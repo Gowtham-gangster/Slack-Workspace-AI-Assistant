@@ -1,0 +1,360 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap');
+@import "tailwindcss";
+
+
+:root {
+  --background: #06070d;
+  --foreground: #e8eaf0;
+  --card: #0d0f1a;
+  --card-foreground: #e8eaf0;
+  --popover: #0d0f1a;
+  --popover-foreground: #e8eaf0;
+  --primary: #7c6af7;
+  --primary-light: #a78bfa;
+  --primary-foreground: #ffffff;
+  --secondary: #161828;
+  --secondary-foreground: #e8eaf0;
+  --muted: #161828;
+  --muted-foreground: #6b7280;
+  --accent: #8b5cf6;
+  --accent-foreground: #ffffff;
+  --destructive: #ef4444;
+  --destructive-foreground: #ffffff;
+  --border: rgba(255, 255, 255, 0.07);
+  --border-light: rgba(255, 255, 255, 0.12);
+  --input: rgba(255, 255, 255, 0.04);
+  --ring: #7c6af7;
+  --success: #10b981;
+  --warning: #f59e0b;
+
+  /* Glow tokens */
+  --glow-primary: 0 0 40px rgba(124, 106, 247, 0.18);
+  --glow-success: 0 0 30px rgba(16, 185, 129, 0.15);
+}
+
+html.light {
+  --background: #f8fafc;
+  --foreground: #0f172a;
+  --card: #ffffff;
+  --card-foreground: #0f172a;
+  --popover: #ffffff;
+  --popover-foreground: #0f172a;
+  --primary: #7c6af7;
+  --primary-light: #6366f1;
+  --primary-foreground: #ffffff;
+  --secondary: #f1f5f9;
+  --secondary-foreground: #0f172a;
+  --muted: #f1f5f9;
+  --muted-foreground: #64748b;
+  --accent: #8b5cf6;
+  --accent-foreground: #ffffff;
+  --destructive: #ef4444;
+  --destructive-foreground: #ffffff;
+  --border: rgba(0, 0, 0, 0.08);
+  --border-light: rgba(0, 0, 0, 0.12);
+  --input: rgba(0, 0, 0, 0.03);
+  --ring: #7c6af7;
+  --success: #10b981;
+  --warning: #f59e0b;
+
+  /* Glow tokens in light mode */
+  --glow-primary: 0 0 40px rgba(124, 106, 247, 0.08);
+  --glow-success: 0 0 30px rgba(16, 185, 129, 0.06);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ───────────────────────── Scrollbars ───────────────────────── */
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(124,106,247,0.25); border-radius: 99px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(124,106,247,0.5); }
+
+/* ───────────────────────── Glass cards ───────────────────────── */
+.glass {
+  background: rgba(13, 15, 26, 0.75);
+  backdrop-filter: blur(20px) saturate(1.4);
+  -webkit-backdrop-filter: blur(20px) saturate(1.4);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.glass-elevated {
+  background: rgba(18, 20, 34, 0.85);
+  backdrop-filter: blur(24px) saturate(1.6);
+  -webkit-backdrop-filter: blur(24px) saturate(1.6);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.4), var(--glow-primary);
+}
+
+.glass-input {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.glass-input:focus {
+  outline: none;
+  border-color: rgba(124,106,247,0.6);
+  box-shadow: 0 0 0 3px rgba(124,106,247,0.12), 0 0 16px rgba(124,106,247,0.08);
+}
+
+/* ───────────────────────── Stat cards gradient stripe ───────────────────────── */
+.stat-card {
+  position: relative;
+  overflow: hidden;
+}
+.stat-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(124,106,247,0.06) 0%, transparent 60%);
+  pointer-events: none;
+}
+.stat-card:hover::before {
+  background: linear-gradient(135deg, rgba(124,106,247,0.12) 0%, transparent 60%);
+}
+
+/* ───────────────────────── Animations ───────────────────────── */
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes shimmer {
+  0%   { background-position: -400px 0; }
+  100% { background-position: 400px 0; }
+}
+
+@keyframes pulse-dot {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(16,185,129,0.5); }
+  50%       { box-shadow: 0 0 0 5px rgba(16,185,129,0); }
+}
+
+@keyframes gradient-move {
+  0%   { background-position: 0% 50%; }
+  50%  { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+.animate-fadeInUp  { animation: fadeInUp 0.4s ease both; }
+.animate-fadeIn    { animation: fadeIn 0.3s ease both; }
+
+.pulse-dot {
+  animation: pulse-dot 2s infinite;
+}
+
+.skeleton {
+  background: linear-gradient(90deg, rgba(255,255,255,0.04) 25%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0.04) 75%);
+  background-size: 400px 100%;
+  animation: shimmer 1.4s infinite;
+}
+
+/* ───────────────────────── Gradient text ───────────────────────── */
+.gradient-text {
+  background: linear-gradient(135deg, #a78bfa 0%, #7c6af7 50%, #6366f1 100%);
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* ───────────────────────── Ambient background orbs ───────────────────────── */
+.bg-orb {
+  position: fixed;
+  border-radius: 50%;
+  filter: blur(120px);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* ───────────────────────── Tab pill ───────────────────────── */
+.tab-pill-active {
+  background: linear-gradient(135deg, #7c6af7, #6366f1);
+  box-shadow: 0 4px 16px rgba(124,106,247,0.35);
+  color: #fff;
+}
+
+/* ───────────────────────── Message bubble ───────────────────────── */
+.msg-bubble {
+  border-left: 2px solid rgba(124,106,247,0.3);
+  transition: border-color 0.2s, background 0.2s;
+}
+.msg-bubble:hover {
+  border-color: rgba(124,106,247,0.7);
+  background: rgba(124,106,247,0.06);
+}
+
+/* ───────────────────────── Status badge ───────────────────────── */
+.badge-pending  { background: rgba(245,158,11,0.12); color: #fbbf24; border: 1px solid rgba(245,158,11,0.25); }
+.badge-progress { background: rgba(99,102,241,0.12); color: #818cf8; border: 1px solid rgba(99,102,241,0.25); }
+.badge-done     { background: rgba(16,185,129,0.12); color: #34d399; border: 1px solid rgba(16,185,129,0.25); }
+
+/* ───────────────────────── Select element ───────────────────────── */
+select {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  padding-right: 28px !important;
+}
+select option { background: #0d0f1a; color: #e8eaf0; }
+
+/* Light Mode Overrides for Glass UI elements */
+html.light .glass {
+  background: rgba(255, 255, 255, 0.75);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+}
+html.light .glass-elevated {
+  background: rgba(255, 255, 255, 0.85);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.06), var(--glow-primary);
+}
+html.light .glass-input {
+  background: rgba(0, 0, 0, 0.02);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  color: #0f172a;
+}
+html.light .glass-input::placeholder {
+  color: #94a3b8;
+}
+html.light .glass-input:focus {
+  border-color: rgba(124, 106, 247, 0.6);
+  box-shadow: 0 0 0 3px rgba(124, 106, 247, 0.12), 0 0 16px rgba(124, 106, 247, 0.04);
+}
+html.light select option {
+  background: #ffffff;
+  color: #0f172a;
+}
+html.light ::-webkit-scrollbar-thumb {
+  background: rgba(124, 106, 247, 0.2);
+}
+html.light ::-webkit-scrollbar-thumb:hover {
+  background: rgba(124, 106, 247, 0.35);
+}
+
+/* ───────────────────────── Scanner & Spin Animations ───────────────────────── */
+@keyframes spin-slow {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+@keyframes spin-reverse {
+  0% { transform: rotate(360deg); }
+  100% { transform: rotate(0deg); }
+}
+@keyframes scanner-beam {
+  0%, 100% { top: 0%; opacity: 0; }
+  10% { opacity: 1; }
+  90% { opacity: 1; }
+  50% { top: 100%; }
+}
+.animate-spin-slow {
+  animation: spin-slow 16s linear infinite;
+}
+.animate-spin-reverse {
+  animation: spin-reverse 10s linear infinite;
+}
+.animate-scanner-beam {
+  animation: scanner-beam 4s ease-in-out infinite;
+}
+
+/* ───────────────────────── React Flow Controls Override ───────────────────────── */
+.react-flow__controls {
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  background: #111322 !important;
+  display: flex;
+  flex-direction: column;
+}
+
+.react-flow__controls-button {
+  background: #111322 !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+  fill: #94a3b8 !important;
+  stroke: #94a3b8 !important;
+  color: #94a3b8 !important;
+  transition: all 0.2s ease;
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.react-flow__controls-button:last-child {
+  border-bottom: none !important;
+}
+
+.react-flow__controls-button:hover {
+  background: rgba(255, 255, 255, 0.08) !important;
+  fill: #7c6af7 !important;
+  stroke: #7c6af7 !important;
+  color: #7c6af7 !important;
+}
+
+.react-flow__controls-button svg {
+  fill: currentColor !important;
+  stroke: currentColor !important;
+  width: 14px;
+  height: 14px;
+}
+
+/* Light mode overrides */
+html.light .react-flow__controls {
+  border: 1px solid rgba(0, 0, 0, 0.08) !important;
+  background: #ffffff !important;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+}
+
+html.light .react-flow__controls-button {
+  background: #ffffff !important;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08) !important;
+  fill: #475569 !important;
+  stroke: #475569 !important;
+  color: #475569 !important;
+}
+
+html.light .react-flow__controls-button:hover {
+  background: #f1f5f9 !important;
+  fill: #7c6af7 !important;
+  stroke: #7c6af7 !important;
+  color: #7c6af7 !important;
+}
+
+
