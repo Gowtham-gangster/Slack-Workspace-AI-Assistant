@@ -5,9 +5,11 @@ import { syncSlackWorkspace } from '../services/vectorStore.js';
 import { MCPClientManager, parseMCPResponse } from '../services/mcpClient.js';
 import { generateText } from '../services/ai.js';
 import { generateLocalFallbackSummary, generateLocalFallbackActionPlans } from '../services/fallback.js';
+import { cache, TTL, cacheKey } from '../services/cache.js';
 
 
 const router = Router();
+
 
 // GET /api/channels
 router.get('/', authenticateJWT, async (req: AuthenticatedRequest, res: Response) => {
@@ -20,10 +22,16 @@ router.get('/', authenticateJWT, async (req: AuthenticatedRequest, res: Response
   }
 });
 
-// GET /api/channels/users - Get mapped users
+// GET /api/channels/users - Get mapped users (cached 5 min)
 router.get('/users', authenticateJWT, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const userId = req.user!.id;
+    const key = cacheKey(userId, 'slack_users');
+    const cached = cache.get<Record<string, { realName: string; name: string; avatar: string }>>(key);
+    if (cached) {
+      return res.json(cached);
+    }
+
     const mcpManager = MCPClientManager.getInstance(userId);
     if (!mcpManager.isConnected()) {
       await mcpManager.initializeClient();
@@ -43,12 +51,15 @@ router.get('/users', authenticateJWT, async (req: AuthenticatedRequest, res: Res
         };
       }
     }
+
+    cache.set(key, userMap, TTL.SLACK_USERS);
     res.json(userMap);
   } catch (error: any) {
     console.error('Failed to get slack users:', error);
     res.status(500).json({ error: error?.message || 'Failed to retrieve slack users.' });
   }
 });
+
 
 // GET /api/channels/:id/messages - Retrieve live messages from Slack channel
 router.get('/:id/messages', authenticateJWT, async (req: AuthenticatedRequest, res: Response) => {
@@ -73,11 +84,17 @@ router.get('/:id/messages', authenticateJWT, async (req: AuthenticatedRequest, r
   }
 });
 
-// GET /api/channels/:id/summarize - Summarize live messages in a channel
+// GET /api/channels/:id/summarize - Summarize live messages in a channel (cached 10 min)
 router.get('/:id/summarize', authenticateJWT, async (req: AuthenticatedRequest, res: Response) => {
   const channelId = req.params.id;
   try {
     const userId = req.user!.id;
+    const key = cacheKey(userId, 'summarize', channelId);
+    const cached = cache.get<{ summary: string }>(key);
+    if (cached) {
+      return res.json(cached);
+    }
+
     const mcpManager = MCPClientManager.getInstance(userId);
     if (!mcpManager.isConnected()) {
       await mcpManager.initializeClient();
@@ -177,18 +194,26 @@ ${messagesText}`;
         throw err;
       }
     }
-    res.json({ summary });
+    const result = { summary };
+    cache.set(key, result, TTL.CHANNEL_SUMMARY);
+    res.json(result);
   } catch (error: any) {
     console.error('Failed to summarize channel:', error);
     res.status(500).json({ error: error?.message || 'Failed to summarize channel.' });
   }
 });
 
-// GET /api/channels/:id/action-plans - Extract action items from a channel
+// GET /api/channels/:id/action-plans - Extract action items from a channel (cached 10 min)
 router.get('/:id/action-plans', authenticateJWT, async (req: AuthenticatedRequest, res: Response) => {
   const channelId = req.params.id;
   try {
     const userId = req.user!.id;
+    const plansKey = cacheKey(userId, 'action_plans', channelId);
+    const cachedPlans = cache.get<any[]>(plansKey);
+    if (cachedPlans) {
+      return res.json(cachedPlans);
+    }
+
     const mcpManager = MCPClientManager.getInstance(userId);
     if (!mcpManager.isConnected()) {
       await mcpManager.initializeClient();
@@ -246,6 +271,9 @@ ${messagesText}`;
       }
     }
 
+    if (tasks && tasks.length > 0) {
+      cache.set(plansKey, tasks, TTL.ACTION_PLANS);
+    }
     res.json(tasks);
   } catch (error: any) {
     console.error('Failed to extract action items:', error);

@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
-import { setAuthToken, getAuthToken, apiFetch } from '../lib/api';
+import { setAuthToken, getAuthToken, apiFetch, setRefreshToken, getRefreshToken } from '../lib/api';
 
 interface User {
   id: number;
@@ -21,7 +21,7 @@ interface AuthContextType {
   token: string | null;
   loading: boolean;
   slackUsers: Record<string, SlackUser>;
-  login: (token: string, user: User, redirectPath?: string | null) => void;
+  login: (token: string, user: User, redirectPath?: string | null, refreshToken?: string) => void;
   logout: () => void;
 }
 
@@ -35,6 +35,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
 
+  // Load Slack users once logged in
   useEffect(() => {
     async function loadSlackUsers() {
       if (user && token) {
@@ -51,6 +52,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     loadSlackUsers();
   }, [user, token]);
 
+  // On mount — restore session from stored token
   useEffect(() => {
     async function loadUser() {
       const storedToken = getAuthToken();
@@ -59,11 +61,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setToken(storedToken);
           const data = await apiFetch('/api/auth/me');
           setUser(data.user);
-        } catch (error) {
+        } catch (error: any) {
+          // If auto-refresh in apiFetch succeeded, /me will have worked.
+          // If we land here it means refresh also failed — clear everything.
           console.error('Failed to load user with stored token:', error);
-          // Don't call logout here to avoid infinite redirect loops on mount,
-          // just clear tokens silently.
           setAuthToken(null);
+          setRefreshToken(null);
           setToken(null);
           setUser(null);
         }
@@ -73,9 +76,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     loadUser();
   }, []);
 
+  // Route protection
   useEffect(() => {
     if (!loading) {
-      const isPublicPath = pathname === '/login' || pathname === '/' || pathname === '/privacy' || pathname === '/terms';
+      const isPublicPath =
+        pathname === '/login' ||
+        pathname === '/' ||
+        pathname === '/privacy' ||
+        pathname === '/terms';
       if (!user && !isPublicPath) {
         router.push('/login');
       } else if (user && pathname === '/login') {
@@ -84,17 +92,37 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [user, loading, pathname, router]);
 
-  const login = (newToken: string, newUser: User, redirectPath: string | null = '/dashboard') => {
+  const login = (
+    newToken: string,
+    newUser: User,
+    redirectPath: string | null = '/dashboard',
+    refreshToken?: string
+  ) => {
     setAuthToken(newToken);
     setToken(newToken);
     setUser(newUser);
+    if (refreshToken) {
+      setRefreshToken(refreshToken);
+    }
     if (redirectPath) {
       router.push(redirectPath);
     }
   };
 
-  const logout = () => {
+  const logout = async () => {
+    // Revoke refresh token on the server (best effort)
+    const storedRefreshToken = getRefreshToken();
+    try {
+      await apiFetch('/api/auth/logout', {
+        method: 'POST',
+        body: storedRefreshToken ? { refreshToken: storedRefreshToken } : {},
+      });
+    } catch {
+      // Ignore errors — local cleanup still happens
+    }
+
     setAuthToken(null);
+    setRefreshToken(null);
     setToken(null);
     setUser(null);
     router.push('/login');

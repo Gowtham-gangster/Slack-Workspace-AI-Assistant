@@ -48,7 +48,7 @@ export default function ProfilePage() {
     }),
     onSuccess: (data) => {
       setProfileStatus({ type: 'success', message: 'User profile updated successfully.' });
-      login(data.token, data.user, null);
+      login(data.token, data.user, null, data.refreshToken);
       setProfilePassword('');
       setProfileConfirmPassword('');
       setTimeout(() => setProfileStatus(null), 5000);

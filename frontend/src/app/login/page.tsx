@@ -58,7 +58,7 @@ export default function LoginPage() {
         method: 'POST',
         body: { credential: response.credential }
       });
-      login(data.token, data.user);
+      login(data.token, data.user, '/dashboard', data.refreshToken);
     } catch (err: any) {
       setError(err?.message || 'Google Sign-In failed. Please try again.');
     } finally {
@@ -171,14 +171,14 @@ export default function LoginPage() {
           method: 'POST',
           body: { username: email, password }
         });
-        login(loginData.token, loginData.user);
+        login(loginData.token, loginData.user, '/dashboard', loginData.refreshToken);
       } else {
         // Login flow
         const loginData = await apiFetch('/api/auth/login', {
           method: 'POST',
           body: { username: email, password }
         });
-        login(loginData.token, loginData.user);
+        login(loginData.token, loginData.user, '/dashboard', loginData.refreshToken);
       }
     } catch (err: any) {
       setError(err?.message || 'Authentication failed. Please try again.');

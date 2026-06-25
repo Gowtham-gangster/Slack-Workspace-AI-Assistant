@@ -277,6 +277,32 @@ export async function initializeDatabase() {
   `);
 
 
+  // Refresh tokens for JWT token rotation
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS refresh_tokens (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      user_id INT NOT NULL,
+      token VARCHAR(512) NOT NULL UNIQUE,
+      expires_at TIMESTAMP NOT NULL,
+      revoked TINYINT(1) DEFAULT 0,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    )
+  `);
+
+  // Login attempts for brute-force protection
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS login_attempts (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      username VARCHAR(255) NOT NULL,
+      ip_address VARCHAR(50) NOT NULL,
+      success TINYINT(1) DEFAULT 0,
+      attempted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_username_ip (username, ip_address),
+      INDEX idx_attempted_at (attempted_at)
+    )
+  `);
+
   // Seed default admin user if users is empty
   const userCountResult = await db.query<any>('SELECT COUNT(*) as count FROM users');
   if (userCountResult[0].count === 0) {
