@@ -90,3 +90,32 @@ export function broadcastReactionUpdate(messageId: string, channelId: string, re
   // Emit to all clients (server-wide broadcast) or targeted to room
   io.emit('reaction_update', payload);
 }
+
+export function broadcastNewMessage(channelId: string, message: any) {
+  if (!io) return;
+  console.log(`[WebSocket] WebSocket emitted - message for room ${channelId}`);
+  io.emit('message', { channelId, message });
+}
+
+export function broadcastMessageChanged(channelId: string, message: any) {
+  if (!io) return;
+  console.log(`[WebSocket] WebSocket emitted - message_changed for room ${channelId}`);
+  io.emit('message_changed', { channelId, message });
+}
+
+export function broadcastMessageDeleted(channelId: string, deletedTs: string) {
+  if (!io) return;
+  console.log(`[WebSocket] WebSocket emitted - message_deleted for room ${channelId}`);
+  io.emit('message_deleted', { channelId, deletedTs });
+}
+
+export function broadcastReminderFired(userId: number, reminder: any) {
+  if (!io) return;
+  const sockets = io.sockets.sockets;
+  for (const [id, socket] of sockets.entries()) {
+    if (socket.data.user && Number(socket.data.user.id) === Number(userId)) {
+      console.log(`[WebSocket] Sending reminder_fired to User ${userId} on socket ${id}`);
+      socket.emit('reminder_fired', reminder);
+    }
+  }
+}

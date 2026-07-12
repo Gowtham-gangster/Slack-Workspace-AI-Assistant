@@ -131,6 +131,58 @@ class SocketService {
     }
   }
 
+  public onMessage(callback: (payload: any) => void) {
+    if (this.socket) {
+      this.socket.off('message');
+      this.socket.on('message', callback);
+    }
+  }
+
+  public offMessage() {
+    if (this.socket) {
+      this.socket.off('message');
+    }
+  }
+
+  public onMessageChanged(callback: (payload: any) => void) {
+    if (this.socket) {
+      this.socket.off('message_changed');
+      this.socket.on('message_changed', callback);
+    }
+  }
+
+  public offMessageChanged() {
+    if (this.socket) {
+      this.socket.off('message_changed');
+    }
+  }
+
+  public onMessageDeleted(callback: (payload: any) => void) {
+    if (this.socket) {
+      this.socket.off('message_deleted');
+      this.socket.on('message_deleted', callback);
+    }
+  }
+
+  public offMessageDeleted() {
+    if (this.socket) {
+      this.socket.off('message_deleted');
+    }
+  }
+
+  public onReminderFired(callback: (payload: any) => void) {
+    if (this.socket) {
+      this.socket.off('reminder_fired');
+      this.socket.on('reminder_fired', callback);
+    }
+  }
+
+  public offReminderFired() {
+    if (this.socket) {
+      this.socket.off('reminder_fired');
+    }
+  }
+
   public disconnect() {
     if (this.socket) {
       console.log('[WebSocket] Disconnecting socket singleton and clearing listeners.');

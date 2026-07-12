@@ -1,7 +1,12 @@
 import { Router, Request, Response } from 'express';
 import crypto from 'crypto';
 import { db } from '../db/index.js';
-import { broadcastReactionUpdate } from '../services/websocket.js';
+import { 
+  broadcastReactionUpdate, 
+  broadcastNewMessage, 
+  broadcastMessageChanged, 
+  broadcastMessageDeleted 
+} from '../services/websocket.js';
 import { slackToUnicode, getBotUserIdForUser, getHumanSlackUserIdForUser } from '../utils/emoji.js';
 import { cache, cacheKey } from '../services/cache.js';
 
@@ -68,7 +73,84 @@ router.post('/events', verifySlackRequest, async (req: Request, res: Response) =
     if (!event) return;
 
     const eventType = event.type;
-    if (eventType === 'reaction_added' || eventType === 'reaction_removed') {
+    if (eventType === 'message') {
+      const channelId = event.channel;
+      const subtype = event.subtype;
+
+      // Resolve local user ID associated with this workspace
+      const teamId = body.team_id || event.team || '';
+      const userRow = await db.queryOne<{ user_id: number }>(
+        'SELECT user_id FROM settings WHERE `key` = "mcp_slack_team_id" AND value = ?',
+        [teamId]
+      );
+      const localUserId = userRow?.user_id || 1;
+
+      if (subtype === 'message_changed') {
+        const msg = event.message;
+        if (msg) {
+          const messageId = msg.ts;
+          const text = msg.text || '';
+          try {
+            await db.execute(
+              'UPDATE slack_messages SET text = ? WHERE db_user_id = ? AND id = ?',
+              [text, localUserId, messageId]
+            );
+            console.log(`[SlackWebhook] Updated message ${messageId} in DB for user ${localUserId}`);
+            broadcastMessageChanged(channelId, { id: messageId, ts: messageId, text, channel_id: channelId });
+          } catch (err) {
+            console.error('[SlackWebhook] Error handling message change event:', err);
+          }
+        }
+      } else if (subtype === 'message_deleted') {
+        const messageId = event.deleted_ts;
+        if (messageId) {
+          try {
+            await db.execute(
+              'DELETE FROM slack_messages WHERE db_user_id = ? AND id = ?',
+              [localUserId, messageId]
+            );
+            console.log(`[SlackWebhook] Deleted message ${messageId} from DB for user ${localUserId}`);
+            broadcastMessageDeleted(channelId, messageId);
+          } catch (err) {
+            console.error('[SlackWebhook] Error handling message delete event:', err);
+          }
+        }
+      } else if (!subtype || subtype === 'bot_message') {
+        const messageId = event.ts;
+        const text = event.text || '';
+        const slackUser = event.user || event.bot_id || 'bot';
+        const threadTs = event.thread_ts || null;
+        const eventId = body.event_id || `message_${channelId}_${messageId}`;
+
+        try {
+          // Idempotency check via event_id
+          try {
+            await db.execute('INSERT INTO slack_processed_events (event_id) VALUES (?)', [eventId]);
+          } catch (dbErr) {
+            console.log(`[SlackWebhook] Duplicate message event detected. Discarding: ${eventId}`);
+            return;
+          }
+
+          await db.execute(
+            'INSERT INTO slack_messages (db_user_id, id, channel_id, user_id, text, thread_ts) VALUES (?, ?, ?, ?, ?, ?)',
+            [localUserId, messageId, channelId, slackUser, text, threadTs]
+          );
+          console.log(`[SlackWebhook] Saved new message ${messageId} in DB for user ${localUserId}`);
+          
+          broadcastNewMessage(channelId, {
+            id: messageId,
+            ts: messageId,
+            channel_id: channelId,
+            user: slackUser,
+            text,
+            thread_ts: threadTs,
+            reactions: []
+          });
+        } catch (err) {
+          console.error('[SlackWebhook] Error handling message event:', err);
+        }
+      }
+    } else if (eventType === 'reaction_added' || eventType === 'reaction_removed') {
       const slackUser = event.user;
       const slackEmoji = event.reaction;
       const unicodeEmoji = slackToUnicode(slackEmoji);

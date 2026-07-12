@@ -208,66 +208,63 @@ router.get('/:id/summarize', authenticateJWT, async (req: AuthenticatedRequest, 
 
     const messagesText = messages.map((m: any) => `User ${m.user || 'bot'}: ${m.text || ''}`).reverse().join('\n');
     const prompt = `You are an expert workplace communication analyst.
-Your task is to analyze Slack conversations and generate a PROFESSIONAL CHANNEL SUMMARY.
+Your task is to analyze Slack conversations and generate a PROFESSIONAL, COMPREHENSIVE CHANNEL SUMMARY.
 
 IMPORTANT RULES:
 - DO NOT summarize message-by-message.
-- DO NOT describe who said what unless it is critical.
-- DO NOT generate a chat transcript.
-- DO NOT create a chronological recap.
-
-Instead:
-1. Understand the overall purpose of the discussion.
-2. Identify the main context.
-3. Group related messages into topics.
-4. Extract decisions.
-5. Extract action items.
-6. Extract blockers or concerns.
-7. Produce a concise executive summary.
+- DO NOT generate a chronological recap or chat transcript.
+- DO NOT ignore any discussion topic. If multiple distinct topics are discussed (e.g., specific movies like Pushpa or Bahubali, meeting schedules, codebase bugs, deployment issues), you MUST list and describe each one under "Main Topics"!
 
 ━━━━━━━━━━━━━━━━━━━━━━
-OUTPUT FORMAT
+OUTPUT FORMAT - YOU MUST INCLUDE ALL 14 SECTIONS BELOW WITH THESE EXACT HEADINGS:
 
 # Conversation Summary
 
-## Main Context
-Provide a 2-4 sentence explanation of what the discussion was primarily about.
+## 1. Executive Summary
+Provide a concise, high-level synthesis (2-4 sentences) summarizing the conversation.
 
-## Key Discussion Points
-* Topic 1
-* Topic 2
-* Topic 3
-...
+## 2. Main Topics
+Provide a detailed breakdown of EVERY distinct topic discussed. Do not ignore any topic. If they discussed multiple separate things, summarize each one clearly.
 
-## Important Insights
-* Insight 1
-* Insight 2
-...
+## 3. Key Decisions
+List all explicit agreements, decisions, or resolutions. (If none, state "No explicit decisions were made.")
 
-## Decisions Made
-* Decision 1
-(If none, state: "No explicit decisions were made.")
+## 4. Important Updates
+List any major status updates or project progress items shared.
 
-## Action Items
+## 5. Action Items
+Provide a structured Markdown table:
 | Task | Owner | Status |
-| ---- | ------ | ------- |
-(If none, state: "No action items identified.")
+(If none, state "No action items identified.")
 
-## Risks / Blockers
-List any blockers, concerns, dependencies, or unresolved questions.
-(If none, state: "No blockers identified.")
+## 6. Deadlines & Milestones
+List any dates, times, or milestones mentioned for deliverables.
 
-## Participants
-Mention only active contributors.
+## 7. Risks & Blockers
+List any blocker issues, code design friction, environment downtime, or project risks.
 
-## Final Outcome
-Summarize the final conclusion or result of the conversation in 2-3 sentences.
+## 8. Open Questions
+List any unresolved questions, dependencies, or outstanding inquiries.
+
+## 9. Participants
+List all active users/contributors who participated in the conversation.
+
+## 10. Mentioned Files
+List all file names, uploads, or attachments shared or referenced. (If none, state "None.")
+
+## 11. Mentioned Links
+List all URLs, links, or web resources shared. (If none, state "None.")
+
+## 12. Technical Discussions
+Summarize technical details, architecture decisions, database changes, or code review points discussed.
+
+## 13. Business Discussions
+Summarize business objectives, client requirements, operational updates, or project planning points discussed.
+
+## 14. Final Outcome
+Synthesize the ultimate conclusion or result of the discussion in 2-3 sentences.
 
 ━━━━━━━━━━━━━━━━━━━━━━
-WRITING STYLE
-- Professional, Executive-friendly, Concise, Business-oriented.
-- Focus on outcomes and meaning, not chronology or individual messages.
-
 Slack Discussion:
 ${messagesText}`;
     
@@ -730,20 +727,30 @@ router.post('/retrieve-messages', authenticateJWT, async (req: AuthenticatedRequ
     }
 
     // --- Time window: "last 30 mins", "last 2 hours", "today", "last hour", "recent", "latest" ---
-    const minsMatch = q.match(/last\s+(\d+)\s+(?:min(?:ute)?s?)/);
-    const hoursMatch = q.match(/last\s+(\d+)\s+hours?/);
-    const daysMatch = q.match(/last\s+(\d+)\s+days?/);
+    const minsMatch = q.match(/last\s+(\d+|one|two|three|four|five|six|seven|eight|nine|ten)\s+(?:min(?:ute)?s?)/);
+    const hoursMatch = q.match(/last\s+(\d+|one|two|three|four|five|six|seven|eight|nine|ten)\s+hours?/);
+    const daysMatch = q.match(/last\s+(\d+|one|two|three|four|five|six|seven|eight|nine|ten)\s+days?/);
     const todayMatch = q.match(/\btoday\b/);
     const weekMatch = q.match(/\b(?:last\s+week|this\s+week)\b/);
-    const lastHourMatch = q.match(/\blast\s+hour\b/);
+    const lastHourMatch = q.match(/\blast\s+(?:one|an)?\s*hour\b/);
     const recentMatch = q.match(/\b(?:latest|recent|new)\b/);
 
+    const mapNumberWord = (word: string): number => {
+      const parsed = parseInt(word);
+      if (!isNaN(parsed)) return parsed;
+      const mapping: Record<string, number> = {
+        one: 1, two: 2, three: 3, four: 4, five: 5,
+        six: 6, seven: 7, eight: 8, nine: 9, ten: 10
+      };
+      return mapping[word.toLowerCase()] || 1;
+    };
+
     if (minsMatch) {
-      params.timeWindowMinutes = parseInt(minsMatch[1]);
+      params.timeWindowMinutes = mapNumberWord(minsMatch[1]);
     } else if (hoursMatch) {
-      params.timeWindowMinutes = parseInt(hoursMatch[1]) * 60;
+      params.timeWindowMinutes = mapNumberWord(hoursMatch[1]) * 60;
     } else if (daysMatch) {
-      params.timeWindowMinutes = parseInt(daysMatch[1]) * 1440;
+      params.timeWindowMinutes = mapNumberWord(daysMatch[1]) * 1440;
     } else if (lastHourMatch) {
       params.timeWindowMinutes = 60;
     } else if (todayMatch) {
@@ -792,7 +799,7 @@ router.post('/retrieve-messages', authenticateJWT, async (req: AuthenticatedRequ
     const isTimeRangeQuery = isTimeRangeTrigger(q);
 
     function isTimeRangeTrigger(str: string): boolean {
-      return /\b(?:last\s+\d+\s+(?:min|minute|hour|day)s?|today|yesterday|last\s+week|last\s+month|last\s+hour)\b/.test(str);
+      return /\b(?:last\s+(?:\d+|one|two|three|four|five|six|seven|eight|nine|ten|an)\s+(?:min|minute|hour|day)s?|today|yesterday|last\s+week|last\s+month|last\s+(?:one|an)?\s*hour)\b/.test(str);
     }
 
     const hasExplicitKeyword = containingMatch !== null || quotedMatch !== null;
@@ -1016,13 +1023,25 @@ router.post('/retrieve-messages', authenticateJWT, async (req: AuthenticatedRequ
         let recencyScore = 0;
         const matchedTerms = new Set<string>();
 
-        // 1. Keyword Match (+50)
+        // 1. Keyword & Synonym Concept Match (+50)
         const nonTrivialQueryWords = queryWords.filter(w => !STOPWORDS.has(w));
         let hasKeywordMatch = false;
         for (const qw of nonTrivialQueryWords) {
           if (msgWords.includes(qw) || normalizedMsg.includes(qw)) {
             hasKeywordMatch = true;
             matchedTerms.add(qw);
+          } else {
+            // Perform concept mapping matching (e.g. bahubali concept synonyms)
+            const synonyms = CONCEPT_EXPANSIONS[qw];
+            if (synonyms) {
+              for (const syn of synonyms) {
+                if (msgWords.includes(syn) || normalizedMsg.includes(syn)) {
+                  hasKeywordMatch = true;
+                  matchedTerms.add(syn);
+                  break;
+                }
+              }
+            }
           }
         }
         if (hasKeywordMatch) {

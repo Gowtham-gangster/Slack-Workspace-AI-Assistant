@@ -26,7 +26,7 @@ import chatRoutes from './routes/chat.js';
 import filesRoutes from './routes/files.js';
 import notificationsRoutes from './routes/notifications.js';
 import slackRoutes from './routes/slack.js';
-import { initWebSocketServer } from './services/websocket.js';
+import { initWebSocketServer, broadcastReminderFired } from './services/websocket.js';
 
 
 const app = express();
@@ -171,7 +171,7 @@ async function startServer() {
     reminderJobTick++;
     try {
       const now = new Date();
-      // Find all due reminders not yet email-notified
+      // Find all due reminders not yet notified
       const dueReminders = await db.query<any>(`
         SELECT r.id, r.user_id, r.message_id, r.content, r.session_id,
                r.remind_at, r.created_at,
@@ -180,19 +180,32 @@ async function startServer() {
         FROM chat_reminders r
         JOIN users u ON r.user_id = u.id
         LEFT JOIN chat_messages m ON r.message_id = m.id
-        WHERE r.dismissed = 0 AND r.email_sent = 0 AND r.remind_at <= ?
+        WHERE r.dismissed = 0 AND r.notified = 0 AND r.remind_at <= ?
       `, [now]);
 
       if (dueReminders.length === 0) return;
 
-      console.log(`[ReminderJob] Found ${dueReminders.length} due reminder(s) to email.`);
+      console.log(`[ReminderJob] Found ${dueReminders.length} due reminder(s) to process.`);
 
       for (const reminder of dueReminders) {
-        const userEmail = reminder.email || reminder.username; // username may be email
+        const userEmail = reminder.email || reminder.username;
         const userName = reminder.full_name || reminder.username || 'there';
         const messageContent = reminder.message_content || 'No message content available.';
 
-        // Send email if configured and user has email
+        // 1. Broadcast real-time WebSocket alert to the connected client
+        try {
+          broadcastReminderFired(reminder.user_id, {
+            id: reminder.id,
+            message_id: reminder.message_id,
+            session_id: reminder.session_id,
+            content: messageContent,
+            remind_at: reminder.remind_at
+          });
+        } catch (wsErr) {
+          console.error('[ReminderJob] Failed to broadcast WebSocket reminder alert:', wsErr);
+        }
+
+        // 2. Send fallback email notification if SMTP is configured
         let emailSent = false;
         if (isEmailConfigured() && userEmail && userEmail.includes('@')) {
           emailSent = await sendReminderEmail({
@@ -205,7 +218,7 @@ async function startServer() {
           });
         }
 
-        // Mark as email_sent regardless (avoid retrying on SMTP errors) + mark notified
+        // 3. Mark as notified + email_sent in database
         await db.execute(
           'UPDATE chat_reminders SET email_sent = ?, notified = 1 WHERE id = ?',
           [emailSent ? 1 : 0, reminder.id]

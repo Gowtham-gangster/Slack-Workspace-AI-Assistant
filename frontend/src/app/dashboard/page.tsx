@@ -592,11 +592,75 @@ export default function DashboardPage() {
       console.log(`[Frontend updated] reaction state updated for message: ${messageId}, channelId: ${channelId}`);
     });
 
+    socketService.onMessage((data: any) => {
+      const { channelId, message } = data;
+      console.log(`[WebSocket] Live message received for channel ${channelId}:`, message);
+      queryClient.setQueryData(['liveMessages', channelId, fetchLimit], (oldData: any) => {
+        if (!oldData || !Array.isArray(oldData)) return [message];
+        const exists = oldData.some((m: any) => (m.id || m.ts) === (message.id || message.ts));
+        if (exists) return oldData;
+        return [message, ...oldData];
+      });
+    });
+
+    socketService.onMessageChanged((data: any) => {
+      const { channelId, message } = data;
+      console.log(`[WebSocket] Live message change received for msg ${message.id}:`, message);
+      queryClient.setQueryData(['liveMessages', channelId, fetchLimit], (oldData: any) => {
+        if (!oldData || !Array.isArray(oldData)) return oldData;
+        return oldData.map((m: any) => {
+          if ((m.id || m.ts) === (message.id || message.ts)) {
+            return {
+              ...m,
+              text: message.text
+            };
+          }
+          return m;
+        });
+      });
+    });
+
+    socketService.onMessageDeleted((data: any) => {
+      const { channelId, deletedTs } = data;
+      console.log(`[WebSocket] Live message delete received for msg ${deletedTs}`);
+      queryClient.setQueryData(['liveMessages', channelId, fetchLimit], (oldData: any) => {
+        if (!oldData || !Array.isArray(oldData)) return oldData;
+        return oldData.filter((m: any) => (m.id || m.ts) !== deletedTs);
+      });
+    });
+
+    socketService.onReminderFired((reminder: any) => {
+      console.log(`[WebSocket] Live reminder fired:`, reminder);
+      const formattedReminder = {
+        id: reminder.id,
+        message_id: reminder.message_id,
+        session_id: reminder.session_id,
+        content: reminder.content || 'Your scheduled reminder is due!'
+      };
+      setReminderToasts(prev => [formattedReminder, ...prev]);
+      if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+        new Notification("Slack AI Assistant Reminder", {
+          body: reminder.content || 'Your scheduled reminder is due!',
+          icon: '/favicon.ico'
+        });
+      }
+    });
+
     return () => {
-      // Clean up reaction listeners on cleanup
       socketService.offReactionUpdate();
+      socketService.offMessage();
+      socketService.offMessageChanged();
+      socketService.offMessageDeleted();
+      socketService.offReminderFired();
     };
   }, [fetchLimit, queryClient]);
+
+  // Request browser notification permissions on mount
+  useEffect(() => {
+    if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission();
+    }
+  }, []);
 
   // Join socket channel room when channel selection or connection changes
   useEffect(() => {
@@ -868,6 +932,35 @@ export default function DashboardPage() {
   const EMOJIS = ['👍', '❤️', '😂', '🔥', '👏', '🎉', '😮', '😢', '👀', '🚀'];
 
   const handleToggleReaction = useCallback(async (messageId: string, emoji: string, content: string, msgUser: string) => {
+    setActiveEmojiPickerMsgId(null);
+    setSelectedMobileMsg(null);
+
+    const queryKey = ['liveMessages', selectedChannelId, fetchLimit];
+    const previousMessages = queryClient.getQueryData(queryKey);
+
+    // Optimistic UI Update
+    queryClient.setQueryData(queryKey, (oldMessages: any) => {
+      if (!oldMessages || !Array.isArray(oldMessages)) return oldMessages;
+      return oldMessages.map((m: any) => {
+        if (m.id === messageId || m.ts === messageId) {
+          const currentReactions = m.reactions || [];
+          const localUserId = user?.id || 1;
+          const userReactionIndex = currentReactions.findIndex(
+            (r: any) => r.emoji === emoji && Number(r.user_id) === Number(localUserId)
+          );
+
+          let newReactions = [...currentReactions];
+          if (userReactionIndex > -1) {
+            newReactions.splice(userReactionIndex, 1);
+          } else {
+            newReactions.push({ emoji, user_id: localUserId });
+          }
+          return { ...m, reactions: newReactions };
+        }
+        return m;
+      });
+    });
+
     try {
       console.log(`[Reaction API called] toggling emoji ${emoji} on message ${messageId} in channel ${selectedChannelId}`);
       await apiFetch(`/api/chat/messages/${messageId}/react`, {
@@ -879,13 +972,12 @@ export default function DashboardPage() {
           role: msgUser === 'US' || msgUser === user?.id?.toString() ? 'user' : 'assistant'
         }
       });
-      // Deferring update to WebSocket broadcast event to enforce single source of truth
-      setActiveEmojiPickerMsgId(null);
-      setSelectedMobileMsg(null);
     } catch (e) {
-      console.error('[Reaction API error] failed to toggle reaction:', e);
+      console.error('[Reaction API error] failed to toggle reaction, rolling back optimistic UI:', e);
+      // Rollback to previous state on error
+      queryClient.setQueryData(queryKey, previousMessages);
     }
-  }, [selectedChannelId, user]);
+  }, [selectedChannelId, user, fetchLimit, queryClient]);
 
   const handleToggleBookmark = useCallback(async (msg: LiveMessage) => {
     try {
@@ -3193,20 +3285,21 @@ export default function DashboardPage() {
             return (
               <div 
                 key={reminder.id}
-                className="bg-[#141624] border border-[#7c6af7]/40 rounded-2xl shadow-2xl p-4 flex gap-3 items-start animate-slide-up"
+                onClick={() => handleSelectSavedMessage(reminder)}
+                className="bg-[#141624] border border-[#7c6af7]/40 rounded-2xl shadow-2xl p-4 flex gap-3 items-start animate-slide-up cursor-pointer hover:bg-slate-800/40 transition-colors"
                 style={{ animation: 'slideUpFade 0.3s ease-out forwards' }}
               >
                 <div className="flex-shrink-0 w-9 h-9 rounded-xl bg-gradient-to-br from-[#7c6af7] to-[#6366f1] flex items-center justify-center">
                   <Bell className="w-4 h-4 text-white" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-xs font-bold text-white mb-0.5">⏰ Message Reminder</p>
+                  <p className="text-xs font-bold text-white mb-0.5">⏰ Message Reminder (Click to view)</p>
                   <p className="text-xs text-slate-400 line-clamp-2 leading-relaxed">
                     "{content.slice(0, 120)}{content.length > 120 ? '…' : ''}"
                   </p>
                 </div>
                 <button 
-                  onClick={() => handleDismissReminderToast(reminder.id)}
+                  onClick={(e) => { e.stopPropagation(); handleDismissReminderToast(reminder.id); }}
                   className="flex-shrink-0 text-slate-500 hover:text-slate-300 transition-colors mt-0.5"
                   title="Dismiss"
                 >
