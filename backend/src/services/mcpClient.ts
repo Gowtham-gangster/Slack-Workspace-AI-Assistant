@@ -176,6 +176,7 @@ export class MCPClientManager {
         arguments: args
       });
       result = response;
+      console.log(`[MCP Tool Call Success] ${toolName} returned:`, JSON.stringify(response).substring(0, 1000));
       if (toolName === 'slack_get_users') {
         this.cachedUsers = response;
         this.cachedUsersTime = Date.now();
