@@ -175,7 +175,7 @@ async function startServer() {
       const dueReminders = await db.query<any>(`
         SELECT r.id, r.user_id, r.message_id, r.content, r.session_id,
                r.remind_at, r.created_at,
-               u.username, u.full_name, u.email,
+               u.email, u.full_name,
                COALESCE(m.content, r.content) as message_content
         FROM chat_reminders r
         JOIN users u ON r.user_id = u.id
@@ -188,8 +188,8 @@ async function startServer() {
       console.log(`[ReminderJob] Found ${dueReminders.length} due reminder(s) to process.`);
 
       for (const reminder of dueReminders) {
-        const userEmail = reminder.email || reminder.username;
-        const userName = reminder.full_name || reminder.username || 'there';
+        const userEmail = reminder.email;
+        const userName = reminder.full_name || reminder.email || 'there';
         const messageContent = reminder.message_content || 'No message content available.';
 
         // 1. Broadcast real-time WebSocket alert to the connected client
