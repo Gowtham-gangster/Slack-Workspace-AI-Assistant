@@ -60,10 +60,12 @@ app.use(...securityMiddleware);
 // ─── 3. CORS ─────────────────────────────────────────────────────────────────
 app.use(cors({
   origin: (origin, callback) => {
+    console.log(`[CORS Check] Origin: "${origin}" | Whitelisted:`, ALLOWED_ORIGINS);
     // Allow non-browser requests (Postman, server-to-server) in development
     if (!origin && !IS_PRODUCTION) return callback(null, true);
     // Allow if origin is in whitelist
     if (!origin || ALLOWED_ORIGINS.includes(origin)) return callback(null, true);
+    console.warn(`[CORS Blocked] Origin "${origin}" not allowed by whitelist:`, ALLOWED_ORIGINS);
     callback(new Error(`CORS: Origin ${origin} is not allowed.`));
   },
   credentials: true,
