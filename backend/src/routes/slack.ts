@@ -94,21 +94,29 @@ router.post('/events', verifySlackRequest, async (req: Request, res: Response) =
           return;
         }
 
+        // Resolve the user ID associated with this Slack workspace team_id
+        const teamId = body.team_id || event.team || '';
+        const userRow = await db.queryOne<{ user_id: number }>(
+          'SELECT user_id FROM settings WHERE `key` = "mcp_slack_team_id" AND value = ?',
+          [teamId]
+        );
+        const localUserId = userRow?.user_id || 1; // Fallback to 1
+
         // Fetch Slack bot token to query details
         const tokenRow = await db.queryOne<{ value: string }>(
-          'SELECT value FROM settings WHERE user_id = 1 AND `key` = "mcp_slack_bot_token"'
+          'SELECT value FROM settings WHERE user_id = ? AND `key` = "mcp_slack_bot_token"',
+          [localUserId]
         );
         const slackToken = tokenRow?.value;
         if (!slackToken) return;
 
         // Determine if this reaction matches the local user (either bot user or human user)
-        const botUserId = await getBotUserIdForUser(1);
-        const humanSlackUserId = await getHumanSlackUserIdForUser(1);
+        const botUserId = await getBotUserIdForUser(localUserId);
+        const humanSlackUserId = await getHumanSlackUserIdForUser(localUserId);
 
         // If the reaction event was triggered by our local user (either bot client or user browser client on Slack),
         // we keep the local DB chat_reactions in sync.
         if (slackUser === botUserId || (humanSlackUserId && slackUser === humanSlackUserId)) {
-          const localUserId = 1; // Main local user ID
           if (eventType === 'reaction_added') {
             // Ensure message exists in local DB before inserting reaction
             const session = await db.queryOne<{ id: string }>('SELECT id FROM chat_sessions WHERE id = ?', [channelId]);
@@ -162,7 +170,7 @@ router.post('/events', verifySlackRequest, async (req: Request, res: Response) =
               const uEmoji = slackToUnicode(sr.name);
               if (sr.users && Array.isArray(sr.users)) {
                 for (const sUser of sr.users) {
-                  const resolvedUserId = (sUser === botUserId || (humanSlackUserId && sUser === humanSlackUserId)) ? 1 : sUser;
+                  const resolvedUserId = (sUser === botUserId || (humanSlackUserId && sUser === humanSlackUserId)) ? localUserId : sUser;
                   slackReactions.push({
                     emoji: uEmoji,
                     user_id: resolvedUserId
