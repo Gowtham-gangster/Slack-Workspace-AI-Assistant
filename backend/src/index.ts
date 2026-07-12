@@ -231,8 +231,8 @@ async function startServer() {
       console.error('[ReminderJob] Error processing reminders:', err);
     }
 
-    // SEC-05 + SEC-06: Hourly cleanup of unbounded audit tables (every 60 ticks ≈ 60 minutes)
-    if (reminderJobTick % 60 === 0) {
+    // SEC-05 + SEC-06: Hourly cleanup of unbounded audit tables (every 3600 ticks ≈ 60 minutes)
+    if (reminderJobTick % 3600 === 0) {
       try {
         await db.execute("DELETE FROM login_attempts WHERE attempted_at < NOW() - INTERVAL 24 HOUR");
         await db.execute("DELETE FROM refresh_tokens WHERE (revoked = 1 OR expires_at < NOW()) AND created_at < NOW() - INTERVAL 7 DAY");
@@ -241,7 +241,7 @@ async function startServer() {
         console.error('[Cleanup] Failed to prune stale rows:', cleanupErr);
       }
     }
-  }, 60 * 1000); // every 60 seconds
+  }, 1000); // run every 1 second (1000ms) for millisecond-level responsiveness
 
 
   const shutdown = async () => {

@@ -3776,7 +3776,7 @@ const MessageItem = React.memo(({
       const el = elementRef.current;
       const timer = setTimeout(() => {
         el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }, 150);
+      }, 500);
       return () => clearTimeout(timer);
     }
   }, [isHighlighted]);
