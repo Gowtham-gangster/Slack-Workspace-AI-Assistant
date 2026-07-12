@@ -1,11 +1,15 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Sidebar from '../../components/Sidebar';
 import { apiFetch, getAuthToken } from '../../lib/api';
 import { socketService } from '../../lib/socketService';
-import RichTextEditor from '../../components/MessageComposer/RichTextEditor';
+import dynamic from 'next/dynamic';
+const RichTextEditor = dynamic(() => import('../../components/MessageComposer/RichTextEditor'), {
+  ssr: false,
+  loading: () => <div className="h-[120px] w-full animate-pulse bg-slate-100 dark:bg-slate-800/40 rounded-xl" />
+});
 import SlackMrkdwnRenderer from '../../components/MessageComposer/SlackMrkdwnRenderer';
 import { FileVideo, FileAudio, FileCode, FileArchive, FileSpreadsheet, Play, Presentation } from 'lucide-react';
 import {
@@ -612,14 +616,26 @@ export default function DashboardPage() {
   const [activePdfViewer, setActivePdfViewer] = useState<{ url: string; name: string; size?: number; originalUrl?: string; filetype?: string } | null>(null);
   const [activeCodeViewer, setActiveCodeViewer] = useState<{ url: string; name: string; content?: string } | null>(null);
 
-  const getProxyDownloadUrl = (file: any, download: boolean = false) => {
+  const handleOpenImageLightbox = useCallback((url: string, name: string, size?: number) => {
+    setActiveImageLightbox({ url, name, size });
+  }, []);
+
+  const handleOpenVideoPlayer = useCallback((url: string, name: string, size?: number) => {
+    setActiveVideoPlayer({ url, name, size });
+  }, []);
+
+  const handleOpenPdfViewer = useCallback((url: string, name: string, size?: number, originalUrl?: string, filetype?: string) => {
+    setActivePdfViewer({ url, name, size, originalUrl, filetype });
+  }, []);
+
+  const getProxyDownloadUrl = useCallback((file: any, download: boolean = false) => {
     const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
     const token = getAuthToken() || '';
     const fileUrl = file.url_private_download || file.url_private || '';
     return `${BACKEND_URL}/api/files/${file.id}?token=${encodeURIComponent(token)}&url=${encodeURIComponent(fileUrl)}&filename=${encodeURIComponent(file.name || '')}${download ? '&download=true' : ''}`;
-  };
+  }, []);
 
-  const handleOpenCodeViewer = async (file: any) => {
+  const handleOpenCodeViewer = useCallback(async (file: any) => {
     const proxyUrl = getProxyDownloadUrl(file);
     const token = getAuthToken();
     setActiveCodeViewer({ url: proxyUrl, name: file.name, content: 'Loading content...' });
@@ -638,7 +654,7 @@ export default function DashboardPage() {
     } catch (err: any) {
       setActiveCodeViewer({ url: proxyUrl, name: file.name, content: `Error loading file: ${err?.message || 'Unknown error'}` });
     }
-  };
+  }, [getProxyDownloadUrl]);
 
   const [attachments, setAttachments] = useState<FileUpload[]>([]);
   const [isDraggingOver, setIsDraggingOver] = useState(false);
@@ -851,7 +867,7 @@ export default function DashboardPage() {
 
   const EMOJIS = ['👍', '❤️', '😂', '🔥', '👏', '🎉', '😮', '😢', '👀', '🚀'];
 
-  const handleToggleReaction = async (messageId: string, emoji: string, content: string, msgUser: string) => {
+  const handleToggleReaction = useCallback(async (messageId: string, emoji: string, content: string, msgUser: string) => {
     try {
       console.log(`[Reaction API called] toggling emoji ${emoji} on message ${messageId} in channel ${selectedChannelId}`);
       await apiFetch(`/api/chat/messages/${messageId}/react`, {
@@ -869,9 +885,9 @@ export default function DashboardPage() {
     } catch (e) {
       console.error('[Reaction API error] failed to toggle reaction:', e);
     }
-  };
+  }, [selectedChannelId, user]);
 
-  const handleToggleBookmark = async (msg: LiveMessage) => {
+  const handleToggleBookmark = useCallback(async (msg: LiveMessage) => {
     try {
       if (msg.isBookmarked) {
         await apiFetch(`/api/chat/bookmarks/${msg.ts}`, { method: 'DELETE' });
@@ -892,9 +908,9 @@ export default function DashboardPage() {
     } catch (e) {
       console.error(e);
     }
-  };
+  }, [selectedChannelId, refetchLiveMessages, refetchBookmarks]);
 
-  const handleTogglePin = async (msg: LiveMessage) => {
+  const handleTogglePin = useCallback(async (msg: LiveMessage) => {
     try {
       if (msg.isPinned) {
         await apiFetch(`/api/chat/sessions/${selectedChannelId}/pins/${msg.ts}`, { method: 'DELETE' });
@@ -914,9 +930,9 @@ export default function DashboardPage() {
     } catch (e) {
       console.error(e);
     }
-  };
+  }, [selectedChannelId, refetchLiveMessages, refetchPins]);
 
-  const handleRunAiAction = async (msgId: string, action: string, actionTitle: string, content: string) => {
+  const handleRunAiAction = useCallback(async (msgId: string, action: string, actionTitle: string, content: string) => {
     setIsRunningAiAction(true);
     setSelectedMobileMsg(null);
     try {
@@ -935,7 +951,7 @@ export default function DashboardPage() {
     } finally {
       setIsRunningAiAction(false);
     }
-  };
+  }, [selectedChannelId]);
 
   const handleCreateTask = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1342,17 +1358,17 @@ export default function DashboardPage() {
     }, 50);
   };
 
-  const handleMessageTouchStart = (msg: LiveMessage) => {
+  const handleMessageTouchStart = useCallback((msg: LiveMessage) => {
     longPressTimerRef.current = setTimeout(() => {
       setSelectedMobileMsg(msg);
     }, 600);
-  };
+  }, []);
 
-  const handleMessageTouchEnd = () => {
+  const handleMessageTouchEnd = useCallback(() => {
     if (longPressTimerRef.current) {
       clearTimeout(longPressTimerRef.current);
     }
-  };
+  }, []);
 
   const handlePostMessage = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1913,9 +1929,9 @@ export default function DashboardPage() {
                       setInfoModalMessage={setInfoModalMessage}
                       handleMessageTouchStart={handleMessageTouchStart}
                       handleMessageTouchEnd={handleMessageTouchEnd}
-                      onOpenImageLightbox={(url, name, size) => setActiveImageLightbox({ url, name, size })}
-                      onOpenVideoPlayer={(url, name, size) => setActiveVideoPlayer({ url, name, size })}
-                      onOpenPdfViewer={(url, name, size, originalUrl, filetype) => setActivePdfViewer({ url, name, size, originalUrl, filetype })}
+                      onOpenImageLightbox={handleOpenImageLightbox}
+                      onOpenVideoPlayer={handleOpenVideoPlayer}
+                      onOpenPdfViewer={handleOpenPdfViewer}
                       onOpenCodeViewer={handleOpenCodeViewer}
                     />
                   );

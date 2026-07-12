@@ -486,7 +486,11 @@ export async function initializeDatabase() {
     { table: 'embeddings', index: 'idx_embed_entity', definition: '(user_id, entity_type, entity_id)' },
     { table: 'action_items', index: 'idx_actions_user_status', definition: '(user_id, status)' },
     { table: 'chat_messages', index: 'idx_msg_session_created', definition: '(session_id, created_at)' },
-    { table: 'chat_threads', index: 'idx_threads_parent_created', definition: '(parent_message_id, created_at)' }
+    { table: 'chat_threads', index: 'idx_threads_parent_created', definition: '(parent_message_id, created_at)' },
+    { table: 'chat_messages', index: 'idx_msg_slack_chan_ts', definition: '(slack_channel_id, slack_message_ts)' },
+    { table: 'chat_reactions', index: 'idx_reactions_msg_user', definition: '(message_id, user_id)' },
+    { table: 'tool_executions', index: 'idx_tools_message', definition: '(message_id)' },
+    { table: 'refresh_tokens', index: 'idx_tokens_token_user', definition: '(token, user_id)' }
   ];
 
   for (const idx of performanceIndexes) {
