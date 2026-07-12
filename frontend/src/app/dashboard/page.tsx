@@ -774,6 +774,7 @@ export default function DashboardPage() {
 
   const [taskForm, setTaskForm] = useState({ task: '', owner: 'Unassigned', dueDate: '', priority: 'medium' });
   const [reminderDuration, setReminderDuration] = useState('60');
+  const [customRemindAt, setCustomRemindAt] = useState('');
   const [reminderToasts, setReminderToasts] = useState<any[]>([]); // fired reminders shown as toasts
   const [showMyReminders, setShowMyReminders] = useState(false); // "My Reminders" panel
 
@@ -1109,8 +1110,27 @@ export default function DashboardPage() {
 
   const handleSetReminder = async () => {
     if (!reminderMessage) return;
-    const minutes = parseInt(reminderDuration);
-    const remindAt = new Date(Date.now() + minutes * 60 * 1000);
+    
+    let remindAt: Date;
+    if (reminderDuration === 'custom') {
+      if (!customRemindAt) {
+        alert('Please select a valid custom date and time.');
+        return;
+      }
+      remindAt = new Date(customRemindAt);
+      if (isNaN(remindAt.getTime())) {
+        alert('Invalid date and time selected.');
+        return;
+      }
+      if (remindAt.getTime() <= Date.now()) {
+        alert('Reminder time must be in the future.');
+        return;
+      }
+    } else {
+      const minutes = parseInt(reminderDuration);
+      remindAt = new Date(Date.now() + minutes * 60 * 1000);
+    }
+
     try {
       await apiFetch(`/api/chat/messages/${reminderMessage.ts}/reminder`, {
         method: 'POST',
@@ -1122,6 +1142,7 @@ export default function DashboardPage() {
         }
       });
       setReminderMessage(null);
+      setCustomRemindAt('');
       refetchReminders();
     } catch (e) {
       console.error(e);
@@ -3252,13 +3273,32 @@ export default function DashboardPage() {
                     isLightMode ? 'bg-white text-slate-800 border-slate-200' : 'bg-[#0f101a] text-white border-border/40'
                   }`}
                 >
+                  <option value="10">10 minutes</option>
                   <option value="20">20 minutes</option>
+                  <option value="30">30 minutes</option>
+                  <option value="45">45 minutes</option>
                   <option value="60">1 hour</option>
+                  <option value="120">2 hours</option>
                   <option value="180">3 hours</option>
-                  <option value="1440">Tomorrow (24 hours)</option>
-                  <option value="10080">Next week (7 days)</option>
+                  <option value="1440">24 hours (Tomorrow)</option>
+                  <option value="custom">Custom Date & Time</option>
                 </select>
               </div>
+
+              {reminderDuration === 'custom' && (
+                <div className="flex flex-col gap-1.5 animate-fadeIn">
+                  <label className="text-muted-foreground font-semibold">Select Date & Time:</label>
+                  <input
+                    type="datetime-local"
+                    value={customRemindAt}
+                    onChange={e => setCustomRemindAt(e.target.value)}
+                    min={new Date(Date.now() + 60000).toISOString().slice(0, 16)}
+                    className={`w-full p-2.5 rounded-xl border border-border outline-none focus:border-primary ${
+                      isLightMode ? 'bg-white text-slate-800 border-slate-200' : 'bg-[#0f101a] text-white border-border/40'
+                    }`}
+                  />
+                </div>
+              )}
 
               <button 
                 type="button" 
