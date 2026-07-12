@@ -533,22 +533,63 @@ export default function DashboardPage() {
   const [isThreadSending, setIsThreadSending] = useState(false);
 
   const [activeEmojiPickerMsgId, setActiveEmojiPickerMsgId] = useState<string | null>(null);
-  const [activeAiMenuMsgId, setActiveAiMenuMsgId] = useState<string | null>(null);
+  const [hoveredMessageId, setHoveredMessageId] = useState<string | null>(null);
+  const [openedMenuMessageId, setOpenedMenuMessageId] = useState<string | null>(null);
 
   const activeMenuRef = useRef<{ emoji: string | null; ai: string | null }>({ emoji: null, ai: null });
-  useEffect(() => { activeMenuRef.current = { emoji: activeEmojiPickerMsgId, ai: activeAiMenuMsgId }; }, [activeEmojiPickerMsgId, activeAiMenuMsgId]);
+  useEffect(() => { activeMenuRef.current = { emoji: activeEmojiPickerMsgId, ai: openedMenuMessageId }; }, [activeEmojiPickerMsgId, openedMenuMessageId]);
 
   useEffect(() => {
     const handleOutsideClick = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
-      // If click is inside any action toolbar or popup, ignore
-      if (target.closest('[data-msg-toolbar]')) return;
-      setActiveAiMenuMsgId(null);
+      // If click is inside any action toolbar, popup, or trigger, ignore
+      if (target.closest('[data-msg-toolbar]') || target.closest('.ai-actions-dropdown') || target.closest('[data-ai-trigger]')) return;
+      setOpenedMenuMessageId(null);
       setActiveEmojiPickerMsgId(null);
     };
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setOpenedMenuMessageId(null);
+        setActiveEmojiPickerMsgId(null);
+      }
+    };
+
     document.addEventListener('mousedown', handleOutsideClick);
-    return () => document.removeEventListener('mousedown', handleOutsideClick);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handleOutsideClick);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
   }, []);
+
+  // Auto-close AI actions dropdown if the message scrolls out of the visible viewport of the message pane
+  useEffect(() => {
+    if (!openedMenuMessageId) return;
+
+    const handleScroll = () => {
+      const msgElement = document.getElementById(`msg-${openedMenuMessageId}`);
+      const scrollContainer = messagesEndRef.current?.parentElement;
+      if (msgElement && scrollContainer) {
+        const rect = msgElement.getBoundingClientRect();
+        const containerRect = scrollContainer.getBoundingClientRect();
+        // If the message scrolls out of the visible vertical bounds of the scroll container, close the dropdown
+        if (rect.bottom < containerRect.top || rect.top > containerRect.bottom) {
+          setOpenedMenuMessageId(null);
+        }
+      }
+    };
+
+    const c = messagesEndRef.current?.parentElement;
+    if (c) {
+      c.addEventListener('scroll', handleScroll);
+    }
+    return () => {
+      if (c) {
+        c.removeEventListener('scroll', handleScroll);
+      }
+    };
+  }, [openedMenuMessageId]);
 
   // WebSocket setup via SocketService singleton
   useEffect(() => {
@@ -2008,8 +2049,10 @@ export default function DashboardPage() {
                       isHighlighted={isHighlighted}
                       activeEmojiPickerMsgId={activeEmojiPickerMsgId}
                       setActiveEmojiPickerMsgId={setActiveEmojiPickerMsgId}
-                      activeAiMenuMsgId={activeAiMenuMsgId}
-                      setActiveAiMenuMsgId={setActiveAiMenuMsgId}
+                      openedMenuMessageId={openedMenuMessageId}
+                      setOpenedMenuMessageId={setOpenedMenuMessageId}
+                      hoveredMessageId={hoveredMessageId}
+                      setHoveredMessageId={setHoveredMessageId}
                       setActiveThreadParentId={setActiveThreadParentId}
                       handleToggleReaction={handleToggleReaction}
                       handleToggleBookmark={handleToggleBookmark}
@@ -3569,8 +3612,10 @@ interface MessageItemProps {
   isHighlighted?: boolean;
   activeEmojiPickerMsgId: string | null;
   setActiveEmojiPickerMsgId: (id: string | null) => void;
-  activeAiMenuMsgId: string | null;
-  setActiveAiMenuMsgId: (id: string | null) => void;
+  openedMenuMessageId: string | null;
+  setOpenedMenuMessageId: (id: string | null) => void;
+  hoveredMessageId: string | null;
+  setHoveredMessageId: (id: string | null) => void;
   setActiveThreadParentId: (id: string | null) => void;
   handleToggleReaction: (ts: string, emoji: string, text: string, user: string) => void;
   handleToggleBookmark: (msg: any) => void;
@@ -3594,8 +3639,10 @@ const MessageItem = React.memo(({
   isHighlighted = false,
   activeEmojiPickerMsgId,
   setActiveEmojiPickerMsgId,
-  activeAiMenuMsgId,
-  setActiveAiMenuMsgId,
+  openedMenuMessageId,
+  setOpenedMenuMessageId,
+  hoveredMessageId,
+  setHoveredMessageId,
   setActiveThreadParentId,
   handleToggleReaction,
   handleToggleBookmark,
@@ -3698,7 +3745,9 @@ const MessageItem = React.memo(({
     <div 
       ref={elementRef}
       id={`msg-${msg.ts}`}
-      className={`msg-bubble flex gap-3 items-start px-3 py-2.5 rounded-xl relative group transition-all duration-500 border border-transparent ${
+      onMouseEnter={() => setHoveredMessageId(msg.ts)}
+      onMouseLeave={() => setHoveredMessageId(null)}
+      className={`msg-bubble flex gap-3 items-start px-3 py-2.5 rounded-xl relative transition-all duration-500 border border-transparent ${
         isHighlighted
           ? isLightMode 
             ? 'bg-amber-100/60 border-amber-300 shadow-[0_0_12px_rgba(245,158,11,0.15)] scale-[1.01]' 
@@ -3711,13 +3760,18 @@ const MessageItem = React.memo(({
       onTouchEnd={handleMessageTouchEnd}
     >
       {/* Interactive Actions Toolbar */}
-      <div data-msg-toolbar className={`absolute -top-3.5 z-40 flex items-center bg-card border border-border shadow-2xl rounded-2xl p-1 gap-1 transition-opacity duration-150 right-3 ${
-        (activeEmojiPickerMsgId === msg.ts || activeAiMenuMsgId === msg.ts)
-          ? 'opacity-100 pointer-events-auto'
-          : (activeEmojiPickerMsgId !== null || activeAiMenuMsgId !== null)
-            ? 'opacity-0 pointer-events-none'
-            : 'opacity-0 group-hover:opacity-100'
-      }`}>
+      <div 
+        data-msg-toolbar 
+        className={`absolute -top-3.5 z-40 flex items-center bg-card border border-border shadow-2xl rounded-2xl p-1 gap-1 transition-opacity duration-150 right-3 ${
+          (activeEmojiPickerMsgId === msg.ts || openedMenuMessageId === msg.ts)
+            ? 'opacity-100 pointer-events-auto'
+            : (activeEmojiPickerMsgId !== null || openedMenuMessageId !== null)
+              ? 'opacity-0 pointer-events-none'
+              : (hoveredMessageId === msg.ts)
+                ? 'opacity-100 pointer-events-auto'
+                : 'opacity-0 pointer-events-none'
+        }`}
+      >
         
         {/* Emojis selector trigger */}
         <div className="relative">
@@ -3728,7 +3782,7 @@ const MessageItem = React.memo(({
             onClick={(e) => {
               e.stopPropagation();
               setActiveEmojiPickerMsgId(activeEmojiPickerMsgId === msg.ts ? null : msg.ts);
-              setActiveAiMenuMsgId(null);
+              setOpenedMenuMessageId(null);
             }}
           >
             <SmilePlus className="w-3.5 h-3.5" />
@@ -3788,20 +3842,21 @@ const MessageItem = React.memo(({
         <div className="relative">
           <button 
             type="button"
+            data-ai-trigger="true"
             onClick={(e) => {
               e.stopPropagation();
-              setActiveAiMenuMsgId(activeAiMenuMsgId === msg.ts ? null : msg.ts);
+              setOpenedMenuMessageId(openedMenuMessageId === msg.ts ? null : msg.ts);
               setActiveEmojiPickerMsgId(null);
             }}
             className={`p-1.5 rounded-xl hover:bg-secondary/40 flex items-center transition-colors ${
-              activeAiMenuMsgId === msg.ts ? 'bg-[#7c6af7]/10 text-[#7c6af7] dark:bg-[#7c6af7]/20 dark:text-[#a78bfa]' : 'text-[#7c6af7] hover:opacity-85'
+              openedMenuMessageId === msg.ts ? 'bg-[#7c6af7]/10 text-[#7c6af7] dark:bg-[#7c6af7]/20 dark:text-[#a78bfa]' : 'text-[#7c6af7] hover:opacity-85'
             }`}
             title="AI Actions"
           >
             <Sparkles className="w-3.5 h-3.5" />
           </button>
           
-          {activeAiMenuMsgId === msg.ts && (
+          {openedMenuMessageId === msg.ts && (
             <div className={`ai-actions-dropdown absolute ${idx < 3 ? 'top-full mt-1.5' : 'bottom-full mb-1.5'} w-52 rounded-xl shadow-2xl p-2 z-50 right-0`} onClick={e => e.stopPropagation()}>
               <button type="button" onClick={() => handleRunAiAction(msg.ts, 'explain', 'AI Explanation', msg.text)} className="w-full text-left p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg flex items-center gap-2 text-[11px] font-semibold text-slate-800 dark:text-slate-100"><Info className="w-3.5 h-3.5 text-sky-500 shrink-0" /> Explain Message</button>
               <button type="button" onClick={() => handleRunAiAction(msg.ts, 'summarize', 'AI Summary', msg.text)} className="w-full text-left p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg flex items-center gap-2 text-[11px] font-semibold text-slate-800 dark:text-slate-100"><Compass className="w-3.5 h-3.5 text-emerald-500 shrink-0" /> Summarize Points</button>
@@ -4137,5 +4192,6 @@ const MessageItem = React.memo(({
          prevProps.msg.isBookmarked === nextProps.msg.isBookmarked &&
          JSON.stringify(prevProps.msg.reactions) === JSON.stringify(nextProps.msg.reactions) &&
          (prevProps.activeEmojiPickerMsgId === prevProps.msg.ts) === (nextProps.activeEmojiPickerMsgId === nextProps.msg.ts) &&
-         (prevProps.activeAiMenuMsgId === prevProps.msg.ts) === (nextProps.activeAiMenuMsgId === nextProps.msg.ts);
+         (prevProps.openedMenuMessageId === prevProps.msg.ts) === (nextProps.openedMenuMessageId === nextProps.msg.ts) &&
+         (prevProps.hoveredMessageId === prevProps.msg.ts) === (nextProps.hoveredMessageId === nextProps.msg.ts);
 });
