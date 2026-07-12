@@ -6,7 +6,7 @@ import { setAuthToken, getAuthToken, apiFetch, setRefreshToken, getRefreshToken 
 
 interface User {
   id: number;
-  username: string;
+  email: string;
   fullName?: string;
 }
 

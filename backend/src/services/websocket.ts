@@ -58,7 +58,7 @@ export function initWebSocketServer(server: HttpServer) {
 
   io.on('connection', (socket: Socket) => {
     const user = socket.data.user;
-    console.log(`[WebSocket] Socket Connected (ID: ${socket.id}, User: ${user?.username || 'Unknown'})`);
+    console.log(`[WebSocket] Socket Connected (ID: ${socket.id}, User: ${user?.email || 'Unknown'})`);
     console.log('[WebSocket] Socket Authenticated');
 
     socket.on('join_channel', (channelId: string) => {

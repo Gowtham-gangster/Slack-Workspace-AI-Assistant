@@ -159,19 +159,19 @@ export default function LoginPage() {
         // Register flow
         await apiFetch('/api/auth/register', {
           method: 'POST',
-          body: { username: email, password, fullName: fullName.trim() }
+          body: { email, password, fullName: fullName.trim() }
         });
         // Auto-login after registration
         const loginData = await apiFetch('/api/auth/login', {
           method: 'POST',
-          body: { username: email, password }
+          body: { email, password }
         });
         login(loginData.token, loginData.user, '/dashboard', loginData.refreshToken);
       } else {
         // Login flow
         const loginData = await apiFetch('/api/auth/login', {
           method: 'POST',
-          body: { username: email, password }
+          body: { email, password }
         });
         login(loginData.token, loginData.user, '/dashboard', loginData.refreshToken);
       }
@@ -424,14 +424,14 @@ export default function LoginPage() {
           <div>
             <label className={`block text-[11px] font-bold uppercase tracking-wider mb-2 ml-1 transition-colors duration-500 ${
               isLightMode ? 'text-slate-600' : 'text-slate-400'
-            }`}>Email or Username</label>
+            }`}>Email Address</label>
             <div className="relative">
               <Mail className={`absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 transition-colors duration-500 ${
                 isLightMode ? 'text-slate-500' : 'text-slate-400'
               }`} />
               <input
                 type="text"
-                placeholder="Enter email or username"
+                placeholder="Enter email address"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className={`w-full pl-11 pr-4 py-3 rounded-xl border focus:ring-1 transition-all outline-none ${

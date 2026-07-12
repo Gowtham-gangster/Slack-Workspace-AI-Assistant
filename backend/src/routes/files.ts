@@ -42,7 +42,7 @@ function authenticateFileJWT(req: AuthenticatedRequest, res: Response, next: Nex
       return res.status(403).json({ error: 'Invalid token.' });
     }
 
-    req.user = decoded as { id: number; username: string; fullName?: string };
+    req.user = decoded as { id: number; email: string; fullName?: string };
     next();
   });
 }

@@ -60,12 +60,33 @@ export async function initializeDatabase() {
   await db.execute(`
     CREATE TABLE IF NOT EXISTS users (
       id INT AUTO_INCREMENT PRIMARY KEY,
-      username VARCHAR(255) UNIQUE NOT NULL,
+      email VARCHAR(255) UNIQUE NOT NULL,
       password_hash VARCHAR(255) NOT NULL,
       full_name VARCHAR(255) DEFAULT NULL,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
   `);
+
+  try {
+    const columns = await db.query<any>('SHOW COLUMNS FROM users');
+    const hasUsername = columns.some((c: any) => c.Field === 'username');
+    const hasEmail = columns.some((c: any) => c.Field === 'email');
+    if (hasUsername) {
+      if (hasEmail) {
+        console.log('[Migration] Both username and email columns exist in users. Migrating data...');
+        await db.execute('UPDATE users SET email = username WHERE email IS NULL OR email = ""');
+        await db.execute('ALTER TABLE users DROP COLUMN username');
+        await db.execute('ALTER TABLE users MODIFY COLUMN email VARCHAR(255) UNIQUE NOT NULL');
+        console.log('[Migration] Successfully migrated data from users.username to users.email');
+      } else {
+        console.log('[Migration] Renaming users.username to users.email...');
+        await db.execute("ALTER TABLE users CHANGE COLUMN username email VARCHAR(255) UNIQUE NOT NULL");
+        console.log('[Migration] users.username successfully renamed to users.email');
+      }
+    }
+  } catch (err: any) {
+    console.warn('[Migration] Failed to migrate users table columns:', err?.message);
+  }
 
   try {
     await db.execute('ALTER TABLE users DROP COLUMN role');
@@ -220,13 +241,6 @@ export async function initializeDatabase() {
     try { await db.execute(sql); } catch (e: any) {
       if (e?.code !== 'ER_DUP_FIELDNAME') console.warn('[Migration]', sql, e?.message);
     }
-  }
-
-  // Add email column to users if not present
-  try {
-    await db.execute('ALTER TABLE users ADD COLUMN email VARCHAR(255) DEFAULT NULL');
-  } catch (e: any) {
-    if (e?.code !== 'ER_DUP_FIELDNAME') console.warn('[Migration] ALTER TABLE users ADD COLUMN email:', e?.message);
   }
 
   // Drop old slack tables if they do not contain db_user_id column
@@ -463,14 +477,31 @@ export async function initializeDatabase() {
   await db.execute(`
     CREATE TABLE IF NOT EXISTS login_attempts (
       id INT AUTO_INCREMENT PRIMARY KEY,
-      username VARCHAR(255) NOT NULL,
+      email VARCHAR(255) NOT NULL,
       ip_address VARCHAR(50) NOT NULL,
       success TINYINT(1) DEFAULT 0,
       attempted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      INDEX idx_username_ip (username, ip_address),
+      INDEX idx_email_ip (email, ip_address),
       INDEX idx_attempted_at (attempted_at)
     )
   `);
+
+  try {
+    const loginCols = await db.query<any>("SHOW COLUMNS FROM login_attempts LIKE 'username'");
+    if (loginCols.length > 0) {
+      console.log('[Migration] Renaming login_attempts.username to login_attempts.email...');
+      await db.execute("ALTER TABLE login_attempts CHANGE COLUMN username email VARCHAR(255) NOT NULL");
+      try {
+        await db.execute("ALTER TABLE login_attempts DROP INDEX idx_username_ip");
+      } catch (e) {}
+      try {
+        await db.execute("ALTER TABLE login_attempts ADD INDEX idx_email_ip (email, ip_address)");
+      } catch (e) {}
+      console.log('[Migration] login_attempts.username successfully renamed to login_attempts.email');
+    }
+  } catch (err: any) {
+    console.warn('[Migration] Failed to migrate login_attempts table:', err?.message);
+  }
 
   // PERF-05: Index for the reminder polling job (runs every 60s)
   try {
@@ -508,12 +539,12 @@ export async function initializeDatabase() {
   if (userCountResult[0].count === 0) {
     const salt = bcrypt.genSaltSync(10);
     const passwordHash = bcrypt.hashSync('admin123', salt);
-    await db.execute('INSERT INTO users (username, password_hash) VALUES (?, ?)', ['admin', passwordHash]);
-    console.log('Seeded default admin user (admin / admin123).');
+    await db.execute('INSERT INTO users (email, password_hash) VALUES (?, ?)', ['admin@workspace.ai', passwordHash]);
+    console.log('Seeded default admin user (admin@workspace.ai / admin123).');
   }
 
   // Seed default settings for default admin user if they don't have settings
-  const adminUser = await db.queryOne<{ id: number }>('SELECT id FROM users WHERE username = ?', ['admin']);
+  const adminUser = await db.queryOne<{ id: number }>('SELECT id FROM users WHERE email = ?', ['admin@workspace.ai']);
   if (adminUser) {
     const settingsCountResult = await db.queryOne<{ count: number }>('SELECT COUNT(*) as count FROM settings WHERE user_id = ?', [adminUser.id]);
     if (!settingsCountResult || settingsCountResult.count === 0) {

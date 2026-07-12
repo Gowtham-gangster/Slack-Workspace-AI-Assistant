@@ -160,8 +160,8 @@ router.post('/messages/:id/react', authenticateJWT, async (req: AuthenticatedReq
       );
       
       if (message && message.author_id !== userId) {
-        const user = await db.queryOne<any>('SELECT username, full_name FROM users WHERE id = ?', [userId]);
-        const username = user?.full_name || user?.username || 'Someone';
+        const user = await db.queryOne<any>('SELECT email, full_name FROM users WHERE id = ?', [userId]);
+        const username = user?.full_name || user?.email || 'Someone';
         
         await db.execute(
           'INSERT INTO notifications (user_id, type, title, message, link) VALUES (?, ?, ?, ?, ?)',
@@ -278,8 +278,8 @@ router.post('/messages/:id/thread', authenticateJWT, async (req: AuthenticatedRe
     // Send notification to parent message author
     const session = await db.queryOne<any>('SELECT user_id, title FROM chat_sessions WHERE id = ?', [parent.session_id]);
     if (session && session.user_id !== req.user!.id) {
-      const user = await db.queryOne<any>('SELECT username, full_name FROM users WHERE id = ?', [req.user!.id]);
-      const username = user?.full_name || user?.username || 'Someone';
+      const user = await db.queryOne<any>('SELECT email, full_name FROM users WHERE id = ?', [req.user!.id]);
+      const username = user?.full_name || user?.email || 'Someone';
       
       await db.execute(
         'INSERT INTO notifications (user_id, type, title, message, link) VALUES (?, ?, ?, ?, ?)',
@@ -386,7 +386,7 @@ router.get('/sessions/:id/pins', authenticateJWT, async (req: AuthenticatedReque
   const sessionId = req.params.id;
   try {
     const pins = await db.query<any>(`
-      SELECT m.*, m.role AS user, p.created_at as pinned_at, u.username as pinned_by_username
+      SELECT m.*, m.role AS user, p.created_at as pinned_at, u.email as pinned_by_email
       FROM chat_pins p
       JOIN chat_messages m ON p.message_id = m.id
       JOIN users u ON p.pinned_by = u.id

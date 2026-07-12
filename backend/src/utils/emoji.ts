@@ -38,8 +38,8 @@ export async function getHumanSlackUserIdForUser(userId: number): Promise<string
   }
 
   try {
-    const userRow = await db.queryOne<{ username: string; full_name: string }>(
-      'SELECT username, full_name FROM users WHERE id = ?',
+    const userRow = await db.queryOne<{ email: string; full_name: string }>(
+      'SELECT email, full_name FROM users WHERE id = ?',
       [userId]
     );
     if (!userRow) return null;
@@ -60,7 +60,7 @@ export async function getHumanSlackUserIdForUser(userId: number): Promise<string
         const email = member.profile?.email;
         const realName = member.real_name || member.profile?.real_name;
         
-        if (email && email.toLowerCase() === userRow.username.toLowerCase()) {
+        if (email && email.toLowerCase() === userRow.email.toLowerCase()) {
           humanSlackUserIdCache.set(userId, member.id);
           return member.id;
         }

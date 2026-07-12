@@ -12,7 +12,7 @@ export const REFRESH_EXPIRY = 30 * 24 * 60 * 60; // 30 days in seconds
 export interface AuthenticatedRequest extends Request {
   user?: {
     id: number;
-    username: string;
+    email: string;
     fullName?: string;
   };
 }
@@ -50,7 +50,7 @@ export function authenticateJWT(req: AuthenticatedRequest, res: Response, next: 
       return res.status(403).json({ error: 'Invalid token.' });
     }
 
-    req.user = decoded as { id: number; username: string; fullName?: string };
+    req.user = decoded as { id: number; email: string; fullName?: string };
     next();
   });
 }
@@ -58,6 +58,6 @@ export function authenticateJWT(req: AuthenticatedRequest, res: Response, next: 
 /**
  * Sign a new short-lived access token (15 minutes).
  */
-export function signAccessToken(payload: { id: number; username: string; fullName?: string }): string {
+export function signAccessToken(payload: { id: number; email: string; fullName?: string }): string {
   return jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_EXPIRY });
 }

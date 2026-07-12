@@ -36,13 +36,13 @@ export default function ProfilePage() {
   useEffect(() => {
     if (user) {
       setFullName(user.fullName || '');
-      setProfileEmail(user.username || '');
+      setProfileEmail(user.email || '');
     }
   }, [user]);
 
   // Mutation to update profile details
   const updateProfileMutation = useMutation({
-    mutationFn: (data: { username: string; fullName?: string; password?: string }) => apiFetch('/api/auth/profile', {
+    mutationFn: (data: { email: string; fullName?: string; password?: string }) => apiFetch('/api/auth/profile', {
       method: 'PUT',
       body: data
     }),
@@ -83,8 +83,8 @@ export default function ProfilePage() {
       return;
     }
 
-    const payload: { username: string; fullName?: string; password?: string } = {
-      username: profileEmail,
+    const payload: { email: string; fullName?: string; password?: string } = {
+      email: profileEmail,
       fullName: fullName
     };
 

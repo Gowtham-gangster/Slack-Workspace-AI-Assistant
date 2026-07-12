@@ -88,7 +88,7 @@ const Sidebar = React.memo(function Sidebar() {
     });
   }, [router]);
 
-  const initials = (user?.fullName || user?.username || 'US').slice(0, 2).toUpperCase();
+  const initials = (user?.fullName || user?.email || 'US').slice(0, 2).toUpperCase();
 
   return (
     <aside className="w-[220px] flex flex-col h-full shrink-0 relative z-10 transition-colors duration-300"
@@ -202,11 +202,11 @@ const Sidebar = React.memo(function Sidebar() {
           </div>
           <div className="min-w-0 flex-1">
             <p className={`text-[11px] font-bold truncate leading-none ${isLightMode ? 'text-slate-800' : 'text-white'}`}>
-              {user?.fullName || user?.username || 'User'}
+              {user?.fullName || user?.email || 'User'}
             </p>
             {user?.fullName && (
               <p className={`text-[9px] truncate mt-1 leading-none ${isLightMode ? 'text-slate-400' : 'text-slate-500'}`}>
-                {user.username}
+                {user.email}
               </p>
             )}
           </div>

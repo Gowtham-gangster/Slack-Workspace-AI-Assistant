@@ -16,35 +16,35 @@ function getClientIp(req: Request): string {
   return req.socket?.remoteAddress || 'unknown';
 }
 
-async function recordLoginAttempt(username: string, ip: string, success: boolean) {
+async function recordLoginAttempt(email: string, ip: string, success: boolean) {
   try {
     await db.execute(
-      'INSERT INTO login_attempts (username, ip_address, success) VALUES (?, ?, ?)',
-      [username, ip, success ? 1 : 0]
+      'INSERT INTO login_attempts (email, ip_address, success) VALUES (?, ?, ?)',
+      [email, ip, success ? 1 : 0]
     );
   } catch (err) {
     console.error('Failed to record login attempt:', err);
   }
 }
 
-async function isLockedOut(username: string, ip: string): Promise<boolean> {
+async function isLockedOut(email: string, ip: string): Promise<boolean> {
   const windowStart = new Date(Date.now() - 15 * 60 * 1000);
 
-  // Lock if 5+ failed attempts from the same IP for this username in 15 min
+  // Lock if 5+ failed attempts from the same IP for this email in 15 min
   const perIpResult = await db.queryOne<{ count: number }>(
     `SELECT COUNT(*) as count FROM login_attempts
-     WHERE username = ? AND ip_address = ? AND success = 0
+     WHERE email = ? AND ip_address = ? AND success = 0
      AND attempted_at >= ?`,
-    [username, ip, windowStart]
+    [email, ip, windowStart]
   );
   if ((perIpResult?.count || 0) >= 5) return true;
 
-  // Also lock if 20+ failed attempts from ANY IP for this username in 15 min (distributed attack)
+  // Also lock if 20+ failed attempts from ANY IP for this email in 15 min (distributed attack)
   const perUserResult = await db.queryOne<{ count: number }>(
     `SELECT COUNT(*) as count FROM login_attempts
-     WHERE username = ? AND success = 0
+     WHERE email = ? AND success = 0
      AND attempted_at >= ?`,
-    [username, windowStart]
+    [email, windowStart]
   );
   return (perUserResult?.count || 0) >= 20;
 }
@@ -74,11 +74,11 @@ async function writeAuditLog(userId: number | null, action: string, target: stri
 
 // POST /api/auth/register
 router.post('/register', async (req, res) => {
-  const { username, password, fullName } = req.body;
+  const { email, password, fullName } = req.body;
   const ip = getClientIp(req);
 
-  if (!username || !password) {
-    return res.status(400).json({ error: 'Username and password are required.' });
+  if (!email || !password) {
+    return res.status(400).json({ error: 'Email and password are required.' });
   }
 
   // Password complexity checks
@@ -98,11 +98,11 @@ router.post('/register', async (req, res) => {
     const passwordHash = await bcrypt.hash(password, salt);
 
     const result = await db.execute(
-      'INSERT INTO users (username, password_hash, full_name) VALUES (?, ?, ?)',
-      [username, passwordHash, fullName || null]
+      'INSERT INTO users (email, password_hash, full_name) VALUES (?, ?, ?)',
+      [email, passwordHash, fullName || null]
     );
 
-    await writeAuditLog(result.insertId, 'REGISTER', username, ip);
+    await writeAuditLog(result.insertId, 'REGISTER', email, ip);
 
     res.status(201).json({
       message: 'User registered successfully.',
@@ -110,7 +110,7 @@ router.post('/register', async (req, res) => {
     });
   } catch (error: any) {
     if (error.code === 'ER_DUP_ENTRY' || error.message?.includes('duplicate')) {
-      res.status(400).json({ error: 'Username already exists.' });
+      res.status(400).json({ error: 'Email Address already exists.' });
     } else {
       console.error('Registration error:', error);
       res.status(500).json({ error: 'Failed to register user.' });
@@ -120,15 +120,15 @@ router.post('/register', async (req, res) => {
 
 // POST /api/auth/login
 router.post('/login', async (req: Request, res: Response) => {
-  const { username, password } = req.body;
+  const { email, password } = req.body;
   const ip = getClientIp(req);
 
-  if (!username || !password) {
-    return res.status(400).json({ error: 'Username and password are required.' });
+  if (!email || !password) {
+    return res.status(400).json({ error: 'Email and password are required.' });
   }
 
   // Brute-force lockout check
-  const locked = await isLockedOut(username, ip);
+  const locked = await isLockedOut(email, ip);
   if (locked) {
     return res.status(429).json({
       error: 'Too many failed login attempts. Please wait 15 minutes and try again.'
@@ -136,18 +136,18 @@ router.post('/login', async (req: Request, res: Response) => {
   }
 
   try {
-    const user = await db.queryOne<any>('SELECT * FROM users WHERE username = ?', [username]);
+    const user = await db.queryOne<any>('SELECT * FROM users WHERE email = ?', [email]);
     const isMatch = user ? await bcrypt.compare(password, user.password_hash) : false;
 
     if (!user || !isMatch) {
-      await recordLoginAttempt(username, ip, false);
-      return res.status(401).json({ error: 'Invalid username or password.' });
+      await recordLoginAttempt(email, ip, false);
+      return res.status(401).json({ error: 'Invalid email or password.' });
     }
 
-    await recordLoginAttempt(username, ip, true);
+    await recordLoginAttempt(email, ip, true);
     await writeAuditLog(user.id, 'LOGIN', null, ip);
 
-    const accessToken = signAccessToken({ id: user.id, username: user.username, fullName: user.full_name });
+    const accessToken = signAccessToken({ id: user.id, email: user.email, fullName: user.full_name });
     const refreshToken = await createRefreshToken(user.id);
 
     res.json({
@@ -155,7 +155,7 @@ router.post('/login', async (req: Request, res: Response) => {
       refreshToken,
       user: {
         id: user.id,
-        username: user.username,
+        email: user.email,
         fullName: user.full_name
       }
     });
@@ -176,7 +176,7 @@ router.post('/refresh', async (req: Request, res: Response) => {
 
   try {
     const stored = await db.queryOne<any>(
-      `SELECT rt.*, u.username, u.full_name
+      `SELECT rt.*, u.email, u.full_name
        FROM refresh_tokens rt
        JOIN users u ON rt.user_id = u.id
        WHERE rt.token = ? AND rt.revoked = 0 AND rt.expires_at > NOW()`,
@@ -192,7 +192,7 @@ router.post('/refresh', async (req: Request, res: Response) => {
     const newRefreshToken = await createRefreshToken(stored.user_id);
     const newAccessToken = signAccessToken({
       id: stored.user_id,
-      username: stored.username,
+      email: stored.email,
       fullName: stored.full_name
     });
 
@@ -203,7 +203,7 @@ router.post('/refresh', async (req: Request, res: Response) => {
       refreshToken: newRefreshToken,
       user: {
         id: stored.user_id,
-        username: stored.username,
+        email: stored.email,
         fullName: stored.full_name
       }
     });
@@ -309,7 +309,7 @@ router.post('/google', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Email not provided by Google.' });
     }
 
-    let user = await db.queryOne<any>('SELECT * FROM users WHERE username = ?', [email]);
+    let user = await db.queryOne<any>('SELECT * FROM users WHERE email = ?', [email]);
 
     if (!user) {
       // Use asynchronous bcrypt hash with 10 rounds to avoid blocking event loop (80ms instead of 1200ms)
@@ -318,13 +318,13 @@ router.post('/google', async (req: Request, res: Response) => {
       const passwordHash = await bcrypt.hash(randomPassword, salt);
 
       const result = await db.execute(
-        'INSERT INTO users (username, password_hash, full_name) VALUES (?, ?, ?)',
+        'INSERT INTO users (email, password_hash, full_name) VALUES (?, ?, ?)',
         [email, passwordHash, name || null]
       );
 
       user = {
         id: result.insertId,
-        username: email,
+        email: email,
         full_name: name || null
       };
 
@@ -333,7 +333,7 @@ router.post('/google', async (req: Request, res: Response) => {
       await writeAuditLog(user.id, 'LOGIN_GOOGLE', null, ip);
     }
 
-    const accessToken = signAccessToken({ id: user.id, username: user.username, fullName: user.full_name });
+    const accessToken = signAccessToken({ id: user.id, email: user.email, fullName: user.full_name });
     const refreshToken = await createRefreshToken(user.id);
 
     res.json({
@@ -341,7 +341,7 @@ router.post('/google', async (req: Request, res: Response) => {
       refreshToken,
       user: {
         id: user.id,
-        username: user.username,
+        email: user.email,
         fullName: user.full_name
       }
     });
@@ -364,17 +364,17 @@ router.put('/profile', authenticateJWT, async (req: AuthenticatedRequest, res: R
   if (!req.user) {
     return res.status(401).json({ error: 'Unauthorized.' });
   }
-  const { username, password, fullName } = req.body;
+  const { email, password, fullName } = req.body;
   const ip = getClientIp(req);
 
-  if (!username) {
+  if (!email) {
     return res.status(400).json({ error: 'Email Address is required.' });
   }
 
   try {
     const existingUser = await db.queryOne<any>(
-      'SELECT * FROM users WHERE username = ? AND id != ?',
-      [username, req.user.id]
+      'SELECT * FROM users WHERE email = ? AND id != ?',
+      [email, req.user.id]
     );
     if (existingUser) {
       return res.status(400).json({ error: 'Email Address is already taken.' });
@@ -384,19 +384,19 @@ router.put('/profile', authenticateJWT, async (req: AuthenticatedRequest, res: R
       const salt = bcrypt.genSaltSync(12);
       const passwordHash = bcrypt.hashSync(password, salt);
       await db.execute(
-        'UPDATE users SET username = ?, password_hash = ?, full_name = ? WHERE id = ?',
-        [username, passwordHash, fullName || null, req.user.id]
+        'UPDATE users SET email = ?, password_hash = ?, full_name = ? WHERE id = ?',
+        [email, passwordHash, fullName || null, req.user.id]
       );
     } else {
       await db.execute(
-        'UPDATE users SET username = ?, full_name = ? WHERE id = ?',
-        [username, fullName || null, req.user.id]
+        'UPDATE users SET email = ?, full_name = ? WHERE id = ?',
+        [email, fullName || null, req.user.id]
       );
     }
 
-    await writeAuditLog(req.user.id, 'PROFILE_UPDATE', username, ip);
+    await writeAuditLog(req.user.id, 'PROFILE_UPDATE', email, ip);
 
-    const newAccessToken = signAccessToken({ id: req.user.id, username, fullName: fullName || null });
+    const newAccessToken = signAccessToken({ id: req.user.id, email, fullName: fullName || null });
     const newRefreshToken = await createRefreshToken(req.user.id);
 
     res.json({
@@ -405,7 +405,7 @@ router.put('/profile', authenticateJWT, async (req: AuthenticatedRequest, res: R
       refreshToken: newRefreshToken,
       user: {
         id: req.user.id,
-        username,
+        email,
         fullName: fullName || null
       }
     });
@@ -423,7 +423,7 @@ router.delete('/account', authenticateJWT, async (req: AuthenticatedRequest, res
   const ip = getClientIp(req);
 
   try {
-    await writeAuditLog(req.user.id, 'ACCOUNT_DELETE', req.user.username, ip);
+    await writeAuditLog(req.user.id, 'ACCOUNT_DELETE', req.user.email, ip);
     await db.execute('DELETE FROM users WHERE id = ?', [req.user.id]);
     res.json({ message: 'Account deleted successfully.' });
   } catch (error) {

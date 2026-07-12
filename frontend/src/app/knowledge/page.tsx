@@ -274,6 +274,7 @@ export default function KnowledgeGraphPage() {
                   fitView
                   minZoom={0.5}
                   maxZoom={1.5}
+                  proOptions={{ hideAttribution: true }}
                 >
                   <Background color={isLightMode ? '#cbd5e1' : '#334155'} gap={16} size={1} />
                   <Controls />
