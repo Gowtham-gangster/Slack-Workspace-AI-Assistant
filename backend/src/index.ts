@@ -155,7 +155,7 @@ async function startServer() {
 
   initWebSocketServer(server);
 
-  server.listen(PORT, () => {
+  server.listen(PORT, '0.0.0.0', () => {
     console.log(`===============================================`);
     console.log(`Slack AI Workspace Assistant Backend Running`);
     console.log(`Listening on http://localhost:${PORT}`);
