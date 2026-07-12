@@ -89,6 +89,9 @@ router.get('/:id/messages', authenticateJWT, async (req: AuthenticatedRequest, r
       limit: limit
     });
     const parsed = parseMCPResponse(response);
+    if (parsed && parsed.ok === false) {
+      console.error(`[Slack API Error] Failed to fetch history for channel ${channelId}:`, parsed.error);
+    }
     const messages = parsed?.messages || (Array.isArray(parsed) ? parsed : []);
 
     if (messages.length === 0) {

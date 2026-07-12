@@ -190,6 +190,9 @@ export async function syncSlackWorkspace(userId: number, channelLimit = 10, mess
       });
 
       const parsedHistory = parseMCPResponse(historyResponse);
+      if (parsedHistory && parsedHistory.ok === false) {
+        console.error(`[Slack API Sync Error] Failed to fetch history for channel ${channelId}:`, parsedHistory.error);
+      }
       const messages = parsedHistory?.messages || (Array.isArray(parsedHistory) ? parsedHistory : []);
 
       if (Array.isArray(messages)) {
