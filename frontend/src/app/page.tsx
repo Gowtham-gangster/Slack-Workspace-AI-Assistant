@@ -373,6 +373,97 @@ const PipelineUIVisualizer = ({
   );
 };
 
+const scenarios = [
+  {
+    query: "What happened in engineering this week?",
+    summary: "The engineering team successfully completed the migration to the new MySQL production database on Tuesday. The front-end team integrated a global theme settings panel, and David resolved the Slack bot API rate limit issue.",
+    decisions: [
+      "MySQL production migration is officially complete; sqlite database file is deactivated.",
+      "Decided to change sync frequencies to 15-minute intervals to avoid API limit errors."
+    ],
+    actions: [
+      { task: "Load test DB replica with 10k dataset", owner: "@Priya", status: "In Progress", color: "#0ea5e9" },
+      { task: "Coordinate replica parameters with cloud ops", owner: "@David", status: "Pending", color: "#fbbf24" },
+      { task: "Document Slack MCP sync setup guide", owner: "@Priya", status: "Completed", color: "#10b981" }
+    ],
+    risks: [
+      "MySQL read latencies could spike during peak traffic hours if caching rules are not optimized.",
+      "Slack API rate limits may block real-time messages if batch indexing runs overlap."
+    ]
+  },
+  {
+    query: "Are there any blockers or decisions in support?",
+    summary: "Customer support reports a surge in setup inquiries. Users are confused by the Slack Bot Token credentials scope setup. Inquiries are resolved quickly, but documentation is currently a major bottleneck.",
+    decisions: [
+      "Create a public integration setup guide to reduce ticket volumes.",
+      "Add helper tooltips to the credentials input form in workspace settings."
+    ],
+    actions: [
+      { task: "Draft setup guide documentation", owner: "@Priya", status: "In Progress", color: "#0ea5e9" },
+      { task: "Add UI settings credentials tooltips", owner: "@Gowtham", status: "Pending", color: "#fbbf24" }
+    ],
+    risks: [
+      "Setup bottlenecks may impact user trial conversions if documentation is not launched this week.",
+      "OAuth scoping updates require security re-verification."
+    ]
+  },
+  {
+    query: "Give me the team updates from the #general channel.",
+    summary: "General channel updates include announcements about the new workspace assistant launch. Priya shared slides for the upcoming demo sync.",
+    decisions: [
+      "The company-wide demo is scheduled for Thursday at 2 PM EST.",
+      "All teams must submit progress updates by Wednesday EOD."
+    ],
+    actions: [
+      { task: "Share slides in the general Slack channel", owner: "@Priya", status: "Completed", color: "#10b981" },
+      { task: "Submit progress updates on engineering tasks", owner: "@Gowtham", status: "Pending", color: "#fbbf24" }
+    ],
+    risks: [
+      "Delayed slide submission by remote teams may push the review meeting schedule.",
+      "Overlapping presentation slots could exceed the 30-minute demo window."
+    ]
+  }
+];
+
+const useCases = [
+  {
+    icon: Search,
+    title: "Find Lost Conversations",
+    desc: "Instantly retrieve facts, links, and design mockups buried deep in old threads. No more endless scrolling through weeks of backlog.",
+    color: "#7c6af7"
+  },
+  {
+    icon: ClipboardList,
+    title: "Generate Meeting Summaries",
+    desc: "Turn chaotic standups, product reviews, and brainstorming channels into clean, structured written summaries in one click.",
+    color: "#0ea5e9"
+  },
+  {
+    icon: CheckCircle2,
+    title: "Track Action Items",
+    desc: "Detect tasks automatically from team conversations, compile deadlines, and assign clear owners to keep everyone accountable.",
+    color: "#10b981"
+  },
+  {
+    icon: Users,
+    title: "Discover Team Decisions",
+    desc: "Highlight final agreements, consensus points, and project greenlights without reading back through multi-threaded chats.",
+    color: "#8b5cf6"
+  },
+  {
+    icon: Activity,
+    title: "Monitor Workspace Health",
+    desc: "Observe topic velocities, identify conversational bottlenecks, and gauge team sentiment using clean, elegant metrics dashboards.",
+    color: "#fbbf24"
+  },
+  {
+    icon: Layers,
+    title: "Search Across Channels",
+    desc: "Connect information from public channels, private rooms, and direct messages in a unified security-audited search view.",
+    color: "#f43f5e"
+  }
+];
+
 export default function LandingPage() {
   const router = useRouter();
   const { user } = useAuth();
@@ -396,58 +487,6 @@ export default function LandingPage() {
   const [isTyping, setIsTyping] = useState(false);
   const [typedText, setTypedText] = useState('');
   const [showResponse, setShowResponse] = useState(false);
-
-  const scenarios = [
-    {
-      query: "What happened in engineering this week?",
-      summary: "The engineering team successfully completed the migration to the new MySQL production database on Tuesday. The front-end team integrated a global theme settings panel, and David resolved the Slack bot API rate limit issue.",
-      decisions: [
-        "MySQL production migration is officially complete; sqlite database file is deactivated.",
-        "Decided to change sync frequencies to 15-minute intervals to avoid API limit errors."
-      ],
-      actions: [
-        { task: "Load test DB replica with 10k dataset", owner: "@Priya", status: "In Progress", color: "#0ea5e9" },
-        { task: "Coordinate replica parameters with cloud ops", owner: "@David", status: "Pending", color: "#fbbf24" },
-        { task: "Document Slack MCP sync setup guide", owner: "@Priya", status: "Completed", color: "#10b981" }
-      ],
-      risks: [
-        "MySQL read latencies could spike during peak traffic hours if caching rules are not optimized.",
-        "Slack API rate limits may block real-time messages if batch indexing runs overlap."
-      ]
-    },
-    {
-      query: "Are there any blockers or decisions in support?",
-      summary: "Customer support reports a surge in setup inquiries. Users are confused by the Slack Bot Token credentials scope setup. Inquiries are resolved quickly, but documentation is currently a major bottleneck.",
-      decisions: [
-        "Create a public integration setup guide to reduce ticket volumes.",
-        "Add helper tooltips to the credentials input form in workspace settings."
-      ],
-      actions: [
-        { task: "Draft setup guide documentation", owner: "@Priya", status: "In Progress", color: "#0ea5e9" },
-        { task: "Add UI settings credentials tooltips", owner: "@Gowtham", status: "Pending", color: "#fbbf24" }
-      ],
-      risks: [
-        "Setup bottlenecks may impact user trial conversions if documentation is not launched this week.",
-        "OAuth scoping updates require security re-verification."
-      ]
-    },
-    {
-      query: "Give me the team updates from the #general channel.",
-      summary: "General channel updates include announcements about the new workspace assistant launch. Priya shared slides for the upcoming demo sync.",
-      decisions: [
-        "The company-wide demo is scheduled for Thursday at 2 PM EST.",
-        "All teams must submit progress updates by Wednesday EOD."
-      ],
-      actions: [
-        { task: "Share slides in the general Slack channel", owner: "@Priya", status: "Completed", color: "#10b981" },
-        { task: "Submit progress updates on engineering tasks", owner: "@Gowtham", status: "Pending", color: "#fbbf24" }
-      ],
-      risks: [
-        "Delayed slide submission by remote teams may push the review meeting schedule.",
-        "Overlapping presentation slots could exceed the 30-minute demo window."
-      ]
-    }
-  ];
 
   useEffect(() => {
     let active = true;
@@ -484,46 +523,6 @@ export default function LandingPage() {
     const el = document.getElementById(id);
     if (el) el.scrollIntoView({ behavior: 'smooth' });
   };
-
-  // Human-centered use case cards data
-  const useCases = [
-    {
-      icon: Search,
-      title: "Find Lost Conversations",
-      desc: "Instantly retrieve facts, links, and design mockups buried deep in old threads. No more endless scrolling through weeks of backlog.",
-      color: "#7c6af7"
-    },
-    {
-      icon: ClipboardList,
-      title: "Generate Meeting Summaries",
-      desc: "Turn chaotic standups, product reviews, and brainstorming channels into clean, structured written summaries in one click.",
-      color: "#0ea5e9"
-    },
-    {
-      icon: CheckCircle2,
-      title: "Track Action Items",
-      desc: "Detect tasks automatically from team conversations, compile deadlines, and assign clear owners to keep everyone accountable.",
-      color: "#10b981"
-    },
-    {
-      icon: Users,
-      title: "Discover Team Decisions",
-      desc: "Highlight final agreements, consensus points, and project greenlights without reading back through multi-threaded chats.",
-      color: "#8b5cf6"
-    },
-    {
-      icon: Activity,
-      title: "Monitor Workspace Health",
-      desc: "Observe topic velocities, identify conversational bottlenecks, and gauge team sentiment using clean, elegant metrics dashboards.",
-      color: "#fbbf24"
-    },
-    {
-      icon: Layers,
-      title: "Search Across Channels",
-      desc: "Connect information from public channels, private rooms, and direct messages in a unified security-audited search view.",
-      color: "#f43f5e"
-    }
-  ];
 
   return (
     <div ref={targetRef} className={`relative min-h-screen overflow-x-hidden selection:bg-[#7c6af7]/35 transition-colors duration-500 ${
@@ -1081,7 +1080,7 @@ export default function LandingPage() {
                   isLightMode ? 'bg-slate-50 border-slate-100 text-slate-800 shadow-sm' : 'bg-white/[0.02] border-white/5 text-slate-300'
                 }`}>
                   <div className={`font-bold mb-1 ${isLightMode ? 'text-slate-900' : 'text-white'}`}>MySQL Vector / Embedded Database</div>
-                  <div className={isLightMode ? 'text-slate-500' : 'text-slate-500'}>All summaries and vector embeddings stored locally inside your SQL cluster.</div>
+                  <div className={isLightMode ? 'text-slate-500' : 'text-slate-500'}>All summaries and vector embeddings stored  inside SQL cluster.</div>
                 </div>
               </div>
             </div>

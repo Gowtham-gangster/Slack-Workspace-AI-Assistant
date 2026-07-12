@@ -2,6 +2,8 @@ import { Router, Response } from 'express';
 import { authenticateJWT, AuthenticatedRequest } from '../middleware/auth.js';
 import { MCPClientManager, parseMCPResponse } from '../services/mcpClient.js';
 import { generateText } from '../services/ai.js';
+import { sanitizeAIError } from '../middleware/errorHandler.js';
+import { cache, TTL, cacheKey } from '../services/cache.js';
 
 const router = Router();
 
@@ -11,6 +13,14 @@ router.get('/:channelId', authenticateJWT, async (req: AuthenticatedRequest, res
     const userId = req.user!.id;
     const { channelId } = req.params;
     const limit = parseInt(req.query.limit as string) || 40;
+
+    // Check cache first
+    const key = cacheKey(userId, 'timeline', channelId, limit);
+    const cached = cache.get<any[]>(key);
+    if (cached) {
+      console.log(`[Cache Hit] Returning cached timeline for channel: ${channelId}`);
+      return res.json(cached);
+    }
 
     const mcpManager = MCPClientManager.getInstance(userId);
     if (!mcpManager.isConnected()) await mcpManager.initializeClient();
@@ -80,10 +90,12 @@ Focus on important events only. Return 5-15 events maximum.`;
       };
     });
 
+    // Save to cache
+    cache.set(key, result, TTL.ANALYTICS);
     res.json(result);
   } catch (error: any) {
     console.error('Timeline generation failed:', error);
-    res.status(500).json({ error: error?.message || 'Failed to generate timeline.' });
+    res.status(500).json({ error: sanitizeAIError(error, 'Failed to generate timeline.') });
   }
 });
 

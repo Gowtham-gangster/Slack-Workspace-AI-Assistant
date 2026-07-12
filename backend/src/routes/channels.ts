@@ -1,14 +1,21 @@
 import { Router, Response } from 'express';
 import { db } from '../db/index.js';
+import { slackToUnicode, getBotUserIdForUser, getHumanSlackUserIdForUser } from '../utils/emoji.js';
 import { authenticateJWT, AuthenticatedRequest } from '../middleware/auth.js';
 import { syncSlackWorkspace } from '../services/vectorStore.js';
 import { MCPClientManager, parseMCPResponse } from '../services/mcpClient.js';
-import { generateText } from '../services/ai.js';
+import { generateText, generateTextStream } from '../services/ai.js';
 import { generateLocalFallbackSummary, generateLocalFallbackActionPlans } from '../services/fallback.js';
 import { cache, TTL, cacheKey } from '../services/cache.js';
+import { sanitizeAIError } from '../middleware/errorHandler.js';
 
+
+import { FileService } from '../services/fileService.js';
+
+import multer from 'multer';
 
 const router = Router();
+const upload = multer({ storage: multer.memoryStorage() });
 
 
 // GET /api/channels
@@ -61,6 +68,12 @@ router.get('/users', authenticateJWT, async (req: AuthenticatedRequest, res: Res
 });
 
 
+const fileService = FileService.getInstance();
+
+export async function saveFileMetadata(file: any) {
+  await fileService.saveFileMetadata(file);
+}
+
 // GET /api/channels/:id/messages - Retrieve live messages from Slack channel
 router.get('/:id/messages', authenticateJWT, async (req: AuthenticatedRequest, res: Response) => {
   const channelId = req.params.id;
@@ -77,12 +90,91 @@ router.get('/:id/messages', authenticateJWT, async (req: AuthenticatedRequest, r
     });
     const parsed = parseMCPResponse(response);
     const messages = parsed?.messages || (Array.isArray(parsed) ? parsed : []);
-    res.json(messages);
+
+    if (messages.length === 0) {
+      return res.json([]);
+    }
+
+    // Batch all metadata queries — one query each instead of one per message
+    const messageIds = messages.map((m: any) => m.ts);
+    const placeholders = messageIds.map(() => '?').join(',');
+
+    const [reactionsAll, pinsAll, bookmarksAll] = await Promise.all([
+      db.query<any>(`SELECT emoji, user_id, message_id FROM chat_reactions WHERE message_id IN (${placeholders})`, messageIds),
+      db.query<any>(`SELECT message_id, pinned_by FROM chat_pins WHERE message_id IN (${placeholders}) AND session_id = ?`, [...messageIds, channelId]),
+      db.query<any>(`SELECT message_id FROM chat_bookmarks WHERE message_id IN (${placeholders}) AND user_id = ?`, [...messageIds, userId]),
+    ]);
+
+    // Build O(1) lookup maps
+    const reactionsMap = new Map<string, any[]>();
+    for (const r of reactionsAll) {
+      if (!reactionsMap.has(r.message_id)) reactionsMap.set(r.message_id, []);
+      reactionsMap.get(r.message_id)!.push({ emoji: r.emoji, user_id: r.user_id });
+    }
+    const pinMap = new Map<string, any>(pinsAll.map((p: any) => [p.message_id, p]));
+    const bookmarkSet = new Set<string>(bookmarksAll.map((b: any) => b.message_id));
+
+    const botUserId = await getBotUserIdForUser(userId);
+    const humanSlackUserId = await getHumanSlackUserIdForUser(userId);
+
+    const formattedMessages = messages.map((m: any) => {
+      const pin = pinMap.get(m.ts);
+      
+      // Parse Slack native reactions
+      const slackReactions: any[] = [];
+      if (m.reactions && Array.isArray(m.reactions)) {
+        for (const sr of m.reactions) {
+          const unicodeEmoji = slackToUnicode(sr.name);
+          if (sr.users && Array.isArray(sr.users)) {
+            for (const sUser of sr.users) {
+              const resolvedUserId = (sUser === botUserId || (humanSlackUserId && sUser === humanSlackUserId)) ? 1 : sUser;
+              slackReactions.push({
+                emoji: unicodeEmoji,
+                user_id: resolvedUserId
+              });
+            }
+          }
+        }
+      }
+
+      // Merge with local reactions
+      const localReactions = reactionsMap.get(m.ts) || [];
+      const combinedMap = new Map<string, any>();
+      for (const r of slackReactions) {
+        combinedMap.set(`${r.emoji}_${r.user_id}`, r);
+      }
+      for (const r of localReactions) {
+        combinedMap.set(`${r.emoji}_${r.user_id}`, r);
+      }
+      const combinedReactions = Array.from(combinedMap.values());
+
+      return {
+        ...m,
+        id: m.ts,
+        reactions: combinedReactions,
+        isPinned: !!pin,
+        pinnedBy: pin ? pin.pinned_by : null,
+        isBookmarked: bookmarkSet.has(m.ts),
+        replyCount: m.reply_count || 0
+      };
+    });
+
+    // Cache any Slack files metadata in our database
+    for (const m of messages) {
+      if (m.files && Array.isArray(m.files)) {
+        for (const file of m.files) {
+          await saveFileMetadata(file);
+        }
+      }
+    }
+
+    res.json(formattedMessages);
   } catch (error: any) {
     console.error('Failed to get live messages:', error);
     res.status(500).json({ error: error?.message || 'Failed to retrieve live channel messages.' });
   }
 });
+
 
 // GET /api/channels/:id/summarize - Summarize live messages in a channel (cached 10 min)
 router.get('/:id/summarize', authenticateJWT, async (req: AuthenticatedRequest, res: Response) => {
@@ -176,6 +268,44 @@ WRITING STYLE
 Slack Discussion:
 ${messagesText}`;
     
+    const shouldStream = req.query.stream === 'true';
+
+    if (shouldStream) {
+      res.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+        'X-Accel-Buffering': 'no'
+      });
+
+      let completeSummary = '';
+      try {
+        completeSummary = await generateTextStream(prompt, userId, (token) => {
+          res.write(`data: ${JSON.stringify({ token })}\n\n`);
+        });
+      } catch (err: any) {
+        if (err?.message?.includes('429') || err?.message?.includes('RESOURCE_EXHAUSTED')) {
+          let members: any[] = [];
+          try {
+            const usersResponse = await mcpManager.callTool('slack_get_users', {});
+            const parsedUsers = parseMCPResponse(usersResponse);
+            members = parsedUsers?.members || (Array.isArray(parsedUsers) ? parsedUsers : []);
+          } catch (_) {}
+          const channelInfo = await db.queryOne<{ name: string }>('SELECT name FROM slack_channels WHERE db_user_id = ? AND id = ?', [userId, channelId]);
+          const channelName = channelInfo?.name || channelId;
+          completeSummary = generateLocalFallbackSummary(messages, channelName, members);
+          res.write(`data: ${JSON.stringify({ token: completeSummary })}\n\n`);
+        } else {
+          res.write(`data: ${JSON.stringify({ error: err?.message || String(err) })}\n\n`);
+          return res.end();
+        }
+      }
+
+      cache.set(key, { summary: completeSummary }, TTL.CHANNEL_SUMMARY);
+      res.write('data: [DONE]\n\n');
+      return res.end();
+    }
+
     let summary: string;
     try {
       summary = await generateText(prompt, userId);
@@ -199,7 +329,7 @@ ${messagesText}`;
     res.json(result);
   } catch (error: any) {
     console.error('Failed to summarize channel:', error);
-    res.status(500).json({ error: error?.message || 'Failed to summarize channel.' });
+    res.status(500).json({ error: sanitizeAIError(error, 'Failed to summarize channel.') });
   }
 });
 
@@ -277,7 +407,7 @@ ${messagesText}`;
     res.json(tasks);
   } catch (error: any) {
     console.error('Failed to extract action items:', error);
-    res.status(500).json({ error: error?.message || 'Failed to extract action items.' });
+    res.status(500).json({ error: sanitizeAIError(error, 'Failed to extract action items.') });
   }
 });
 
@@ -349,27 +479,159 @@ router.get('/:id/active-members', authenticateJWT, async (req: AuthenticatedRequ
   }
 });
 
+async function uploadAttachmentToSlack(token: string, channelId: string, attachment: { name: string; data: string; type: string }) {
+  try {
+    // 1. Parse Base64 data to buffer
+    const match = attachment.data.match(/^data:(.+);base64,(.+)$/);
+    const base64Data = match ? match[2] : attachment.data;
+    const buffer = Buffer.from(base64Data, 'base64');
+    
+    // 2. Call files.getUploadURLExternal
+    const getUrlResponse = await fetch('https://slack.com/api/files.getUploadURLExternal', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: new URLSearchParams({
+        filename: attachment.name,
+        length: String(buffer.length),
+      }).toString()
+    });
+    
+    const urlData = await getUrlResponse.json() as any;
+    if (!urlData.ok) {
+      throw new Error(`getUploadURLExternal failed: ${urlData.error || 'unknown error'}`);
+    }
+    
+    // 3. Upload the file to the upload_url
+    const uploadResponse = await fetch(urlData.upload_url, {
+      method: 'POST',
+      body: buffer
+    });
+    
+    if (!uploadResponse.ok) {
+      throw new Error(`Upload to Slack S3 storage failed with status ${uploadResponse.status}`);
+    }
+    
+    // 4. Call files.completeUploadExternal
+    const completeResponse = await fetch('https://slack.com/api/files.completeUploadExternal', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json; charset=utf-8',
+      },
+      body: JSON.stringify({
+        channel_id: channelId,
+        files: [{ id: urlData.file_id }]
+      })
+    });
+    
+    const completeData = await completeResponse.json() as any;
+    if (!completeData.ok) {
+      throw new Error(`completeUploadExternal failed: ${completeData.error || 'unknown error'}`);
+    }
+    
+    if (completeData.files && Array.isArray(completeData.files)) {
+      for (const file of completeData.files) {
+        await saveFileMetadata(file);
+      }
+    }
+    
+    return completeData;
+  } catch (err: any) {
+    console.error(`Failed to upload attachment ${attachment.name} to Slack:`, err);
+    throw err;
+  }
+}
+
 // POST /api/channels/:id/messages - Post message directly to Slack channel
 router.post('/:id/messages', authenticateJWT, async (req: AuthenticatedRequest, res: Response) => {
   const channelId = req.params.id;
-  const { text } = req.body;
+  const { text, attachments, fileIds, threadTs } = req.body;
 
-  if (!text) {
-    return res.status(400).json({ error: 'Message text is required.' });
+  if (!text && (!attachments || attachments.length === 0) && (!fileIds || fileIds.length === 0)) {
+    return res.status(400).json({ error: 'Message text, attachments, or fileIds are required.' });
   }
 
   try {
     const userId = req.user!.id;
-    const mcpManager = MCPClientManager.getInstance(userId);
-    if (!mcpManager.isConnected()) {
-      await mcpManager.initializeClient();
+    const tokenRow = await db.queryOne<{ value: string }>('SELECT value FROM settings WHERE user_id = ? AND `key` = ?', [userId, 'mcp_slack_bot_token']);
+    const token = tokenRow?.value;
+
+    if (!token) {
+      return res.status(400).json({ error: 'Slack Bot Token is not configured.' });
     }
-    const response = await mcpManager.callTool('slack_post_message', {
-      channel_id: channelId,
-      text: text
-    });
-    const parsed = parseMCPResponse(response);
-    res.json({ message: 'Message posted successfully.', response: parsed });
+
+    let postResponse: any = null;
+
+    // A. Support the new Slack file upload completion flow
+    if (fileIds && Array.isArray(fileIds) && fileIds.length > 0) {
+      const completeResponse = await fetch('https://slack.com/api/files.completeUploadExternal', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json; charset=utf-8',
+        },
+        body: JSON.stringify({
+          channel_id: channelId,
+          files: fileIds.map(id => ({ id })),
+          initial_comment: text || undefined,
+          thread_ts: threadTs || undefined
+        })
+      });
+
+      const completeData = await completeResponse.json() as any;
+      if (!completeData.ok) {
+        throw new Error(`completeUploadExternal failed: ${completeData.error || 'unknown error'}`);
+      }
+      if (completeData.files && Array.isArray(completeData.files)) {
+        for (const file of completeData.files) {
+          await saveFileMetadata(file);
+        }
+      }
+      postResponse = completeData;
+    } 
+    // B. Fallback to old base64 attachments if present
+    else if (attachments && Array.isArray(attachments) && attachments.length > 0) {
+      for (const att of attachments) {
+        await uploadAttachmentToSlack(token, channelId, att);
+      }
+      if (text) {
+        const mcpManager = MCPClientManager.getInstance(userId);
+        if (!mcpManager.isConnected()) {
+          await mcpManager.initializeClient();
+        }
+        const response = await mcpManager.callTool('slack_post_message', {
+          channel_id: channelId,
+          text: text
+        });
+        postResponse = parseMCPResponse(response);
+      }
+    } 
+    // C. Regular text message
+    else {
+      const mcpManager = MCPClientManager.getInstance(userId);
+      if (!mcpManager.isConnected()) {
+        await mcpManager.initializeClient();
+      }
+      if (threadTs) {
+        const response = await mcpManager.callTool('slack_reply_to_thread', {
+          channel_id: channelId,
+          thread_ts: threadTs,
+          text: text
+        });
+        postResponse = parseMCPResponse(response);
+      } else {
+        const response = await mcpManager.callTool('slack_post_message', {
+          channel_id: channelId,
+          text: text
+        });
+        postResponse = parseMCPResponse(response);
+      }
+    }
+
+    res.json({ message: 'Message posted successfully.', response: postResponse });
   } catch (error: any) {
     console.error('Failed to post message to Slack:', error);
     res.status(500).json({ error: error?.message || 'Failed to post message to Slack.' });
@@ -925,6 +1187,9 @@ router.post('/sync', authenticateJWT, async (req: AuthenticatedRequest, res: Res
     // Sync first 10 channels, 50 messages each for quick local setup
     const stats = await syncSlackWorkspace(userId, 10, 50);
     
+    // Invalidate user's cache after synchronization
+    cache.delByPrefix(cacheKey(userId, ''));
+    
     console.log('Workspace sync complete:', stats);
     res.json({
       message: 'Workspace synced successfully.',
@@ -932,7 +1197,132 @@ router.post('/sync', authenticateJWT, async (req: AuthenticatedRequest, res: Res
     });
   } catch (error: any) {
     console.error('Workspace sync failed:', error);
-    res.status(500).json({ error: error?.message || 'Failed to sync workspace.' });
+    res.status(500).json({ error: sanitizeAIError(error, 'Failed to sync workspace.') });
+  }
+});
+
+// GET /api/channels/:channelId/messages/:ts/thread - Fetch Slack thread replies
+router.get('/:channelId/messages/:ts/thread', authenticateJWT, async (req: AuthenticatedRequest, res: Response) => {
+  const { channelId, ts } = req.params;
+  try {
+    const userId = req.user!.id;
+    const mcpManager = MCPClientManager.getInstance(userId);
+    if (!mcpManager.isConnected()) {
+      await mcpManager.initializeClient();
+    }
+    const response = await mcpManager.callTool('slack_get_thread_replies', {
+      channel_id: channelId,
+      thread_ts: ts
+    });
+    const parsed = parseMCPResponse(response);
+    const replies = parsed?.messages || (Array.isArray(parsed) ? parsed : []);
+    
+    const formatted = replies.map((r: any) => ({
+      id: r.ts,
+      parent_message_id: ts,
+      session_id: channelId,
+      role: r.user === 'US' || r.user === userId.toString() ? 'user' : 'assistant',
+      content: r.text || '',
+      created_at: new Date(parseFloat(r.ts) * 1000).toISOString(),
+      user: r.user
+    }));
+    res.json(formatted);
+  } catch (error: any) {
+    console.error('Failed to retrieve Slack thread replies:', error);
+    res.status(500).json({ error: error?.message || 'Failed to retrieve Slack thread replies.' });
+  }
+});
+
+// POST /api/channels/:channelId/messages/:ts/thread - Post thread reply to Slack
+router.post('/:channelId/messages/:ts/thread', authenticateJWT, async (req: AuthenticatedRequest, res: Response) => {
+  const { channelId, ts } = req.params;
+  const { content, fileIds } = req.body;
+  if (!content && (!fileIds || fileIds.length === 0)) {
+    return res.status(400).json({ error: 'Content or fileIds are required.' });
+  }
+  try {
+    const userId = req.user!.id;
+    const tokenRow = await db.queryOne<{ value: string }>('SELECT value FROM settings WHERE user_id = ? AND `key` = ?', [userId, 'mcp_slack_bot_token']);
+    const token = tokenRow?.value;
+
+    if (!token) {
+      return res.status(400).json({ error: 'Slack Bot Token is not configured.' });
+    }
+
+    let postResponse: any = null;
+
+    if (fileIds && Array.isArray(fileIds) && fileIds.length > 0) {
+      const completeResponse = await fetch('https://slack.com/api/files.completeUploadExternal', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json; charset=utf-8',
+        },
+        body: JSON.stringify({
+          channel_id: channelId,
+          files: fileIds.map(id => ({ id })),
+          initial_comment: content || undefined,
+          thread_ts: ts
+        })
+      });
+
+      const completeData = await completeResponse.json() as any;
+      if (!completeData.ok) {
+        throw new Error(`completeUploadExternal failed: ${completeData.error || 'unknown error'}`);
+      }
+      if (completeData.files && Array.isArray(completeData.files)) {
+        for (const file of completeData.files) {
+          await saveFileMetadata(file);
+        }
+      }
+      postResponse = completeData;
+    } else {
+      const mcpManager = MCPClientManager.getInstance(userId);
+      if (!mcpManager.isConnected()) {
+        await mcpManager.initializeClient();
+      }
+      const response = await mcpManager.callTool('slack_reply_to_thread', {
+        channel_id: channelId,
+        thread_ts: ts,
+        text: content
+      });
+      postResponse = parseMCPResponse(response);
+    }
+
+    res.status(201).json({
+      userReply: {
+        id: postResponse?.ts || postResponse?.file_ids?.[0] || Math.random().toString(),
+        parent_message_id: ts,
+        session_id: channelId,
+        role: 'user',
+        content: content || '',
+        created_at: new Date().toISOString()
+      }
+    });
+  } catch (error: any) {
+    console.error('Failed to post Slack thread reply:', error);
+    res.status(500).json({ error: error?.message || 'Failed to post thread reply.' });
+  }
+});
+
+// POST /api/channels/:id/upload-file - Multipart file upload direct to Slack S3 via getUploadURLExternal
+router.post('/:id/upload-file', authenticateJWT, upload.single('file'), async (req: AuthenticatedRequest, res: Response) => {
+  if (!req.file) {
+    return res.status(400).json({ error: 'No file uploaded in the "file" field.' });
+  }
+
+  try {
+    const userId = req.user!.id;
+    const result = await fileService.uploadFileDirect(
+      userId,
+      req.file.originalname,
+      req.file.size,
+      req.file.mimetype,
+      req.file.buffer
+    );
+    res.json(result);
+  } catch (error: any) {
+    res.status(500).json({ error: error?.message || 'Failed to upload file.' });
   }
 });
 

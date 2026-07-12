@@ -3,6 +3,8 @@ import { authenticateJWT, AuthenticatedRequest } from '../middleware/auth.js';
 import { db } from '../db/index.js';
 import { generateText } from '../services/ai.js';
 import { MCPClientManager, parseMCPResponse } from '../services/mcpClient.js';
+import { sanitizeAIError } from '../middleware/errorHandler.js';
+import { cache, TTL, cacheKey } from '../services/cache.js';
 
 const router = Router();
 
@@ -11,6 +13,14 @@ router.get('/graph/:channelId', authenticateJWT, async (req: AuthenticatedReques
   try {
     const userId = req.user!.id;
     const { channelId } = req.params;
+
+    // Check cache first
+    const key = cacheKey(userId, 'knowledge_graph', channelId);
+    const cached = cache.get<any>(key);
+    if (cached) {
+      console.log(`[Cache Hit] Returning cached knowledge graph for channel: ${channelId}`);
+      return res.json(cached);
+    }
 
     const mcpManager = MCPClientManager.getInstance(userId);
     if (!mcpManager.isConnected()) await mcpManager.initializeClient();
@@ -63,6 +73,7 @@ Rules:
 
     try {
       const graph = JSON.parse(clean);
+      cache.set(key, graph, TTL.ANALYTICS);
       res.json(graph);
     } catch {
       // Fallback: build graph from message authors and keywords
@@ -70,11 +81,14 @@ Rules:
       const nodes = users.map((u: any) => ({ id: u, label: u, type: 'Person' }));
       nodes.push({ id: 'channel', label: 'Channel Discussion', type: 'Topic' });
       const edges = users.map((u: any) => ({ source: u, target: 'channel', label: 'participated in' }));
-      res.json({ nodes, edges });
+      
+      const fallbackGraph = { nodes, edges };
+      cache.set(key, fallbackGraph, TTL.ANALYTICS);
+      res.json(fallbackGraph);
     }
   } catch (error: any) {
     console.error('Knowledge graph failed:', error);
-    res.status(500).json({ error: error?.message || 'Failed to generate knowledge graph.' });
+    res.status(500).json({ error: sanitizeAIError(error, 'Failed to generate knowledge graph.') });
   }
 });
 

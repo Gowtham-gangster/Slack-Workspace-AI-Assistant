@@ -5,6 +5,7 @@ import { useQuery, useMutation } from '@tanstack/react-query';
 import Sidebar from '../../components/Sidebar';
 import { apiFetch } from '../../lib/api';
 import { useTheme } from '../../components/ThemeContext';
+import AIErrorAlert from '../../components/AIErrorAlert';
 import {
   Brain, TrendingUp, TrendingDown, Users, BarChart3,
   Smile, Meh, Frown, Activity, RefreshCw, Hash,
@@ -206,11 +207,11 @@ export default function IntelligencePage() {
               </div>
 
               {sentimentError && (
-                <div className="flex items-center gap-2 p-3 rounded-xl text-xs mb-3"
-                     style={{ background: 'rgba(239,68,68,0.08)', color: '#f87171' }}>
-                  <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-                  {sentimentError}
-                </div>
+                <AIErrorAlert
+                  error={sentimentError}
+                  onRetry={handleSentimentAnalysis}
+                  className="mb-4"
+                />
               )}
 
               {sentimentData ? (

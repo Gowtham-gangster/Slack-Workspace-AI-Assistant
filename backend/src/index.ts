@@ -1,12 +1,14 @@
+import 'dotenv/config';
+import http from 'http';
 import express from 'express';
 import cors from 'cors';
 import compression from 'compression';
-import dotenv from 'dotenv';
-import { initializeDatabase } from './db/index.js';
+import { initializeDatabase, db } from './db/index.js';
 import { MCPClientManager } from './services/mcpClient.js';
 import { securityMiddleware, sanitizeBody } from './middleware/security.js';
 import { generalLimiter, authLimiter, syncLimiter, summarizeLimiter, reportLimiter, searchLimiter } from './middleware/rateLimiter.js';
 import { requestIdMiddleware, notFoundHandler, globalErrorHandler } from './middleware/errorHandler.js';
+import { sendReminderEmail, isEmailConfigured } from './services/emailService.js';
 
 // Load routes
 import authRoutes from './routes/auth.js';
@@ -20,8 +22,12 @@ import knowledgeRoutes from './routes/knowledge.js';
 import actionsRoutes from './routes/actions.js';
 import analyticsRoutes from './routes/analytics.js';
 import memoryRoutes from './routes/memory.js';
+import chatRoutes from './routes/chat.js';
+import filesRoutes from './routes/files.js';
+import notificationsRoutes from './routes/notifications.js';
+import slackRoutes from './routes/slack.js';
+import { initWebSocketServer } from './services/websocket.js';
 
-dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -33,9 +39,15 @@ const ALLOWED_ORIGINS: string[] = (process.env.ALLOWED_ORIGINS || '')
   .map((o) => o.trim())
   .filter(Boolean);
 
-// Always allow localhost in development
+// Always allow all localhost ports in development
 if (!IS_PRODUCTION) {
-  ALLOWED_ORIGINS.push('http://localhost:3000', 'http://127.0.0.1:3000');
+  ALLOWED_ORIGINS.push(
+    'http://localhost:3000', 'http://127.0.0.1:3000',
+    'http://localhost:3001', 'http://127.0.0.1:3001',
+    'http://localhost:7505', 'http://127.0.0.1:7505',
+    'http://localhost:4000', 'http://localhost:5000',
+    'http://localhost:8080', 'http://localhost:8000',
+  );
 }
 
 // ─── 1. Request Tracing ──────────────────────────────────────────────────────
@@ -65,7 +77,12 @@ app.use(cors({
 app.use(compression());
 
 // ─── 5. Body Parsing + Sanitization ─────────────────────────────────────────
-app.use(express.json({ limit: '2mb' }));
+app.use(express.json({
+  limit: '2mb',
+  verify: (req: any, res, buf) => {
+    req.rawBody = buf.toString();
+  }
+}));
 app.use(express.urlencoded({ extended: true, limit: '2mb' }));
 app.use(sanitizeBody);
 
@@ -93,6 +110,20 @@ app.use('/api/knowledge', knowledgeRoutes);
 app.use('/api/actions', actionsRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/memory', memoryRoutes);
+app.use('/api/chat', chatRoutes);
+app.use('/api/files', filesRoutes);
+app.use('/api/notifications', notificationsRoutes);
+app.use('/api/slack', slackRoutes);
+
+// ─── Direct Slack OAuth Redirect Routes ──────────────────────────────────────
+app.get('/auth/slack', (req, res) => {
+  const queryStr = new URLSearchParams(req.query as any).toString();
+  res.redirect(`/api/auth/slack${queryStr ? '?' + queryStr : ''}`);
+});
+app.get('/auth/slack/callback', (req, res) => {
+  const queryStr = new URLSearchParams(req.query as any).toString();
+  res.redirect(`/api/auth/slack/callback${queryStr ? '?' + queryStr : ''}`);
+});
 
 // ─── 9. Health Check ─────────────────────────────────────────────────────────
 app.get('/health', (req, res) => {
@@ -118,17 +149,86 @@ async function startServer() {
     process.exit(1);
   }
 
-  const server = app.listen(PORT, () => {
+  const server = http.createServer(app);
+
+  initWebSocketServer(server);
+
+  server.listen(PORT, () => {
     console.log(`===============================================`);
     console.log(`Slack AI Workspace Assistant Backend Running`);
     console.log(`Listening on http://localhost:${PORT}`);
     console.log(`Security: Helmet ✓ | CORS ✓ | Rate Limits ✓ | Compression ✓`);
     console.log(`Mode: ${IS_PRODUCTION ? 'PRODUCTION' : 'DEVELOPMENT'}`);
+    console.log(`Email Reminders: ${isEmailConfigured() ? '✓ SMTP configured' : '⚠ SMTP not configured (in-app only)'}`);
     console.log(`===============================================`);
   });
 
+  // ─── Background Reminder Email Job (runs every 60 seconds) ────────────────
+  let reminderJobTick = 0;
+  const reminderJob = setInterval(async () => {
+    reminderJobTick++;
+    try {
+      const now = new Date();
+      // Find all due reminders not yet email-notified
+      const dueReminders = await db.query<any>(`
+        SELECT r.id, r.user_id, r.message_id, r.content, r.session_id,
+               r.remind_at, r.created_at,
+               u.username, u.full_name, u.email,
+               COALESCE(m.content, r.content) as message_content
+        FROM chat_reminders r
+        JOIN users u ON r.user_id = u.id
+        LEFT JOIN chat_messages m ON r.message_id = m.id
+        WHERE r.dismissed = 0 AND r.email_sent = 0 AND r.remind_at <= ?
+      `, [now]);
+
+      if (dueReminders.length === 0) return;
+
+      console.log(`[ReminderJob] Found ${dueReminders.length} due reminder(s) to email.`);
+
+      for (const reminder of dueReminders) {
+        const userEmail = reminder.email || reminder.username; // username may be email
+        const userName = reminder.full_name || reminder.username || 'there';
+        const messageContent = reminder.message_content || 'No message content available.';
+
+        // Send email if configured and user has email
+        let emailSent = false;
+        if (isEmailConfigured() && userEmail && userEmail.includes('@')) {
+          emailSent = await sendReminderEmail({
+            toEmail: userEmail,
+            toName: userName,
+            messageContent,
+            reminderId: reminder.id,
+            channelName: reminder.session_id || undefined,
+            setAt: new Date(reminder.created_at)
+          });
+        }
+
+        // Mark as email_sent regardless (avoid retrying on SMTP errors) + mark notified
+        await db.execute(
+          'UPDATE chat_reminders SET email_sent = ?, notified = 1 WHERE id = ?',
+          [emailSent ? 1 : 0, reminder.id]
+        );
+      }
+    } catch (err) {
+      console.error('[ReminderJob] Error processing reminders:', err);
+    }
+
+    // SEC-05 + SEC-06: Hourly cleanup of unbounded audit tables (every 60 ticks ≈ 60 minutes)
+    if (reminderJobTick % 60 === 0) {
+      try {
+        await db.execute("DELETE FROM login_attempts WHERE attempted_at < NOW() - INTERVAL 24 HOUR");
+        await db.execute("DELETE FROM refresh_tokens WHERE (revoked = 1 OR expires_at < NOW()) AND created_at < NOW() - INTERVAL 7 DAY");
+        console.log('[Cleanup] Pruned stale login_attempts and refresh_tokens rows.');
+      } catch (cleanupErr) {
+        console.error('[Cleanup] Failed to prune stale rows:', cleanupErr);
+      }
+    }
+  }, 60 * 1000); // every 60 seconds
+
+
   const shutdown = async () => {
     console.log('\nShutting down backend server gracefully...');
+    clearInterval(reminderJob);
     server.close(async () => {
       console.log('Express HTTP server closed.');
       await MCPClientManager.disconnectAll();

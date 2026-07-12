@@ -1,6 +1,7 @@
 import type { NextConfig } from "next";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
+const WS_BACKEND_URL = BACKEND_URL.replace(/^http/, 'ws');
 
 const securityHeaders = [
   // Prevent clickjacking
@@ -12,7 +13,7 @@ const securityHeaders = [
   // Permissions policy — restrict browser features
   {
     key: 'Permissions-Policy',
-    value: 'camera=(), microphone=(), geolocation=(), payment=(), usb=()',
+    value: 'camera=(), microphone=(self), geolocation=(), payment=(), usb=()',
   },
   // HSTS — force HTTPS for 1 year (only meaningful in production)
   {
@@ -26,12 +27,13 @@ const securityHeaders = [
     key: 'Content-Security-Policy',
     value: [
       "default-src 'self'",
-      `connect-src 'self' ${BACKEND_URL} https://accounts.google.com https://oauth2.googleapis.com https://generativelanguage.googleapis.com`,
+      `connect-src 'self' ${BACKEND_URL} ${WS_BACKEND_URL} http://127.0.0.1:3001 ws://127.0.0.1:3001 https://accounts.google.com https://oauth2.googleapis.com https://generativelanguage.googleapis.com`,
       "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://accounts.google.com https://apis.google.com",
-      "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+      "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://accounts.google.com",
       "font-src 'self' https://fonts.gstatic.com data:",
-      "img-src 'self' data: https: blob:",
-      "frame-src https://accounts.google.com",
+      "img-src 'self' data: https: blob: " + BACKEND_URL + " http://127.0.0.1:3001",
+      "media-src 'self' " + BACKEND_URL + " http://127.0.0.1:3001",
+      "frame-src https://accounts.google.com " + BACKEND_URL + " http://127.0.0.1:3001",
       "frame-ancestors 'none'",
       "base-uri 'self'",
       "form-action 'self'",

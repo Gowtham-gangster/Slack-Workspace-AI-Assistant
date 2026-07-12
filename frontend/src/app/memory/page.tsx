@@ -6,6 +6,7 @@ import Sidebar from '../../components/Sidebar';
 import { apiFetch } from '../../lib/api';
 import { useTheme } from '../../components/ThemeContext';
 import { useAuth } from '../../components/AuthContext';
+import AIErrorAlert from '../../components/AIErrorAlert';
 import {
   BookOpen, Search, Sparkles, CheckCircle2, AlertTriangle, Users,
   Clock, ClipboardList, Info, HelpCircle, ArrowRight
@@ -176,10 +177,11 @@ export default function WorkspaceMemoryPage() {
 
           {/* Error boundary */}
           {queryMutation.error && (
-            <div className="flex items-center gap-3 p-4 rounded-2xl mb-8" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)' }}>
-              <AlertTriangle className="w-4 h-4 text-red-400 shrink-0" />
-              <p className="text-sm text-red-400">{queryMutation.error.message || 'Error occurred querying workspace memory'}</p>
-            </div>
+            <AIErrorAlert
+              error={queryMutation.error}
+              onRetry={() => queryMutation.mutate(query)}
+              className="mb-8"
+            />
           )}
 
           {/* Query Result View */}

@@ -20,6 +20,11 @@ next-env.d.ts
 .env*
 !.env.example
 
+# Scratch and test files containing secrets
+backend/scratch/
+backend/test_*.cjs
+backend/test_*.js
+
 # Debug/Logs
 npm-debug.log*
 yarn-debug.log*

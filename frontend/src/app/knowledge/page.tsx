@@ -7,6 +7,7 @@ import { apiFetch } from '../../lib/api';
 import { useTheme } from '../../components/ThemeContext';
 import { useAuth } from '../../components/AuthContext';
 import { Network, Hash, AlertCircle, Info, Zap } from 'lucide-react';
+import AIErrorAlert from '../../components/AIErrorAlert';
 import ReactFlow, {
   Background,
   Controls,
@@ -251,9 +252,12 @@ export default function KnowledgeGraphPage() {
                   <p className="text-xs font-semibold animate-pulse" style={{ color: '#7c6af7' }}>Analyzing conversations & mapping entities...</p>
                 </div>
               ) : error ? (
-                <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center">
-                  <AlertCircle className="w-8 h-8 text-rose-500 mb-2" />
-                  <p className="text-sm text-rose-500">{(error as any)?.message || 'Failed to generate graph'}</p>
+                <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center max-w-md mx-auto">
+                  <AIErrorAlert
+                    error={error as any}
+                    onRetry={refetch}
+                    className="w-full"
+                  />
                 </div>
               ) : nodes.length === 0 ? (
                 <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center">

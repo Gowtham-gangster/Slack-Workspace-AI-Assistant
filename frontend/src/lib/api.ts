@@ -59,7 +59,7 @@ export { setRefreshToken, getRefreshToken };
 let isRefreshing = false;
 let refreshQueue: Array<(token: string | null) => void> = [];
 
-async function attemptTokenRefresh(): Promise<string | null> {
+export async function attemptTokenRefresh(): Promise<string | null> {
   const refreshToken = getRefreshToken();
   if (!refreshToken) return null;
 
@@ -96,94 +96,144 @@ export interface FetchOptions extends Omit<RequestInit, 'body'> {
   _isRetry?: boolean; // Internal flag — prevent infinite refresh loops
 }
 
+interface CacheEntry {
+  data: any;
+  expiresAt: number;
+}
+
+const apiCache = new Map<string, CacheEntry>();
+const activeRequests = new Map<string, Promise<any>>();
+
 export async function apiFetch(path: string, options: FetchOptions = {}): Promise<any> {
-  const token = getAuthToken();
-  const headers = new Headers(options.headers || {});
+  const method = (options.method || 'GET').toUpperCase();
+  const isGet = method === 'GET';
 
-  if (token) {
-    headers.set('Authorization', `Bearer ${token}`);
+  // Generate cache key for GET requests
+  const paramsStr = options.params ? new URLSearchParams(options.params).toString() : '';
+  const requestKey = `${method}:${path}:${paramsStr}`;
+
+  if (isGet) {
+    // Check client-side memory cache
+    const cached = apiCache.get(requestKey);
+    if (cached && cached.expiresAt > Date.now()) {
+      return cached.data;
+    }
+
+    // Check in-flight active requests (request deduplication)
+    const active = activeRequests.get(requestKey);
+    if (active) {
+      return active;
+    }
   }
 
-  if (options.body && !(options.body instanceof FormData) && typeof options.body === 'object') {
-    headers.set('Content-Type', 'application/json');
-    options.body = JSON.stringify(options.body);
-  }
+  // Define actual fetch runner
+  const runRequest = async (): Promise<any> => {
+    const token = getAuthToken();
+    const headers = new Headers(options.headers || {});
 
-  let url = `${BACKEND_URL}${path}`;
-  if (options.params) {
-    const searchParams = new URLSearchParams(options.params);
-    url += `?${searchParams.toString()}`;
-  }
+    if (token) {
+      headers.set('Authorization', `Bearer ${token}`);
+    }
 
-  const { _isRetry, ...fetchOptions } = options;
+    if (options.body && !(options.body instanceof FormData) && typeof options.body === 'object') {
+      headers.set('Content-Type', 'application/json');
+      options.body = JSON.stringify(options.body);
+    }
 
-  const response = await fetch(url, {
-    ...fetchOptions,
-    headers,
-  });
+    let url = `${BACKEND_URL}${path}`;
+    if (options.params) {
+      const searchParams = new URLSearchParams(options.params);
+      url += `?${searchParams.toString()}`;
+    }
 
-  // ── Token Expired — attempt refresh ──────────────────────────────────────
-  if (response.status === 401 && !_isRetry) {
-    let errorData: any = {};
-    try { errorData = await response.clone().json(); } catch {}
+    const { _isRetry, ...fetchOptions } = options;
 
-    if (errorData?.code === 'TOKEN_EXPIRED') {
-      // Deduplicate concurrent refresh attempts
-      if (!isRefreshing) {
-        isRefreshing = true;
-        const newToken = await attemptTokenRefresh();
-        isRefreshing = false;
+    const response = await fetch(url, {
+      ...fetchOptions,
+      headers,
+    });
 
-        // Notify all waiting callers
-        refreshQueue.forEach((cb) => cb(newToken));
-        refreshQueue = [];
+    // ── Token Expired — attempt refresh ──────────────────────────────────────
+    if (response.status === 401 && !_isRetry) {
+      let errorData: any = {};
+      try { errorData = await response.clone().json(); } catch {}
 
-        if (newToken) {
-          // Retry the original request with the new token
-          return apiFetch(path, { ...options, _isRetry: true });
-        } else {
-          // Redirect to login
-          if (typeof window !== 'undefined') {
-            window.location.href = '/login';
-          }
-          throw new Error('Session expired. Please log in again.');
-        }
-      } else {
-        // Queue until the in-flight refresh completes
-        return new Promise((resolve, reject) => {
-          refreshQueue.push(async (newToken: string | null) => {
-            if (newToken) {
-              try {
-                resolve(await apiFetch(path, { ...options, _isRetry: true }));
-              } catch (e) {
-                reject(e);
-              }
-            } else {
-              reject(new Error('Session expired. Please log in again.'));
+      if (errorData?.code === 'TOKEN_EXPIRED') {
+        if (!isRefreshing) {
+          isRefreshing = true;
+          const newToken = await attemptTokenRefresh();
+          isRefreshing = false;
+
+          refreshQueue.forEach((cb) => cb(newToken));
+          refreshQueue = [];
+
+          if (newToken) {
+            return apiFetch(path, { ...options, _isRetry: true });
+          } else {
+            if (typeof window !== 'undefined') {
+              window.location.href = '/login';
             }
+            throw new Error('Session expired. Please log in again.');
+          }
+        } else {
+          return new Promise((resolve, reject) => {
+            refreshQueue.push(async (newToken: string | null) => {
+              if (newToken) {
+                try {
+                  resolve(await apiFetch(path, { ...options, _isRetry: true }));
+                } catch (e) {
+                  reject(e);
+                }
+              } else {
+                reject(new Error('Session expired. Please log in again.'));
+              }
+            });
           });
-        });
+        }
       }
     }
-  }
 
-  if (!response.ok) {
-    let errorMsg = `Request failed with status ${response.status}`;
-    try {
-      const data = await response.json();
-      errorMsg = data.error || errorMsg;
-    } catch (e) {
+    if (!response.ok) {
+      let errorMsg = `Request failed with status ${response.status}`;
       try {
-        errorMsg = await response.text() || errorMsg;
-      } catch (_) {}
+        const data = await response.json();
+        errorMsg = data.error || errorMsg;
+      } catch (e) {
+        try {
+          errorMsg = await response.text() || errorMsg;
+        } catch (_) {}
+      }
+      throw new Error(errorMsg);
     }
-    throw new Error(errorMsg);
-  }
 
-  // Handle empty or 204 responses
-  if (response.status === 204) {
-    return null;
-  }
+    if (response.status === 204) {
+      return null;
+    }
 
-  return response.json();
+    return response.json();
+  };
+
+  if (isGet) {
+    const promise = runRequest()
+      .then((data) => {
+        // Cache successful response for 5 seconds (absorb navigation duplicate fetches)
+        apiCache.set(requestKey, {
+          data,
+          expiresAt: Date.now() + 5000,
+        });
+        activeRequests.delete(requestKey);
+        return data;
+      })
+      .catch((err) => {
+        activeRequests.delete(requestKey);
+        throw err;
+      });
+
+    activeRequests.set(requestKey, promise);
+    return promise;
+  } else {
+    // For non-GET mutations, invalidate client-side cache
+    apiCache.clear();
+    return runRequest();
+  }
 }

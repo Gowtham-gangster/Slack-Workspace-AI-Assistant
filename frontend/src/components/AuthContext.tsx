@@ -41,12 +41,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (user && token) {
         try {
           const data = await apiFetch('/api/channels/users');
-          setSlackUsers(data || {});
+          setSlackUsers(prev => {
+            if (Object.keys(prev).length === Object.keys(data || {}).length) {
+              return prev;
+            }
+            return data || {};
+          });
         } catch (error) {
           console.warn('Failed to load slack users mapping:', error);
         }
       } else {
-        setSlackUsers({});
+        setSlackUsers(prev => Object.keys(prev).length === 0 ? prev : {});
       }
     }
     loadSlackUsers();
@@ -59,8 +64,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (storedToken) {
         try {
           setToken(storedToken);
-          const data = await apiFetch('/api/auth/me');
-          setUser(data.user);
+          // Fetch both user profile and slack users map in parallel to eliminate waterfall latency
+          const [userData, slackUsersData] = await Promise.all([
+            apiFetch('/api/auth/me'),
+            apiFetch('/api/channels/users').catch(err => {
+              console.warn('Failed to load slack users mapping at startup:', err);
+              return {};
+            })
+          ]);
+          setSlackUsers(slackUsersData || {});
+          setUser(userData.user);
         } catch (error: any) {
           // If auto-refresh in apiFetch succeeded, /me will have worked.
           // If we land here it means refresh also failed — clear everything.
@@ -69,6 +82,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setRefreshToken(null);
           setToken(null);
           setUser(null);
+          setSlackUsers({});
         }
       }
       setLoading(false);

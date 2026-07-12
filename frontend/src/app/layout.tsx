@@ -29,8 +29,9 @@ export default function RootLayout({
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full dark`}
       style={{ colorScheme: 'dark' }}
+      suppressHydrationWarning
     >
-      <body className="h-full bg-background text-foreground antialiased selection:bg-primary/35">
+      <body className="h-full bg-background text-foreground antialiased selection:bg-primary/35" suppressHydrationWarning>
         <Providers>
           <AuthProvider>
             {children}

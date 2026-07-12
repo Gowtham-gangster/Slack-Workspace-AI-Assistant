@@ -4,6 +4,7 @@ import { db } from '../db/index.js';
 import { authenticateJWT, AuthenticatedRequest } from '../middleware/auth.js';
 import { MCPClientManager, parseMCPResponse } from '../services/mcpClient.js';
 import { generateText } from '../services/ai.js';
+import { sanitizeAIError } from '../middleware/errorHandler.js';
 
 const router = Router();
 
@@ -19,6 +20,26 @@ router.get('/', authenticateJWT, async (req: AuthenticatedRequest, res: Response
   } catch (error) {
     console.error('Failed to fetch action items:', error);
     res.status(500).json({ error: 'Failed to retrieve action items.' });
+  }
+});
+
+// ─── POST /api/actions ─────────────────────────────────────────────────────
+router.post('/', authenticateJWT, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const userId = req.user!.id;
+    const { task, owner, dueDate, channelId, channelName } = req.body;
+    if (!task) return res.status(400).json({ error: 'task is required.' });
+
+    const id = uuidv4();
+    await db.execute(
+      `INSERT INTO action_items (id, user_id, channel_id, channel_name, task, owner, status, due_date, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
+      [id, userId, channelId || 'chat', channelName || 'AI Chat', task, owner || 'Unassigned', 'pending', dueDate || null]
+    );
+    res.status(201).json({ id, task, owner, dueDate, channelId, channelName, status: 'pending' });
+  } catch (error) {
+    console.error('Failed to create action item:', error);
+    res.status(500).json({ error: 'Failed to create action item.' });
   }
 });
 
@@ -92,7 +113,7 @@ Rules:
     res.json({ extracted: saved.length, items: saved });
   } catch (error: any) {
     console.error('Action extraction failed:', error);
-    res.status(500).json({ error: error?.message || 'Failed to extract action items.' });
+    res.status(500).json({ error: sanitizeAIError(error, 'Failed to extract action items.') });
   }
 });
 

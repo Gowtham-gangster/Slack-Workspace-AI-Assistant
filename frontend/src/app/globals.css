@@ -357,4 +357,84 @@ html.light .react-flow__controls-button:hover {
   color: #7c6af7 !important;
 }
 
+/* ── Reminder Toast Animation ───────────────────────────────────── */
+@keyframes slideUpFade {
+  from {
+    opacity: 0;
+    transform: translateY(20px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* ── AI Actions Dropdown ─────────────────────────────────────────── */
+.ai-actions-dropdown {
+  background: #0d0f1a;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+.ai-actions-dropdown button {
+  color: #e2e8f0 !important;
+}
+.ai-actions-dropdown button:hover {
+  background: rgba(255, 255, 255, 0.06) !important;
+}
+html.light .ai-actions-dropdown {
+  background: #ffffff;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+}
+html.light .ai-actions-dropdown button {
+  color: #1e293b !important;
+}
+html.light .ai-actions-dropdown button:hover {
+  background: #f1f5f9 !important;
+}
+
+/* ─── Slack Message Body Rendering ─────────────────────── */
+.slack-message-body {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.slack-message-body .slack-link {
+  color: #7c6af7;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+.slack-message-body .slack-link:hover {
+  opacity: 0.75;
+}
+html.light .slack-message-body .slack-link {
+  color: #6366f1;
+}
+
+.slack-message-body .slack-mention {
+  background: rgba(124, 106, 247, 0.12);
+  color: #a78bfa;
+  border-radius: 4px;
+  padding: 0 3px;
+  font-weight: 600;
+  font-size: 0.9em;
+}
+html.light .slack-message-body .slack-mention {
+  background: rgba(99, 102, 241, 0.10);
+  color: #6366f1;
+}
+
+.slack-message-body .slack-code {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.85em;
+}
+html.light .slack-message-body .slack-code {
+  background: rgba(0, 0, 0, 0.05);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+}
+
 

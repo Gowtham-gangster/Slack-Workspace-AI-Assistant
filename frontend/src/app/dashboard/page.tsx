@@ -3,7 +3,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Sidebar from '../../components/Sidebar';
-import { apiFetch } from '../../lib/api';
+import { apiFetch, getAuthToken } from '../../lib/api';
+import { socketService } from '../../lib/socketService';
+import RichTextEditor from '../../components/MessageComposer/RichTextEditor';
+import SlackMrkdwnRenderer from '../../components/MessageComposer/SlackMrkdwnRenderer';
+import { FileVideo, FileAudio, FileCode, FileArchive, FileSpreadsheet, Play, Presentation } from 'lucide-react';
 import {
   Hash,
   MessageSquare,
@@ -29,6 +33,7 @@ import {
   Brain,
   ChevronDown,
   ChevronUp,
+  Plus, Check, Copy, ThumbsUp, Heart, Smile, Flame, Bookmark, Pin, Trash2, Edit3, MoreVertical, Paperclip, SmilePlus, Bell, Info, Mic, Image, CornerDownLeft, Eye, Award, User, Link as LinkIcon, Compass, Terminal, X, ExternalLink
 } from 'lucide-react';
 import Link from 'next/link';
 import { useTheme } from '../../components/ThemeContext';
@@ -47,7 +52,18 @@ interface DashboardData {
 
 interface Channel { id: string; name: string; }
 
-interface LiveMessage { ts: string; user: string; text: string; }
+interface LiveMessage {
+  ts: string;
+  user: string;
+  text: string;
+  reactions?: Array<{ emoji: string; user_id: number; }>;
+  isPinned?: boolean;
+  pinnedBy?: number | null;
+  isBookmarked?: boolean;
+  replyCount?: number;
+  files?: any[];
+  id?: string;
+}
 
 interface ActionPlan { task: string; owner: string; status: string; deadline: string; }
 
@@ -66,6 +82,15 @@ const fmtDate = (ts: string) => {
   try {
     return new Date(parseFloat(ts) * 1000).toLocaleDateString([], { month: 'short', day: 'numeric' });
   } catch { return ''; }
+};
+
+const formatFriendlyDate = (dateStr: string) => {
+  try {
+    const date = new Date(dateStr);
+    return date.toLocaleDateString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+  } catch (e) {
+    return dateStr;
+  }
 };
 
 const avatarColor = (userId: string) => {
@@ -217,6 +242,148 @@ const renderCardContent = (content: string, isLightMode: boolean) => {
   return elements;
 };
 
+const MarkdownRenderer = ({ text, isLightMode }: { text: string; isLightMode: boolean }) => {
+  if (!text) return null;
+
+  const lines = text.split('\n');
+  const renderedElements: React.ReactNode[] = [];
+
+  let inList = false;
+  let listItems: React.ReactNode[] = [];
+  let inCodeBlock = false;
+  let codeLines: string[] = [];
+
+  const parseInlineStyles = (txt: string) => {
+    const parts = txt.split(/(\*\*.*?\*\*|\*.*?\*|`.*?`)/g);
+    return parts.map((part, index) => {
+      if (part.startsWith('**') && part.endsWith('**')) {
+        return <strong key={index} className={`font-bold ${isLightMode ? 'text-slate-900' : 'text-white'}`}>{part.slice(2, -2)}</strong>;
+      }
+      if (part.startsWith('*') && part.endsWith('*')) {
+        return <em key={index} className="italic text-muted-foreground">{part.slice(1, -1)}</em>;
+      }
+      if (part.startsWith('`') && part.endsWith('`')) {
+        return <code key={index} className={`px-1.5 py-0.5 rounded font-mono text-[10px] ${isLightMode ? 'bg-slate-100 text-slate-800' : 'bg-black/30 text-slate-200 border border-white/5'}`}>{part.slice(1, -1)}</code>;
+      }
+      return part;
+    });
+  };
+
+  const flushList = () => {
+    if (inList && listItems.length > 0) {
+      renderedElements.push(
+        <ul key={`ul-${renderedElements.length}`} className={`flex flex-col gap-1 my-2 ${isLightMode ? 'text-slate-700' : 'text-slate-300'}`}>
+          {listItems}
+        </ul>
+      );
+      listItems = [];
+      inList = false;
+    }
+  };
+
+  lines.forEach((line, lineIndex) => {
+    const trimmed = line.trim();
+
+    if (trimmed.startsWith('```')) {
+      flushList();
+      if (inCodeBlock) {
+        renderedElements.push(
+          <pre key={`code-${lineIndex}`} className={`p-3 my-2 overflow-x-auto rounded-xl border font-mono text-[10px] leading-normal ${
+            isLightMode ? 'border-slate-200 bg-slate-50 text-slate-800' : 'border-white/5 bg-black/20 text-slate-300'
+          }`}>
+            <code>{codeLines.join('\n')}</code>
+          </pre>
+        );
+        codeLines = [];
+        inCodeBlock = false;
+      } else {
+        inCodeBlock = true;
+      }
+      return;
+    }
+
+    if (inCodeBlock) {
+      codeLines.push(line);
+      return;
+    }
+
+    if (trimmed.startsWith('#### ')) {
+      flushList();
+      renderedElements.push(
+        <h5 key={`h4-${lineIndex}`} className={`text-xs font-bold mt-3 mb-1.5 ${isLightMode ? 'text-slate-900' : 'text-white'}`}>
+          {parseInlineStyles(trimmed.slice(5))}
+        </h5>
+      );
+      return;
+    }
+    if (trimmed.startsWith('### ')) {
+      flushList();
+      renderedElements.push(
+        <h4 key={`h3-${lineIndex}`} className={`text-[13px] font-bold mt-4 mb-2 flex items-center gap-1.5 ${isLightMode ? 'text-slate-800' : 'text-slate-200'}`}>
+          {parseInlineStyles(trimmed.slice(4))}
+        </h4>
+      );
+      return;
+    }
+    if (trimmed.startsWith('## ')) {
+      flushList();
+      renderedElements.push(
+        <h3 key={`h2-${lineIndex}`} className={`text-sm font-bold mt-4 mb-2 ${isLightMode ? 'text-slate-800' : 'text-slate-200'}`}>
+          {parseInlineStyles(trimmed.slice(3))}
+        </h3>
+      );
+      return;
+    }
+    if (trimmed.startsWith('# ')) {
+      flushList();
+      renderedElements.push(
+        <h2 key={`h1-${lineIndex}`} className={`text-base font-bold mt-5 mb-2.5 ${isLightMode ? 'text-slate-900' : 'text-white'}`}>
+          {parseInlineStyles(trimmed.slice(2))}
+        </h2>
+      );
+      return;
+    }
+
+    if (trimmed.startsWith('> ')) {
+      flushList();
+      renderedElements.push(
+        <blockquote key={`quote-${lineIndex}`} className={`border-l-4 pl-3 py-1 my-2 italic ${
+          isLightMode ? 'border-slate-300 bg-slate-50/50 text-slate-700' : 'border-border bg-white/5 text-slate-300'
+        }`}>
+          {parseInlineStyles(trimmed.slice(2))}
+        </blockquote>
+      );
+      return;
+    }
+
+    if (trimmed.startsWith('* ') || trimmed.startsWith('- ')) {
+      inList = true;
+      listItems.push(
+        <li key={`li-${lineIndex}`} className="list-disc ml-4 my-1 text-[11px] leading-relaxed">
+          {parseInlineStyles(trimmed.slice(2))}
+        </li>
+      );
+      return;
+    }
+
+    if (!trimmed) {
+      flushList();
+      return;
+    }
+
+    flushList();
+    renderedElements.push(
+      <p key={`p-${lineIndex}`} className={`my-1.5 leading-relaxed text-[11px] ${isLightMode ? 'text-slate-700' : 'text-slate-300'}`}>
+        {parseInlineStyles(line)}
+      </p>
+    );
+  });
+
+  flushList();
+
+  return <div className="flex flex-col">{renderedElements}</div>;
+};
+
 /* ─────────────────── sub-components ─────────────────── */
 const SectionHeader = ({ icon: Icon, title, subtitle, action }: {
   icon: any; title: string; subtitle?: string; action?: React.ReactNode
@@ -261,13 +428,20 @@ const PrimaryBtn = ({ onClick, disabled, loading, loadingText, children, classNa
   </button>
 );
 
-const ErrorBanner = ({ message }: { message: string }) => (
-  <div className="flex items-start gap-3 p-3.5 rounded-2xl animate-fadeIn"
-       style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)' }}>
-    <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" style={{ color: '#f87171' }} />
-    <p className="text-[12px] leading-relaxed" style={{ color: '#fca5a5' }}>{message}</p>
-  </div>
-);
+const ErrorBanner = ({ message }: { message: string }) => {
+  const { theme } = useTheme();
+  const isLightMode = theme === 'light';
+  return (
+    <div className="flex items-start gap-3 p-3.5 rounded-2xl animate-fadeIn"
+         style={{ 
+           background: isLightMode ? 'rgba(239,68,68,0.05)' : 'rgba(239,68,68,0.08)', 
+           border: isLightMode ? '1px solid rgba(239,68,68,0.15)' : '1px solid rgba(239,68,68,0.2)' 
+         }}>
+      <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" style={{ color: isLightMode ? '#dc2626' : '#f87171' }} />
+      <p className="text-[12px] leading-relaxed font-medium" style={{ color: isLightMode ? '#991b1b' : '#fca5a5' }}>{message}</p>
+    </div>
+  );
+};
 
 const EmptyState = ({ text }: { text: string }) => (
   <div className="py-10 text-center rounded-2xl" style={{ border: '1px dashed rgba(255,255,255,0.08)' }}>
@@ -279,6 +453,20 @@ const EmptyState = ({ text }: { text: string }) => (
   </div>
 );
 
+interface FileUpload {
+  id: string;
+  file?: File;
+  name: string;
+  size: number;
+  type: string;
+  progress: number;
+  status: 'queued' | 'uploading' | 'processing' | 'uploaded' | 'failed' | 'cancelled';
+  fileId?: string;
+  error?: string;
+  cancelXHR?: XMLHttpRequest;
+  previewUrl?: string;
+}
+
 /* ─────────────────── main page ─────────────────── */
 export default function DashboardPage() {
   const { theme } = useTheme();
@@ -286,7 +474,10 @@ export default function DashboardPage() {
   const { slackUsers } = useAuth();
 
   const getUserDisplayName = (userId: string) => {
-    return slackUsers[userId]?.realName || userId;
+    if (!userId) return 'Unknown';
+    const clean = userId.replace(/[<@>]/g, '');
+    const mapped = slackUsers[clean];
+    return mapped?.realName || mapped?.name || clean;
   };
 
   const getUserInitials = (userId: string) => {
@@ -298,6 +489,8 @@ export default function DashboardPage() {
     return slackUsers[userId]?.avatar || '';
   };
   const queryClient = useQueryClient();
+  const [isSocketReconnecting, setIsSocketReconnecting] = useState(false);
+  const [socketStatus, setSocketStatus] = useState<'connected' | 'disconnected' | 'connecting'>('connecting');
   const [syncing, setSyncing] = useState(false);
   const [syncError, setSyncError] = useState<string | null>(null);
   const [syncSuccess, setSyncSuccess] = useState<any | null>(null);
@@ -328,7 +521,214 @@ export default function DashboardPage() {
   const [fetchLimit, setFetchLimit] = useState(5);
   const [filterQuery, setFilterQuery] = useState('');
 
+  const { user } = useAuth();
+  const [activeThreadParentId, setActiveThreadParentId] = useState<string | null>(null);
+  const [threadReplies, setThreadReplies] = useState<any[]>([]);
+  const [threadInput, setThreadInput] = useState('');
+  const [isThreadLoading, setIsThreadLoading] = useState(false);
+  const [isThreadSending, setIsThreadSending] = useState(false);
+
+  const [activeEmojiPickerMsgId, setActiveEmojiPickerMsgId] = useState<string | null>(null);
+  const [activeAiMenuMsgId, setActiveAiMenuMsgId] = useState<string | null>(null);
+
+  const activeMenuRef = useRef<{ emoji: string | null; ai: string | null }>({ emoji: null, ai: null });
+  useEffect(() => { activeMenuRef.current = { emoji: activeEmojiPickerMsgId, ai: activeAiMenuMsgId }; }, [activeEmojiPickerMsgId, activeAiMenuMsgId]);
+
+  useEffect(() => {
+    const handleOutsideClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      // If click is inside any action toolbar or popup, ignore
+      if (target.closest('[data-msg-toolbar]')) return;
+      setActiveAiMenuMsgId(null);
+      setActiveEmojiPickerMsgId(null);
+    };
+    document.addEventListener('mousedown', handleOutsideClick);
+    return () => document.removeEventListener('mousedown', handleOutsideClick);
+  }, []);
+
+  // WebSocket setup via SocketService singleton
+  useEffect(() => {
+    const token = getAuthToken();
+    if (!token) {
+      socketService.disconnect();
+      return;
+    }
+
+    socketService.initialize(token, {
+      onConnect: () => {
+        setSocketStatus('connected');
+        setIsSocketReconnecting(false);
+      },
+      onDisconnect: () => {
+        setSocketStatus('disconnected');
+      },
+      onReconnecting: (attempt) => {
+        setSocketStatus('connecting');
+        setIsSocketReconnecting(true);
+      }
+    });
+
+    socketService.onReactionUpdate((data: any) => {
+      const { messageId, reactions, channelId } = data;
+      console.log(`[WebSocket] Live reaction update received for msg ${messageId}:`, reactions);
+      
+      // Instantly update React Query cache for liveMessages
+      queryClient.setQueryData(['liveMessages', channelId, fetchLimit], (oldData: any) => {
+        if (!oldData || !Array.isArray(oldData)) return oldData;
+        return oldData.map((m: any) => {
+          if (m.id === messageId || m.ts === messageId) {
+            return {
+              ...m,
+              reactions
+            };
+          }
+          return m;
+        });
+      });
+      console.log(`[Frontend updated] reaction state updated for message: ${messageId}, channelId: ${channelId}`);
+    });
+
+    return () => {
+      // Clean up reaction listeners on cleanup
+      socketService.offReactionUpdate();
+    };
+  }, [fetchLimit, queryClient]);
+
+  // Join socket channel room when channel selection or connection changes
+  useEffect(() => {
+    if (selectedChannelId && socketStatus === 'connected') {
+      socketService.joinChannel(selectedChannelId);
+    }
+  }, [selectedChannelId, socketStatus]);
+
+  const [infoModalMessage, setInfoModalMessage] = useState<any | null>(null);
+  const [reminderMessage, setReminderMessage] = useState<any | null>(null);
+  const [taskMessage, setTaskMessage] = useState<any | null>(null);
+  const [aiActionResult, setAiActionResult] = useState<{ title: string; text: string } | null>(null);
+  const [isRunningAiAction, setIsRunningAiAction] = useState(false);
+
+  const [activeImageLightbox, setActiveImageLightbox] = useState<{ url: string; name: string; size?: number } | null>(null);
+  const [activeVideoPlayer, setActiveVideoPlayer] = useState<{ url: string; name: string; size?: number } | null>(null);
+  const [activePdfViewer, setActivePdfViewer] = useState<{ url: string; name: string; size?: number; originalUrl?: string; filetype?: string } | null>(null);
+  const [activeCodeViewer, setActiveCodeViewer] = useState<{ url: string; name: string; content?: string } | null>(null);
+
+  const getProxyDownloadUrl = (file: any, download: boolean = false) => {
+    const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
+    const token = getAuthToken() || '';
+    const fileUrl = file.url_private_download || file.url_private || '';
+    return `${BACKEND_URL}/api/files/${file.id}?token=${encodeURIComponent(token)}&url=${encodeURIComponent(fileUrl)}&filename=${encodeURIComponent(file.name || '')}${download ? '&download=true' : ''}`;
+  };
+
+  const handleOpenCodeViewer = async (file: any) => {
+    const proxyUrl = getProxyDownloadUrl(file);
+    const token = getAuthToken();
+    setActiveCodeViewer({ url: proxyUrl, name: file.name, content: 'Loading content...' });
+    try {
+      const response = await fetch(proxyUrl, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      if (response.ok) {
+        const text = await response.text();
+        setActiveCodeViewer({ url: proxyUrl, name: file.name, content: text });
+      } else {
+        throw new Error('Failed to read file contents');
+      }
+    } catch (err: any) {
+      setActiveCodeViewer({ url: proxyUrl, name: file.name, content: `Error loading file: ${err?.message || 'Unknown error'}` });
+    }
+  };
+
+  const [attachments, setAttachments] = useState<FileUpload[]>([]);
+  const [isDraggingOver, setIsDraggingOver] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordDuration, setRecordDuration] = useState(0);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const recordingTimerRef = useRef<any>(null);
+
+  const [mentionQuery, setMentionQuery] = useState<{ type: '@' | '#'; query: string; index: number } | null>(null);
+  const composerRef = useRef<HTMLTextAreaElement | null>(null);
+
+  const [taskForm, setTaskForm] = useState({ task: '', owner: 'Unassigned', dueDate: '', priority: 'medium' });
+  const [reminderDuration, setReminderDuration] = useState('60');
+  const [reminderToasts, setReminderToasts] = useState<any[]>([]); // fired reminders shown as toasts
+  const [showMyReminders, setShowMyReminders] = useState(false); // "My Reminders" panel
+
+  const [selectedMobileMsg, setSelectedMobileMsg] = useState<any | null>(null);
+  const longPressTimerRef = useRef<any>(null);
+
+  const threadEndRef = useRef<HTMLDivElement>(null);
+  const [showPinnedDropdown, setShowPinnedDropdown] = useState(false);
+  const [showBookmarksDropdown, setShowBookmarksDropdown] = useState(false);
+  const [highlightedMessageTs, setHighlightedMessageTs] = useState<string | null>(null);
+
+  // Clear highlight after 4 seconds
+  useEffect(() => {
+    if (highlightedMessageTs) {
+      const timer = setTimeout(() => {
+        setHighlightedMessageTs(null);
+      }, 4000);
+      return () => clearTimeout(timer);
+    }
+  }, [highlightedMessageTs]);
+
+  const handleSelectSavedMessage = (b: any) => {
+    const targetMsgId = b.message_id || b.id;
+    if (!targetMsgId) return;
+    
+    // Set larger limit to guarantee old message is fetched and loaded in list
+    setFetchLimit(100);
+    
+    // Switch channel/session
+    setSelectedChannelId(b.session_id);
+    
+    // Trigger highlight
+    setHighlightedMessageTs(targetMsgId);
+    
+    setShowBookmarksDropdown(false);
+  };
+
+  const handleSelectPinnedMessage = (p: any) => {
+    const targetMsgId = p.message_id || p.id;
+    if (!targetMsgId) return;
+
+    // Set larger limit to guarantee old message is fetched and loaded in list
+    setFetchLimit(100);
+
+    // Trigger highlight
+    setHighlightedMessageTs(targetMsgId);
+
+    setShowPinnedDropdown(false);
+  };
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const pinnedDropdownRef = useRef<HTMLDivElement>(null);
+  const bookmarksDropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (showBookmarksDropdown && bookmarksDropdownRef.current && !bookmarksDropdownRef.current.contains(event.target as Node)) {
+        const btn = document.querySelector('[title="Saved Messages"]');
+        if (!btn || !btn.contains(event.target as Node)) {
+          setShowBookmarksDropdown(false);
+        }
+      }
+      if (showPinnedDropdown && pinnedDropdownRef.current && !pinnedDropdownRef.current.contains(event.target as Node)) {
+        const btn = document.querySelector('[title="Pinned Messages"]');
+        if (!btn || !btn.contains(event.target as Node)) {
+          setShowPinnedDropdown(false);
+        }
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showBookmarksDropdown, showPinnedDropdown]);
 
   const { data, isLoading } = useQuery<DashboardData>({
     queryKey: ['dashboardStats'],
@@ -340,6 +740,12 @@ export default function DashboardPage() {
     queryKey: ['channelsList'],
     queryFn: () => apiFetch('/api/channels'),
   });
+
+  const getChannelDisplayName = (channelId: string) => {
+    if (!channelId) return 'Workspace';
+    const ch = channels?.find(c => c.id === channelId);
+    return ch ? `#${ch.name}` : 'Workspace';
+  };
 
   const { data: intelligenceScore, isLoading: loadingScore } = useQuery<any>({
     queryKey: ['intelligenceScore'],
@@ -363,6 +769,55 @@ export default function DashboardPage() {
       refetchInterval: 10000,
     });
 
+  const { data: pinnedMessages, refetch: refetchPins } = useQuery<any[]>({
+    queryKey: ['pinnedMessages', selectedChannelId],
+    queryFn: () => apiFetch(`/api/chat/sessions/${selectedChannelId}/pins`),
+    enabled: !!selectedChannelId
+  });
+
+  const { data: bookmarkedMessages, refetch: refetchBookmarks } = useQuery<any[]>({
+    queryKey: ['bookmarkedMessages'],
+    queryFn: () => apiFetch('/api/chat/bookmarks'),
+  });
+
+  const { data: pendingReminders, refetch: refetchReminders } = useQuery<any[]>({
+    queryKey: ['myReminders'],
+    queryFn: () => apiFetch('/api/chat/reminders'),
+    refetchInterval: 30000,
+  });
+
+  // Poll for due reminders every 30 seconds and show toast notifications
+  useEffect(() => {
+    const pollDueReminders = async () => {
+      try {
+        const due: any[] = await apiFetch('/api/chat/reminders/due');
+        if (due && due.length > 0) {
+          setReminderToasts(prev => [...prev, ...due]);
+          refetchReminders();
+        }
+      } catch (e) { /* silent */ }
+    };
+    pollDueReminders(); // run immediately on mount
+    const interval = setInterval(pollDueReminders, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    if (activeThreadParentId && selectedChannelId) {
+      setIsThreadLoading(true);
+      apiFetch(`/api/channels/${selectedChannelId}/messages/${activeThreadParentId}/thread`)
+        .then((res: any[]) => {
+          setThreadReplies(res);
+        })
+        .catch(err => console.error(err))
+        .finally(() => setIsThreadLoading(false));
+    }
+  }, [activeThreadParentId, selectedChannelId]);
+
+  useEffect(() => {
+    threadEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [threadReplies]);
+
   useEffect(() => {
     if (channels && channels.length > 0 && !selectedChannelId) {
       const preferred = channels.find(c => c.name === 'general') || channels.find(c => c.id === 'C0BC420MMHP') || channels[0];
@@ -376,9 +831,10 @@ export default function DashboardPage() {
   }, [selectedChannelId]);
 
   useEffect(() => {
+    if (highlightedMessageTs) return;
     const c = messagesEndRef.current?.parentElement;
     if (c) c.scrollTop = c.scrollHeight;
-  }, [liveMessages]);
+  }, [liveMessages, highlightedMessageTs]);
 
   const syncMutation = useMutation({
     mutationFn: () => apiFetch('/api/channels/sync', { method: 'POST' }),
@@ -393,13 +849,538 @@ export default function DashboardPage() {
     onSettled: () => setSyncing(false),
   });
 
+  const EMOJIS = ['👍', '❤️', '😂', '🔥', '👏', '🎉', '😮', '😢', '👀', '🚀'];
+
+  const handleToggleReaction = async (messageId: string, emoji: string, content: string, msgUser: string) => {
+    try {
+      console.log(`[Reaction API called] toggling emoji ${emoji} on message ${messageId} in channel ${selectedChannelId}`);
+      await apiFetch(`/api/chat/messages/${messageId}/react`, {
+        method: 'POST',
+        body: { 
+          emoji, 
+          sessionId: selectedChannelId,
+          content,
+          role: msgUser === 'US' || msgUser === user?.id?.toString() ? 'user' : 'assistant'
+        }
+      });
+      // Deferring update to WebSocket broadcast event to enforce single source of truth
+      setActiveEmojiPickerMsgId(null);
+      setSelectedMobileMsg(null);
+    } catch (e) {
+      console.error('[Reaction API error] failed to toggle reaction:', e);
+    }
+  };
+
+  const handleToggleBookmark = async (msg: LiveMessage) => {
+    try {
+      if (msg.isBookmarked) {
+        await apiFetch(`/api/chat/bookmarks/${msg.ts}`, { method: 'DELETE' });
+      } else {
+        await apiFetch('/api/chat/bookmarks', {
+          method: 'POST',
+          body: { 
+            messageId: msg.ts, 
+            sessionId: selectedChannelId,
+            content: msg.text,
+            role: msg.user || 'user'
+          }
+        });
+      }
+      refetchLiveMessages();
+      refetchBookmarks();
+      setSelectedMobileMsg(null);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleTogglePin = async (msg: LiveMessage) => {
+    try {
+      if (msg.isPinned) {
+        await apiFetch(`/api/chat/sessions/${selectedChannelId}/pins/${msg.ts}`, { method: 'DELETE' });
+      } else {
+        await apiFetch(`/api/chat/sessions/${selectedChannelId}/pins`, {
+          method: 'POST',
+          body: { 
+            messageId: msg.ts,
+            content: msg.text,
+            role: msg.user || 'user'
+          }
+        });
+      }
+      refetchLiveMessages();
+      refetchPins();
+      setSelectedMobileMsg(null);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleRunAiAction = async (msgId: string, action: string, actionTitle: string, content: string) => {
+    setIsRunningAiAction(true);
+    setSelectedMobileMsg(null);
+    try {
+      const res = await apiFetch(`/api/chat/messages/${msgId}/ai-action`, {
+        method: 'POST',
+        body: { 
+          action, 
+          sessionId: selectedChannelId,
+          content,
+          role: 'assistant'
+        }
+      });
+      setAiActionResult({ title: actionTitle, text: res.result });
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsRunningAiAction(false);
+    }
+  };
+
+  const handleCreateTask = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!taskForm.task.trim() || !taskMessage) return;
+    try {
+      await apiFetch('/api/actions', {
+        method: 'POST',
+        body: {
+          task: taskForm.task,
+          owner: taskForm.owner,
+          dueDate: taskForm.dueDate || null,
+          channelId: selectedChannelId,
+          channelName: channels?.find(c => c.id === selectedChannelId)?.name || 'Slack Channel'
+        }
+      });
+      queryClient.invalidateQueries({ queryKey: ['actionItems'] });
+      setTaskMessage(null);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleSetReminder = async () => {
+    if (!reminderMessage) return;
+    const minutes = parseInt(reminderDuration);
+    const remindAt = new Date(Date.now() + minutes * 60 * 1000);
+    try {
+      await apiFetch(`/api/chat/messages/${reminderMessage.ts}/reminder`, {
+        method: 'POST',
+        body: { 
+          remindAt,
+          sessionId: selectedChannelId,
+          content: reminderMessage.text,
+          role: reminderMessage.user === 'US' ? 'user' : 'assistant'
+        }
+      });
+      setReminderMessage(null);
+      refetchReminders();
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleDismissReminderToast = async (reminderId: number) => {
+    setReminderToasts(prev => prev.filter(r => r.id !== reminderId));
+    try {
+      await apiFetch(`/api/chat/reminders/${reminderId}/dismiss`, { method: 'PATCH' });
+      refetchReminders();
+    } catch (e) { console.error(e); }
+  };
+
+  const handleDeleteReminder = async (reminderId: number) => {
+    try {
+      await apiFetch(`/api/chat/reminders/${reminderId}`, { method: 'DELETE' });
+      refetchReminders();
+    } catch (e) { console.error(e); }
+  };
+
+
+
+  const handleSendThreadReply = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!threadInput.trim() || !activeThreadParentId || isThreadSending) return;
+
+    const replyText = threadInput.trim();
+    setThreadInput('');
+    setIsThreadSending(true);
+
+    const optId = Math.random().toString();
+    const optReply = {
+      id: optId,
+      parent_message_id: activeThreadParentId,
+      session_id: selectedChannelId,
+      role: 'user',
+      content: replyText,
+      created_at: new Date().toISOString(),
+      user: 'US'
+    };
+    setThreadReplies(prev => [...prev, optReply]);
+
+    try {
+      const res = await apiFetch(`/api/channels/${selectedChannelId}/messages/${activeThreadParentId}/thread`, {
+        method: 'POST',
+        body: { content: replyText }
+      });
+      setThreadReplies(prev => prev.filter(r => r.id !== optId).concat(res.userReply));
+      refetchLiveMessages();
+    } catch (err) {
+      console.error(err);
+      setThreadReplies(prev => prev.filter(r => r.id !== optId));
+    } finally {
+      setIsThreadSending(false);
+    }
+  };
+
+  const handleFormatText = (prefix: string, suffix: string = prefix) => {
+    const textarea = composerRef.current;
+    if (!textarea) return;
+    
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const text = textarea.value;
+    
+    const selectedText = text.substring(start, end);
+    const replacement = prefix + selectedText + suffix;
+    
+    setPostText(text.substring(0, start) + replacement + text.substring(end));
+    
+    setTimeout(() => {
+      textarea.focus();
+      textarea.setSelectionRange(start + prefix.length, start + prefix.length + selectedText.length);
+    }, 50);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.ctrlKey && e.key === 'b') {
+      e.preventDefault();
+      handleFormatText('*');
+    } else if (e.ctrlKey && e.key === 'i') {
+      e.preventDefault();
+      handleFormatText('_');
+    } else if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handlePostMessage(e);
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDraggingOver(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDraggingOver(false);
+  };
+
+  const handleFileDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDraggingOver(false);
+    const files = e.dataTransfer.files;
+    if (files.length > 0) {
+      processFiles(files);
+    }
+  };
+
+  const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (files && files.length > 0) {
+      processFiles(files);
+    }
+  };
+
+  const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const items = e.clipboardData.items;
+    const files: File[] = [];
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].kind === 'file') {
+        const file = items[i].getAsFile();
+        if (file) {
+          files.push(file);
+        }
+      }
+    }
+    if (files.length > 0) {
+      e.preventDefault();
+      processFiles(files);
+    }
+  };
+
+  const uploadFile = async (uploadId: string, file: File) => {
+    const token = getAuthToken();
+    const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
+    
+    setAttachments(prev => prev.map(item => 
+      item.id === uploadId ? { ...item, status: 'uploading' } : item
+    ));
+
+    const xhr = new XMLHttpRequest();
+    
+    setAttachments(prev => prev.map(item => 
+      item.id === uploadId ? { ...item, cancelXHR: xhr } : item
+    ));
+
+    console.log('✓ File selected:', file.name);
+
+    xhr.open('POST', `${BACKEND_URL}/api/channels/${selectedChannelId}/upload-file`);
+    
+    if (token) {
+      xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+    }
+    
+    // Create FormData for multipart upload
+    const formData = new FormData();
+    formData.append('file', file);
+    console.log('✓ FormData created');
+
+    console.log('✓ Request sent');
+
+    xhr.upload.onprogress = (event) => {
+      if (event.lengthComputable) {
+        const percent = Math.round((event.loaded / event.total) * 100);
+        setAttachments(prev => prev.map(item => 
+          item.id === uploadId ? { ...item, progress: percent } : item
+        ));
+      }
+    };
+
+    xhr.onload = () => {
+      if (xhr.status === 200) {
+        try {
+          const res = JSON.parse(xhr.responseText);
+          if (res.fileId) {
+            console.log('✓ Upload completed, Slack fileId:', res.fileId);
+            setAttachments(prev => prev.map(item => 
+              item.id === uploadId ? { ...item, status: 'uploaded', fileId: res.fileId, progress: 100 } : item
+            ));
+          } else {
+            throw new Error('No fileId returned from server');
+          }
+        } catch (err: any) {
+          console.error('✗ Processing failed:', err?.message);
+          setAttachments(prev => prev.map(item => 
+            item.id === uploadId ? { ...item, status: 'failed', error: err?.message || 'Processing failed' } : item
+          ));
+        }
+      } else {
+        let errorMsg = 'Upload failed';
+        try {
+          const res = JSON.parse(xhr.responseText);
+          errorMsg = res.error || errorMsg;
+        } catch (_) {}
+        console.error('✗ Upload failed:', errorMsg);
+        setAttachments(prev => prev.map(item => 
+          item.id === uploadId ? { ...item, status: 'failed', error: errorMsg } : item
+        ));
+      }
+    };
+
+    xhr.onerror = () => {
+      console.error('✗ Request network failure');
+      setAttachments(prev => prev.map(item => 
+        item.id === uploadId ? { ...item, status: 'failed', error: 'Network failure' } : item
+      ));
+    };
+
+    xhr.onabort = () => {
+      console.log('✗ Upload cancelled by user');
+      setAttachments(prev => prev.map(item => 
+        item.id === uploadId ? { ...item, status: 'cancelled' } : item
+      ));
+    };
+
+    xhr.send(formData);
+  };
+
+  const handleCancelUpload = (uploadId: string) => {
+    setAttachments(prev => {
+      const item = prev.find(a => a.id === uploadId);
+      if (item && item.cancelXHR) {
+        item.cancelXHR.abort();
+      }
+      return prev.map(a => a.id === uploadId ? { ...a, status: 'cancelled' } : a);
+    });
+  };
+
+  const handleRetryUpload = (uploadId: string) => {
+    setAttachments(prev => {
+      const item = prev.find(a => a.id === uploadId);
+      if (item && item.file) {
+        uploadFile(uploadId, item.file);
+        return prev.map(a => a.id === uploadId ? { ...a, status: 'queued', progress: 0, error: undefined } : a);
+      }
+      return prev;
+    });
+  };
+
+  const handleRemoveAttachment = (uploadId: string) => {
+    setAttachments(prev => {
+      const item = prev.find(a => a.id === uploadId);
+      if (item) {
+        if (item.cancelXHR && (item.status === 'uploading' || item.status === 'queued')) {
+          item.cancelXHR.abort();
+        }
+        if (item.previewUrl) {
+          URL.revokeObjectURL(item.previewUrl);
+        }
+      }
+      return prev.filter(a => a.id !== uploadId);
+    });
+  };
+
+  const processFiles = (files: FileList | File[]) => {
+    const disallowedExtensions = ['exe', 'bat', 'cmd', 'sh', 'com', 'msi', 'scr', 'vbs', 'js', 'jar', 'bin', 'wsf'];
+    
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      
+      const extension = file.name.split('.').pop()?.toLowerCase();
+      if (extension && disallowedExtensions.includes(extension)) {
+        alert(`Upload blocked for security: executable files and scripts (.${extension}) are not allowed.`);
+        continue;
+      }
+
+      if (file.size > 1024 * 1024 * 1024) {
+        alert(`File ${file.name} is too large. Max allowed size is 1GB.`);
+        continue;
+      }
+
+      const uploadId = 'up-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+      const previewUrl = file.type.startsWith('image/') ? URL.createObjectURL(file) : undefined;
+      
+      const newUpload: FileUpload = {
+        id: uploadId,
+        file,
+        name: file.name,
+        size: file.size,
+        type: file.type || 'application/octet-stream',
+        progress: 0,
+        status: 'queued',
+        previewUrl
+      };
+
+      setAttachments(prev => [...prev, newUpload]);
+      uploadFile(uploadId, file);
+    }
+  };
+
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
+      audioChunksRef.current = [];
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+
+      mediaRecorder.onstop = () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/mpeg' });
+        const voiceFile = new File([audioBlob], `voice_message_${Date.now()}.mp3`, { type: 'audio/mpeg' });
+        processFiles([voiceFile]);
+        stream.getTracks().forEach(track => track.stop());
+      };
+
+      mediaRecorder.start();
+      setIsRecording(true);
+      setRecordDuration(0);
+
+      recordingTimerRef.current = setInterval(() => {
+        setRecordDuration(prev => prev + 1);
+      }, 1000);
+    } catch (err) {
+      console.error('Mic access denied', err);
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+      clearInterval(recordingTimerRef.current);
+    }
+  };
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const val = e.target.value;
+    setPostText(val);
+
+    const caretPos = e.target.selectionStart;
+    const textBeforeCaret = val.substring(0, caretPos);
+    
+    const atMatch = textBeforeCaret.match(/@(\w*)$/);
+    const hashMatch = textBeforeCaret.match(/#(\w*)$/);
+
+    if (atMatch) {
+      setMentionQuery({ type: '@', query: atMatch[1], index: caretPos - atMatch[0].length });
+    } else if (hashMatch) {
+      setMentionQuery({ type: '#', query: hashMatch[1], index: caretPos - hashMatch[0].length });
+    } else {
+      setMentionQuery(null);
+    }
+  };
+
+  const selectMention = (name: string, id: string) => {
+    if (!mentionQuery) return;
+    const textarea = composerRef.current;
+    if (!textarea) return;
+
+    const val = postText;
+    const before = val.substring(0, mentionQuery.index);
+    const after = val.substring(textarea.selectionStart);
+    const replacement = mentionQuery.type === '@' ? `@${name} ` : `#${name} `;
+
+    setPostText(before + replacement + after);
+    setMentionQuery(null);
+
+    setTimeout(() => {
+      textarea.focus();
+      textarea.setSelectionRange(mentionQuery.index + replacement.length, mentionQuery.index + replacement.length);
+    }, 50);
+  };
+
+  const handleMessageTouchStart = (msg: LiveMessage) => {
+    longPressTimerRef.current = setTimeout(() => {
+      setSelectedMobileMsg(msg);
+    }, 600);
+  };
+
+  const handleMessageTouchEnd = () => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+    }
+  };
+
   const handlePostMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!postText.trim() || !selectedChannelId || posting) return;
+    if ((!postText.trim() && attachments.length === 0) || !selectedChannelId || posting) return;
+
+    // Check if any uploads are in progress or queued
+    const hasUnfinishedUploads = attachments.some(a => a.status === 'uploading' || a.status === 'queued');
+    if (hasUnfinishedUploads) {
+      alert('Please wait for all files to finish uploading before sending.');
+      return;
+    }
+
+    const fileIds = attachments
+      .filter(a => a.status === 'uploaded' && a.fileId)
+      .map(a => a.fileId as string);
+
     setPosting(true); setPostStatus(null);
     try {
-      await apiFetch(`/api/channels/${selectedChannelId}/messages`, { method: 'POST', body: { text: postText.trim() } });
-      setPostText(''); setPostStatus('success');
+      await apiFetch(`/api/channels/${selectedChannelId}/messages`, { 
+        method: 'POST', 
+        body: { 
+          text: postText.trim(),
+          fileIds: fileIds
+        } 
+      });
+      setPostText('');
+      setAttachments([]);
+      setPostStatus('success');
       refetchLiveMessages();
       queryClient.invalidateQueries({ queryKey: ['dashboardStats'] });
       setTimeout(() => setPostStatus(null), 3000);
@@ -423,10 +1404,63 @@ export default function DashboardPage() {
 
   const handleGetChannelSummary = async () => {
     if (!selectedChannelId || loadingSummary) return;
-    setLoadingSummary(true); setSummaryError(null); setSummaryText(null);
-    try { const d = await apiFetch(`/api/channels/${selectedChannelId}/summarize`); setSummaryText(d.summary); }
-    catch (err: any) { setSummaryError(err?.message || 'Failed to generate summary.'); }
-    finally { setLoadingSummary(false); }
+    setLoadingSummary(true);
+    setSummaryError(null);
+    setSummaryText(''); // start empty to show progression
+
+    try {
+      const token = localStorage.getItem('app-token');
+      const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
+      const streamUrl = `${BACKEND_URL}/api/channels/${selectedChannelId}/summarize?stream=true`;
+
+      const response = await fetch(streamUrl, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error('Streaming failed to initiate.');
+      }
+
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder('utf-8');
+      if (!reader) throw new Error('Readable stream not supported.');
+
+      let buffer = '';
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          const cleaned = line.trim();
+          if (!cleaned) continue;
+          if (cleaned.startsWith('data: ')) {
+            const dataStr = cleaned.slice(6);
+            if (dataStr === '[DONE]') continue;
+            try {
+              const data = JSON.parse(dataStr);
+              if (data.error) {
+                throw new Error(data.error);
+              }
+              if (data.token) {
+                setSummaryText(prev => (prev || '') + data.token);
+              }
+            } catch (err) {
+              console.warn('Malformed stream JSON:', cleaned);
+            }
+          }
+        }
+      }
+    } catch (err: any) {
+      setSummaryError(err?.message || 'Failed to generate summary.');
+    } finally {
+      setLoadingSummary(false);
+    }
   };
 
   const handleGetActionPlans = async () => {
@@ -535,6 +1569,16 @@ export default function DashboardPage() {
         <div className="p-7 space-y-7 max-w-6xl w-full mx-auto pb-16">
 
           {/* Notifications */}
+          {isSocketReconnecting && (
+            <div className="flex items-center gap-2.5 p-3 rounded-2xl animate-pulse"
+                 style={{ 
+                   background: isLightMode ? 'rgba(245,158,11,0.06)' : 'rgba(245,158,11,0.09)', 
+                   border: isLightMode ? '1px solid rgba(245,158,11,0.18)' : '1px solid rgba(245,158,11,0.22)' 
+                 }}>
+              <div className="w-2 h-2 rounded-full bg-amber-400 animate-ping shrink-0" />
+              <p className="text-[12px] font-semibold text-amber-500">Reconnecting to real-time service...</p>
+            </div>
+          )}
           {syncError && <ErrorBanner message={`Sync failed: ${syncError}${syncError.endsWith('.') ? '' : '.'} Verify your Slack Bot Token in Settings.`} />}
           {syncSuccess && (
             <div className="flex items-center gap-3 p-4 rounded-2xl animate-fadeIn"
@@ -673,6 +1717,134 @@ export default function DashboardPage() {
                 >
                   <RefreshCw className={`w-3.5 h-3.5 ${isFetchingMessages ? 'animate-spin' : ''}`} />
                 </button>
+
+                {/* Pinned Messages Dropdown in Dashboard Channel Viewer */}
+                <div className="relative">
+                  <button
+                    onClick={() => { setShowPinnedDropdown(!showPinnedDropdown); setShowBookmarksDropdown(false); }}
+                    type="button"
+                    className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all duration-200 border ${
+                      showPinnedDropdown 
+                        ? 'border-primary text-primary bg-primary/10' 
+                        : (isLightMode ? 'bg-[#000000]/02 border-[#000000]/06 text-[#6b7280]' : 'bg-[#ffffff]/04 border-[#ffffff]/08 text-[#6b7280]')
+                    }`}
+                    title="Pinned Messages"
+                  >
+                    <Pin className="w-3.5 h-3.5" />
+                    {pinnedMessages && pinnedMessages.length > 0 && (
+                      <span className="absolute -top-1 -right-1 bg-primary text-white text-[8px] font-bold px-1 rounded-full">{pinnedMessages.length}</span>
+                    )}
+                  </button>
+
+                  {showPinnedDropdown && (
+                    <div 
+                      ref={pinnedDropdownRef}
+                      className={`absolute right-0 mt-2 w-80 max-h-80 overflow-y-auto rounded-2xl border shadow-2xl p-4 flex flex-col gap-3 z-[100] ${
+                        isLightMode ? 'bg-white border-slate-200' : 'bg-[#141624] border-border'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between border-b border-border/40 pb-2 mb-1">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Pinned Channel Messages</span>
+                        <button onClick={() => setShowPinnedDropdown(false)} className="text-[9px] text-primary hover:underline font-bold">Close</button>
+                      </div>
+                      {!pinnedMessages || pinnedMessages.length === 0 ? (
+                        <div className="py-6 text-center text-xs text-muted-foreground">No pinned messages in this channel.</div>
+                      ) : (
+                        pinnedMessages.map((p) => (
+                          <div 
+                            key={p.id} 
+                            onClick={() => handleSelectPinnedMessage(p)}
+                            className="p-2.5 border border-border/30 rounded-xl bg-card/40 hover:bg-card/70 hover:border-primary/30 transition-all duration-200 flex flex-col gap-1.5 text-[11px] cursor-pointer"
+                          >
+                            <div className="flex justify-between items-center text-[9px] text-muted-foreground">
+                              <span className="font-bold">{getUserDisplayName(p.user || p.role || 'Unknown')}</span>
+                              <div className="flex items-center gap-1.5">
+                                <span>{formatFriendlyDate(p.pinned_at)}</span>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleTogglePin({ ts: p.id, isPinned: true, text: p.content, user: p.user || p.role });
+                                  }}
+                                  className="text-red-400 hover:text-red-500 p-0.5 rounded hover:bg-red-500/10 transition-colors"
+                                  title="Unpin Message"
+                                >
+                                  <X className="w-2.5 h-2.5" />
+                                </button>
+                              </div>
+                            </div>
+                            <p className="truncate line-clamp-2 max-w-full text-foreground/90 font-medium">{p.content}</p>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* Bookmarked / Saved Messages Dropdown in Dashboard Channel Viewer */}
+                <div className="relative">
+                  <button
+                    onClick={() => { setShowBookmarksDropdown(!showBookmarksDropdown); setShowPinnedDropdown(false); }}
+                    type="button"
+                    className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all duration-200 border ${
+                      showBookmarksDropdown 
+                        ? 'border-amber-500 text-amber-500 bg-amber-500/10' 
+                        : (isLightMode ? 'bg-[#000000]/02 border-[#000000]/06 text-[#6b7280]' : 'bg-[#ffffff]/04 border-[#ffffff]/08 text-[#6b7280]')
+                    }`}
+                    title="Saved Messages"
+                  >
+                    <Bookmark className="w-3.5 h-3.5" />
+                    {bookmarkedMessages && bookmarkedMessages.length > 0 && (
+                      <span className="absolute -top-1 -right-1 bg-amber-500 text-white text-[8px] font-bold px-1 rounded-full">{bookmarkedMessages.length}</span>
+                    )}
+                  </button>
+
+                  {showBookmarksDropdown && (
+                    <div 
+                      ref={bookmarksDropdownRef}
+                      className={`absolute right-0 mt-2 w-80 max-h-80 overflow-y-auto rounded-2xl border shadow-2xl p-4 flex flex-col gap-3 z-[100] ${
+                        isLightMode ? 'bg-white border-slate-200' : 'bg-[#141624] border-border'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between border-b border-border/40 pb-2 mb-1">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Saved Messages</span>
+                        <button onClick={() => setShowBookmarksDropdown(false)} className="text-[9px] text-amber-500 hover:underline font-bold">Close</button>
+                      </div>
+                      {!bookmarkedMessages || bookmarkedMessages.length === 0 ? (
+                        <div className="py-6 text-center text-xs text-muted-foreground">No saved messages.</div>
+                      ) : (
+                        bookmarkedMessages.map((b) => (
+                          <div 
+                            key={b.id} 
+                            onClick={() => handleSelectSavedMessage(b)}
+                            className="p-2.5 border border-border/30 rounded-xl bg-card/40 hover:bg-card/70 hover:border-amber-500/30 transition-all duration-200 flex flex-col gap-1.5 text-[11px] cursor-pointer"
+                          >
+                            <div className="flex justify-between items-center text-[9px] text-muted-foreground">
+                              <span className="font-bold">{getUserDisplayName(b.user || b.role || 'Unknown')}</span>
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-amber-500 font-bold">{getChannelDisplayName(b.session_id)}</span>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleToggleBookmark({ ts: b.id, isBookmarked: true, text: b.content, user: b.user || b.role });
+                                  }}
+                                  className="text-amber-500 hover:text-amber-600 p-0.5 rounded hover:bg-amber-500/10 transition-colors"
+                                  title="Unsave Message"
+                                >
+                                  <X className="w-2.5 h-2.5" />
+                                </button>
+                              </div>
+                            </div>
+                            <p className="truncate line-clamp-2 max-w-full text-foreground/90 font-medium">{b.content}</p>
+                            <div className="flex justify-between text-[8px] text-muted-foreground mt-0.5">
+                              <span>Sent {fmtDate(b.id)} {fmtTime(b.id)}</span>
+                              <span>Saved {formatFriendlyDate(b.saved_at)}</span>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -716,25 +1888,36 @@ export default function DashboardPage() {
                 <EmptyState text={filterQuery ? 'No messages match your filter.' : 'No messages found. Try syncing or post one below!'} />
               ) : (
                 [...filteredMessages].reverse().map((msg, idx) => {
-                  const avatar = getUserAvatar(msg.user);
+                  const isHighlighted = !!highlightedMessageTs && (
+                    String(highlightedMessageTs) === String(msg.ts) || 
+                    String(highlightedMessageTs) === String(msg.id)
+                  );
                   return (
-                    <div key={idx} className="msg-bubble flex gap-3 items-start px-3 py-2.5 rounded-xl cursor-default">
-                      {avatar ? (
-                        <img src={avatar} alt="" className="w-8 h-8 rounded-xl object-cover shrink-0" />
-                      ) : (
-                        <div className="w-8 h-8 rounded-xl flex items-center justify-center text-white text-[11px] font-bold uppercase shrink-0"
-                             style={{ background: avatarColor(msg.user || 'U'), opacity: 0.85 }}>
-                          {getUserInitials(msg.user)}
-                        </div>
-                      )}
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-baseline gap-2 mb-1">
-                          <span className={`text-[11px] font-semibold font-sans ${isLightMode ? 'text-slate-700' : 'text-white'}`}>{getUserDisplayName(msg.user)}</span>
-                          <span className="text-[9px]" style={{ color: isLightMode ? '#6b7280' : '#4b5563' }}>{fmtDate(msg.ts)} {fmtTime(msg.ts)}</span>
-                        </div>
-                        <p className="text-[12px] leading-relaxed whitespace-pre-wrap" style={{ color: isLightMode ? '#334155' : '#d1d5db' }}>{msg.text}</p>
-                      </div>
-                    </div>
+                    <MessageItem
+                      key={msg.ts || msg.id || idx}
+                      msg={msg}
+                      idx={idx}
+                      isHighlighted={isHighlighted}
+                      activeEmojiPickerMsgId={activeEmojiPickerMsgId}
+                      setActiveEmojiPickerMsgId={setActiveEmojiPickerMsgId}
+                      activeAiMenuMsgId={activeAiMenuMsgId}
+                      setActiveAiMenuMsgId={setActiveAiMenuMsgId}
+                      setActiveThreadParentId={setActiveThreadParentId}
+                      handleToggleReaction={handleToggleReaction}
+                      handleToggleBookmark={handleToggleBookmark}
+                      handleTogglePin={handleTogglePin}
+                      handleRunAiAction={handleRunAiAction}
+                      setTaskMessage={setTaskMessage}
+                      setTaskForm={setTaskForm}
+                      setReminderMessage={setReminderMessage}
+                      setInfoModalMessage={setInfoModalMessage}
+                      handleMessageTouchStart={handleMessageTouchStart}
+                      handleMessageTouchEnd={handleMessageTouchEnd}
+                      onOpenImageLightbox={(url, name, size) => setActiveImageLightbox({ url, name, size })}
+                      onOpenVideoPlayer={(url, name, size) => setActiveVideoPlayer({ url, name, size })}
+                      onOpenPdfViewer={(url, name, size, originalUrl, filetype) => setActivePdfViewer({ url, name, size, originalUrl, filetype })}
+                      onOpenCodeViewer={handleOpenCodeViewer}
+                    />
                   );
                 })
               )}
@@ -742,38 +1925,203 @@ export default function DashboardPage() {
             </div>
 
             {/* Post message */}
-            <div className="px-6 pb-5">
-              <form onSubmit={handlePostMessage}
-                    className="flex items-center gap-2.5 p-1.5 rounded-2xl relative"
-                    style={{
-                      background: isLightMode ? 'rgba(0, 0, 0, 0.02)' : 'rgba(255, 255, 255, 0.03)',
-                      border: isLightMode ? '1px solid rgba(0, 0, 0, 0.08)' : '1px solid rgba(255, 255, 255, 0.08)'
-                    }}>
-                <div className="w-7 h-7 rounded-xl flex items-center justify-center shrink-0 ml-1"
-                     style={{ background: 'rgba(124,106,247,0.15)' }}>
-                  <Send className="w-3.5 h-3.5" style={{ color: '#a78bfa' }} />
+            <div 
+              className={`px-6 pb-5 relative transition-all duration-200 ${
+                isDraggingOver ? 'bg-primary/5 border border-dashed border-primary/30 rounded-3xl mx-2 my-1' : ''
+              }`} 
+              onDragOver={handleDragOver} 
+              onDragLeave={handleDragLeave} 
+              onDrop={handleFileDrop}
+            >
+              
+              {/* File Upload Preview bar */}
+              {attachments.length > 0 && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 mb-4 p-3 bg-secondary/10 rounded-2xl border border-border/40 max-h-60 overflow-y-auto">
+                  {attachments.map((att) => {
+                    const isImage = att.type.startsWith('image/');
+                    const sizeFriendly = (att.size / (1024 * 1024)).toFixed(2) + ' MB';
+                    const extension = att.name.split('.').pop()?.toUpperCase() || 'FILE';
+
+                    let FileIcon = FileText;
+                    if (att.type.startsWith('video/')) FileIcon = FileVideo;
+                    else if (att.type.startsWith('audio/')) FileIcon = FileAudio;
+                    else if (att.type.startsWith('text/') || att.type.includes('json') || att.type.includes('xml')) FileIcon = FileCode;
+                    else if (att.type.includes('zip') || att.type.includes('tar') || att.type.includes('rar') || att.type.includes('7z')) FileIcon = FileArchive;
+                    else if (att.type.includes('sheet') || att.type.includes('excel') || att.type.includes('csv')) FileIcon = FileSpreadsheet;
+
+                    return (
+                      <div 
+                        key={att.id} 
+                        className={`flex items-center gap-3 p-2.5 rounded-xl border transition-all ${
+                          att.status === 'failed' ? 'border-red-500/30 bg-red-500/5' : 
+                          att.status === 'uploaded' ? 'border-emerald-500/20 bg-emerald-500/5' : 
+                          'bg-card border-border/50'
+                        }`}
+                      >
+                        <div className="w-10 h-10 rounded-lg overflow-hidden flex-shrink-0 bg-secondary/30 flex items-center justify-center relative">
+                          {isImage && att.previewUrl ? (
+                            <img src={att.previewUrl} alt={att.name} className="w-full h-full object-cover" />
+                          ) : (
+                            <FileIcon className={`w-5 h-5 ${
+                              att.status === 'failed' ? 'text-red-400' :
+                              att.status === 'uploaded' ? 'text-emerald-400' : 'text-primary'
+                            }`} />
+                          )}
+                        </div>
+
+                        <div className="flex-1 min-w-0 flex flex-col gap-0.5">
+                          <div className="flex items-center justify-between gap-1">
+                            <span className="text-[11px] font-semibold truncate text-foreground/90">{att.name}</span>
+                            <span className="text-[8px] uppercase font-mono px-1 rounded bg-secondary/50 text-muted-foreground">{extension}</span>
+                          </div>
+                          
+                          <div className="flex items-center justify-between text-[9px] text-muted-foreground">
+                            <span>{sizeFriendly}</span>
+                            <span className={`font-semibold ${
+                              att.status === 'uploaded' ? 'text-emerald-400' :
+                              att.status === 'failed' ? 'text-red-400' : 
+                              att.status === 'cancelled' ? 'text-slate-400' : 'text-primary animate-pulse'
+                            }`}>
+                              {att.status === 'uploading' ? `Uploading... ${att.progress}%` : 
+                               att.status === 'uploaded' ? 'Completed' : 
+                               att.status === 'failed' ? 'Failed' : 
+                               att.status === 'cancelled' ? 'Cancelled' : 'Queued'}
+                            </span>
+                          </div>
+                          
+                          {att.status === 'failed' && att.error && (
+                            <div className="text-[8px] text-red-400/90 mt-0.5 leading-snug break-all font-semibold" style={{ maxWidth: '160px' }}>
+                              {att.error}
+                            </div>
+                          )}
+
+                          {(att.status === 'uploading' || att.status === 'queued') && (
+                            <div className="w-full h-1 bg-secondary/50 rounded-full mt-1 overflow-hidden">
+                              <div 
+                                className="h-full bg-gradient-to-r from-primary to-indigo-500 rounded-full transition-all duration-300"
+                                style={{ width: `${att.progress}%` }}
+                              />
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="flex flex-col gap-1 shrink-0 ml-1">
+                          <button 
+                            type="button" 
+                            onClick={() => handleRemoveAttachment(att.id)}
+                            className="p-1 text-muted-foreground hover:text-red-400 hover:bg-secondary/20 rounded-md transition-colors"
+                            title="Remove File"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                          {att.status === 'uploading' && (
+                            <button 
+                              type="button" 
+                              onClick={() => handleCancelUpload(att.id)}
+                              className="p-1 text-amber-500 hover:text-amber-600 hover:bg-amber-500/10 rounded-md transition-colors text-[9px] font-bold"
+                              title="Cancel Upload"
+                            >
+                              Cancel
+                            </button>
+                          )}
+                          {att.status === 'failed' && (
+                            <button 
+                              type="button" 
+                              onClick={() => handleRetryUpload(att.id)}
+                              className="p-1 text-primary hover:text-primary/80 hover:bg-primary/10 rounded-md transition-colors text-[9px] font-bold"
+                              title="Retry Upload"
+                            >
+                              Retry
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
-                <input
-                  type="text"
-                  required
-                  placeholder={`Message #${currentChannelName}…`}
-                  value={postText}
-                  onChange={e => setPostText(e.target.value)}
-                  disabled={posting}
-                  className={`flex-1 bg-transparent text-[13px] outline-none py-2 ${isLightMode ? 'text-slate-800 placeholder:text-slate-400' : 'text-white placeholder:text-[#374151]'}`}
-                />
-                <button
-                  type="submit"
-                  disabled={posting || !postText.trim()}
-                  className="px-4 py-2 rounded-xl text-[12px] font-semibold text-white transition-all disabled:opacity-40"
-                  style={{
-                    background: 'linear-gradient(135deg, #7c6af7, #6366f1)',
-                    boxShadow: '0 2px 12px rgba(124,106,247,0.3)',
-                  }}
-                >
-                  {posting ? 'Sending…' : 'Send'}
-                </button>
-              </form>
+              )}
+
+              {/* Mentions Autocomplete suggestions */}
+              {mentionQuery && (
+                <div className={`max-w-xs absolute bottom-28 left-6 w-64 max-h-48 overflow-y-auto rounded-2xl border shadow-2xl p-2 z-50 ${
+                  isLightMode ? 'bg-white border-slate-200' : 'bg-[#141624] border-border'
+                }`}>
+                  <div className="px-2 py-1 text-[9px] font-bold text-muted-foreground uppercase border-b border-border/30 tracking-wider">
+                    {mentionQuery.type === '@' ? 'Users List' : 'Channels List'}
+                  </div>
+                  {mentionQuery.type === '@' ? (
+                    Object.keys(slackUsers)
+                      .filter(id => (slackUsers[id]?.realName || id).toLowerCase().includes(mentionQuery.query.toLowerCase()))
+                      .map(id => (
+                        <button
+                          key={id}
+                          type="button"
+                          onClick={() => selectMention(slackUsers[id]?.realName || id, id)}
+                          className="w-full text-left px-2.5 py-1.5 text-xs hover:bg-secondary/40 rounded-lg truncate flex items-center gap-1.5 font-semibold text-foreground/90"
+                        >
+                          <User className="w-3 h-3 text-primary shrink-0" />
+                          {slackUsers[id]?.realName || id}
+                        </button>
+                      ))
+                  ) : (
+                    channels
+                      ?.filter(c => c.name.toLowerCase().includes(mentionQuery.query.toLowerCase()))
+                      .map(c => (
+                        <button
+                          key={c.id}
+                          type="button"
+                          onClick={() => selectMention(c.name, c.id)}
+                          className="w-full text-left px-2.5 py-1.5 text-xs hover:bg-secondary/40 rounded-lg truncate flex items-center gap-1.5 font-semibold text-foreground/90"
+                        >
+                          <span className="text-primary font-bold shrink-0">#</span>
+                          {c.name}
+                        </button>
+                      ))
+                  )}
+                </div>
+              )}
+
+              <RichTextEditor
+                channelId={selectedChannelId}
+                channels={channels || []}
+                users={slackUsers}
+                posting={posting}
+                onSend={async (text) => {
+                  setPosting(true); setPostStatus(null);
+                  try {
+                    const fileIds = attachments
+                      .filter(a => a.status === 'uploaded' && a.fileId)
+                      .map(a => a.fileId as string);
+
+                    await apiFetch(`/api/channels/${selectedChannelId}/messages`, { 
+                      method: 'POST', 
+                      body: { 
+                        text: text,
+                        fileIds: fileIds
+                      } 
+                    });
+                    setAttachments([]);
+                    setPostStatus('success');
+                    refetchLiveMessages();
+                    queryClient.invalidateQueries({ queryKey: ['dashboardStats'] });
+                    setTimeout(() => setPostStatus(null), 3000);
+                  } catch { 
+                    setPostStatus('error'); 
+                  } finally { 
+                    setPosting(false); 
+                  }
+                }}
+                attachments={attachments}
+                onFileInputChange={handleFileInputChange}
+                isRecording={isRecording}
+                recordDuration={recordDuration}
+                onStartRecording={startRecording}
+                onStopRecording={stopRecording}
+                onRemoveAttachment={(id) => {
+                  setAttachments(prev => prev.filter(a => a.id !== id));
+                }}
+                onPaste={handlePaste}
+              />
 
               {postStatus === 'success' && (
                 <div className="flex items-center gap-2 mt-2 text-[11px] animate-fadeIn px-2"
@@ -1496,6 +2844,593 @@ export default function DashboardPage() {
 
         </div>
       </main>
+
+      {/* Thread Drawer side drawer panel */}
+      {activeThreadParentId && (
+        <div className="w-[380px] border-l flex flex-col h-full bg-card shrink-0 z-40 transition-all shadow-2xl relative"
+             style={{
+               borderLeft: isLightMode ? '1px solid rgba(0,0,0,0.08)' : '1px solid rgba(255,255,255,0.08)',
+               background: isLightMode ? 'rgba(255,255,255,0.98)' : 'rgba(15,16,27,0.98)'
+             }}>
+          
+          {/* Thread Header */}
+          <div className="p-4 border-b flex items-center justify-between shrink-0"
+               style={{ borderColor: isLightMode ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.08)' }}>
+            <div className="flex items-center gap-2">
+              <MessageSquare className="w-4 h-4 text-primary" />
+              <h4 className="text-xs font-bold uppercase tracking-wider">Thread replies</h4>
+            </div>
+            <button 
+              onClick={() => setActiveThreadParentId(null)}
+              className="text-xs text-muted-foreground hover:text-foreground font-bold"
+            >
+              Close
+            </button>
+          </div>
+
+          {/* Thread messages list viewport */}
+          <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            {/* Render parent message */}
+            {(() => {
+              const parent = liveMessages?.find(m => m.ts === activeThreadParentId);
+              if (!parent) return null;
+              return (
+                <div className="p-3.5 border-b pb-4 mb-2 flex flex-col gap-2"
+                     style={{ borderColor: isLightMode ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.06)' }}>
+                  <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+                    <span className="font-bold">{getUserDisplayName(parent.user)}</span>
+                    <span>{fmtDate(parent.ts)} {fmtTime(parent.ts)}</span>
+                  </div>
+                  <p className="text-xs leading-relaxed font-semibold text-foreground/95">{parent.text}</p>
+                </div>
+              );
+            })()}
+
+            {/* Loading Thread Replies */}
+            {isThreadLoading ? (
+              <div className="space-y-3 py-6">
+                <div className="h-10 bg-secondary/15 rounded-xl animate-pulse" />
+                <div className="h-10 bg-secondary/15 rounded-xl animate-pulse" />
+              </div>
+            ) : threadReplies.length === 0 ? (
+              <div className="py-12 text-center text-xs text-muted-foreground px-4">
+                No thread replies yet. Reply below.
+              </div>
+            ) : (
+              threadReplies.map((r) => {
+                const isRepUser = r.role === 'user';
+                const isThinking = r.content === '';
+                return (
+                  <div key={r.id} className={`p-3 rounded-2xl flex flex-col gap-1.5 max-w-[85%] ${
+                    isRepUser 
+                      ? 'ml-auto bg-[#7c6af7]/10 border border-[#7c6af7]/20 text-[#7c6af7]' 
+                      : (isLightMode ? 'mr-auto bg-slate-100 border border-slate-200 text-slate-800' : 'mr-auto bg-secondary/10 border border-border/20 text-foreground')
+                  }`}>
+                    <div className="flex justify-between items-center text-[8px] text-muted-foreground/80">
+                      <span className="font-bold">{getUserDisplayName(r.user || (isRepUser ? 'user' : 'assistant'))}</span>
+                      {!isThinking && <span>{formatFriendlyDate(r.created_at)}</span>}
+                    </div>
+                    
+                    {isThinking ? (
+                      <div className="flex space-x-1 items-center py-1">
+                        <span className="w-1 h-1 bg-[#7c6af7] rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                        <span className="w-1 h-1 bg-[#7c6af7] rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                        <span className="w-1 h-1 bg-[#7c6af7] rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                      </div>
+                    ) : (
+                      <p className="text-xs whitespace-pre-wrap leading-relaxed">{r.content}</p>
+                    )}
+                  </div>
+                );
+              })
+            )}
+            <div ref={threadEndRef} />
+          </div>
+
+          {/* Thread reply composer */}
+          <form onSubmit={handleSendThreadReply} className="p-4 border-t bg-card/25 shrink-0 flex gap-2"
+                style={{ borderColor: isLightMode ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.08)' }}>
+            <input
+              type="text"
+              required
+              placeholder="Reply to thread..."
+              value={threadInput}
+              onChange={(e) => setThreadInput(e.target.value)}
+              disabled={isThreadSending}
+              className={`flex-1 px-3 py-2 text-xs rounded-xl border outline-none focus:border-primary/80 focus:ring-1 focus:ring-primary/40 ${
+                isLightMode ? 'bg-white text-slate-800 border-slate-200' : 'bg-slate-900 border-border text-white'
+              }`}
+            />
+            <button
+              type="submit"
+              disabled={isThreadSending || !threadInput.trim()}
+              className="p-2 rounded-xl bg-primary text-white hover:bg-primary/95 transition-all shadow-md shadow-primary/10 disabled:opacity-40"
+            >
+              <Send className="w-3.5 h-3.5" />
+            </button>
+          </form>
+
+        </div>
+      )}
+
+      {/* MODAL 1: Message Info */}
+      {infoModalMessage && (
+        <div className="fixed inset-0 bg-black/75 z-[999] flex items-center justify-center p-4" onClick={() => setInfoModalMessage(null)}>
+          <div className={`w-full max-w-md p-6 rounded-3xl shadow-2xl border flex flex-col gap-4 ${
+            isLightMode ? 'bg-white border-slate-200' : 'bg-[#141624] border-border'
+          }`} onClick={e => e.stopPropagation()}>
+            <div className="flex justify-between items-center border-b border-border/40 pb-3">
+              <h4 className="text-xs font-bold uppercase tracking-wider flex items-center gap-1.5"><Info className="w-4 h-4 text-primary" /> Message metadata</h4>
+              <button onClick={() => setInfoModalMessage(null)} className="text-xs text-muted-foreground hover:text-foreground font-bold">Close</button>
+            </div>
+            
+            <div className="space-y-3.5 text-xs">
+              <div className="flex justify-between border-b border-border/10 py-1.5">
+                <span className="text-muted-foreground">Message ID</span>
+                <span className="font-mono text-[10px] break-all">{infoModalMessage.id}</span>
+              </div>
+              <div className="flex justify-between border-b border-border/10 py-1.5">
+                <span className="text-muted-foreground">Author Role</span>
+                <span className="font-semibold uppercase">{infoModalMessage.role}</span>
+              </div>
+              <div className="flex justify-between border-b border-border/10 py-1.5">
+                <span className="text-muted-foreground">Created At</span>
+                <span>{formatFriendlyDate(infoModalMessage.created_at)}</span>
+              </div>
+              {infoModalMessage.edited_at && (
+                <div className="flex justify-between border-b border-border/10 py-1.5">
+                  <span className="text-muted-foreground">Edited At</span>
+                  <span>{formatFriendlyDate(infoModalMessage.edited_at)}</span>
+                </div>
+              )}
+              <div className="flex justify-between border-b border-border/10 py-1.5">
+                <span className="text-muted-foreground">Pinned Status</span>
+                <span>{infoModalMessage.isPinned ? 'Yes (Pinned)' : 'No'}</span>
+              </div>
+              <div className="flex justify-between border-b border-border/10 py-1.5">
+                <span className="text-muted-foreground">Bookmarked</span>
+                <span>{infoModalMessage.isBookmarked ? 'Yes (Saved)' : 'No'}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 2: Convert to Task */}
+      {taskMessage && (
+        <div className="fixed inset-0 bg-black/75 z-[999] flex items-center justify-center p-4" onClick={() => setTaskMessage(null)}>
+          <form onSubmit={handleCreateTask} className={`w-full max-w-md p-6 rounded-3xl shadow-2xl border flex flex-col gap-4 ${
+            isLightMode ? 'bg-white border-slate-200' : 'bg-[#141624] border-border'
+          }`} onClick={e => e.stopPropagation()}>
+            <div className="flex justify-between items-center border-b border-border/40 pb-3">
+              <h4 className="text-xs font-bold uppercase tracking-wider flex items-center gap-1.5"><Check className="w-4 h-4 text-[#7c6af7]" /> Convert message to task</h4>
+              <button type="button" onClick={() => setTaskMessage(null)} className="text-xs text-muted-foreground hover:text-foreground font-bold">Cancel</button>
+            </div>
+            
+            <div className="space-y-4 text-xs">
+              <div className="flex flex-col gap-1.5">
+                <label className="text-muted-foreground font-semibold">Task description</label>
+                <textarea
+                  required
+                  value={taskForm.task}
+                  onChange={e => setTaskForm({ ...taskForm, task: e.target.value })}
+                  className={`w-full p-2.5 rounded-xl border border-border outline-none focus:border-primary ${
+                    isLightMode ? 'bg-white text-slate-800 border-slate-200' : 'bg-[#0f101a] text-white border-border/40'
+                  }`}
+                  rows={3}
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-muted-foreground font-semibold">Owner</label>
+                  <input
+                    type="text"
+                    value={taskForm.owner}
+                    onChange={e => setTaskForm({ ...taskForm, owner: e.target.value })}
+                    className={`w-full p-2.5 rounded-xl border border-border outline-none focus:border-primary ${
+                      isLightMode ? 'bg-white text-slate-800 border-slate-200' : 'bg-[#0f101a] text-white border-border/40'
+                    }`}
+                  />
+                </div>
+                
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-muted-foreground font-semibold">Due Date</label>
+                  <input
+                    type="date"
+                    value={taskForm.dueDate}
+                    onChange={e => setTaskForm({ ...taskForm, dueDate: e.target.value })}
+                    className={`w-full p-2.5 rounded-xl border border-border outline-none focus:border-primary ${
+                      isLightMode ? 'bg-white text-slate-800 border-slate-200' : 'bg-[#0f101a] text-white border-border/40'
+                    }`}
+                  />
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label className="text-muted-foreground font-semibold">Priority</label>
+                <select
+                  value={taskForm.priority}
+                  onChange={e => setTaskForm({ ...taskForm, priority: e.target.value })}
+                  className={`w-full p-2.5 rounded-xl border border-border outline-none focus:border-primary ${
+                    isLightMode ? 'bg-white text-slate-800 border-slate-200' : 'bg-[#0f101a] text-white border-border/40'
+                  }`}
+                >
+                  <option value="low">Low Priority</option>
+                  <option value="medium">Medium Priority</option>
+                  <option value="high">High Priority</option>
+                </select>
+              </div>
+
+              <button type="submit" className="w-full py-3 bg-primary hover:bg-primary/95 text-white font-bold rounded-xl transition-all shadow-md shadow-primary/10 mt-2">
+                Save Task to Action Center
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* MODAL 3: Set Reminder */}
+      {reminderMessage && (
+        <div className="fixed inset-0 bg-black/75 z-[999] flex items-center justify-center p-4" onClick={() => setReminderMessage(null)}>
+          <div className={`w-full max-w-sm p-6 rounded-3xl shadow-2xl border flex flex-col gap-4 ${
+            isLightMode ? 'bg-white border-slate-200' : 'bg-[#141624] border-border'
+          }`} onClick={e => e.stopPropagation()}>
+            <div className="flex justify-between items-center border-b border-border/40 pb-3">
+              <h4 className="text-xs font-bold uppercase tracking-wider flex items-center gap-1.5"><Bell className="w-4 h-4 text-[#7c6af7]" /> Set message reminder</h4>
+              <div className="flex items-center gap-2">
+                <button onClick={() => { setReminderMessage(null); setShowMyReminders(true); }} className="text-xs text-primary hover:underline font-semibold flex items-center gap-1">
+                  <Bell className="w-3 h-3" /> My Reminders
+                </button>
+                <button onClick={() => setReminderMessage(null)} className="text-xs text-muted-foreground hover:text-foreground font-bold">✕</button>
+              </div>
+            </div>
+
+            {/* Message Preview */}
+            <div className={`text-xs rounded-xl p-3 border border-border/40 ${isLightMode ? 'bg-slate-50 text-slate-700' : 'bg-[#0f101a] text-slate-300'} line-clamp-3 leading-relaxed`}>
+              "{reminderMessage.text?.slice(0, 160)}{reminderMessage.text?.length > 160 ? '…' : ''}"
+            </div>
+            
+            <div className="space-y-4 text-xs">
+              <div className="flex flex-col gap-1.5">
+                <label className="text-muted-foreground font-semibold">Remind me in:</label>
+                <select
+                  value={reminderDuration}
+                  onChange={e => setReminderDuration(e.target.value)}
+                  className={`w-full p-2.5 rounded-xl border border-border outline-none focus:border-primary ${
+                    isLightMode ? 'bg-white text-slate-800 border-slate-200' : 'bg-[#0f101a] text-white border-border/40'
+                  }`}
+                >
+                  <option value="20">20 minutes</option>
+                  <option value="60">1 hour</option>
+                  <option value="180">3 hours</option>
+                  <option value="1440">Tomorrow (24 hours)</option>
+                  <option value="10080">Next week (7 days)</option>
+                </select>
+              </div>
+
+              <button 
+                type="button" 
+                onClick={handleSetReminder}
+                className="w-full py-3 bg-gradient-to-r from-[#7c6af7] to-[#6366f1] hover:opacity-90 text-white font-bold rounded-xl transition-all shadow-md shadow-primary/10 flex items-center justify-center gap-2"
+              >
+                <Bell className="w-4 h-4" /> Set Reminder
+              </button>
+              <p className="text-center text-muted-foreground text-[10px]">You'll receive an in-app notification and email (if configured)</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* My Reminders Panel (slide-in drawer) */}
+      {showMyReminders && (
+        <div className="fixed inset-0 bg-black/60 z-[999] flex justify-end" onClick={() => setShowMyReminders(false)}>
+          <div className={`w-full max-w-sm h-full flex flex-col shadow-2xl overflow-hidden ${
+            isLightMode ? 'bg-white' : 'bg-[#141624]'
+          }`} onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between p-5 border-b border-border/40">
+              <h3 className="font-bold text-sm flex items-center gap-2"><Bell className="w-4 h-4 text-[#7c6af7]" /> My Reminders</h3>
+              <button onClick={() => setShowMyReminders(false)} className="text-muted-foreground hover:text-foreground"><X className="w-4 h-4" /></button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4 space-y-3">
+              {!pendingReminders || pendingReminders.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-full text-center gap-3 py-16">
+                  <Bell className="w-10 h-10 text-muted-foreground/30" />
+                  <p className="text-sm text-muted-foreground">No pending reminders</p>
+                  <p className="text-xs text-muted-foreground/60">Use "Remind Me Later" on any message to schedule a reminder.</p>
+                </div>
+              ) : (
+                pendingReminders.map((r: any) => {
+                  const remindAt = new Date(r.remind_at);
+                  const isPast = remindAt < new Date();
+                  const content = r.message_content || r.content || 'No content';
+                  return (
+                    <div key={r.id} className={`p-3 rounded-xl border text-xs ${
+                      isPast ? 'border-yellow-500/30 bg-yellow-500/5' : 'border-border/40'
+                    } ${isLightMode ? 'bg-slate-50' : 'bg-[#0f101a]'}`}>
+                      <div className="flex items-start justify-between gap-2 mb-2">
+                        <span className={`flex items-center gap-1 font-semibold ${isPast ? 'text-yellow-400' : 'text-primary'}`}>
+                          <Bell className="w-3 h-3" />
+                          {isPast ? 'Due now' : remindAt.toLocaleString('en-US', { dateStyle: 'short', timeStyle: 'short' })}
+                        </span>
+                        <button onClick={() => handleDeleteReminder(r.id)} className="text-muted-foreground hover:text-red-400 transition-colors" title="Delete reminder">
+                          <X className="w-3 h-3" />
+                        </button>
+                      </div>
+                      <p className="text-muted-foreground line-clamp-3 leading-relaxed">
+                        "{content.slice(0, 140)}{content.length > 140 ? '…' : ''}"
+                      </p>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reminder Toast Notifications Stack */}
+      {reminderToasts.length > 0 && (
+        <div className="fixed bottom-6 right-6 z-[1000] flex flex-col gap-3 max-w-sm w-full">
+          {reminderToasts.map((reminder: any) => {
+            const content = reminder.message_content || reminder.content || 'Message reminder';
+            return (
+              <div 
+                key={reminder.id}
+                className="bg-[#141624] border border-[#7c6af7]/40 rounded-2xl shadow-2xl p-4 flex gap-3 items-start animate-slide-up"
+                style={{ animation: 'slideUpFade 0.3s ease-out forwards' }}
+              >
+                <div className="flex-shrink-0 w-9 h-9 rounded-xl bg-gradient-to-br from-[#7c6af7] to-[#6366f1] flex items-center justify-center">
+                  <Bell className="w-4 h-4 text-white" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-bold text-white mb-0.5">⏰ Message Reminder</p>
+                  <p className="text-xs text-slate-400 line-clamp-2 leading-relaxed">
+                    "{content.slice(0, 120)}{content.length > 120 ? '…' : ''}"
+                  </p>
+                </div>
+                <button 
+                  onClick={() => handleDismissReminderToast(reminder.id)}
+                  className="flex-shrink-0 text-slate-500 hover:text-slate-300 transition-colors mt-0.5"
+                  title="Dismiss"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* MODAL 4: AI Action results */}
+      {aiActionResult && (
+        <div className="fixed inset-0 bg-black/75 z-[999] flex items-center justify-center p-4" onClick={() => setAiActionResult(null)}>
+          <div className={`w-full max-w-2xl p-6 rounded-3xl shadow-2xl border flex flex-col gap-4 ${
+            isLightMode ? 'bg-white border-slate-200' : 'bg-[#141624] border-border'
+          }`} onClick={e => e.stopPropagation()}>
+            <div className="flex justify-between items-center border-b border-border/40 pb-3">
+              <h4 className="text-xs font-bold uppercase tracking-wider flex items-center gap-1.5"><Sparkles className="w-4 h-4 text-primary animate-pulse" /> {aiActionResult.title}</h4>
+              <div className="flex items-center gap-3">
+                <button 
+                  onClick={() => {
+                    navigator.clipboard.writeText(aiActionResult.text);
+                  }}
+                  className="text-xs text-primary hover:underline font-bold flex items-center gap-1"
+                >
+                  <Copy className="w-3.5 h-3.5" /> Copy response
+                </button>
+                <button onClick={() => setAiActionResult(null)} className="text-xs text-muted-foreground hover:text-foreground font-bold">Close</button>
+              </div>
+            </div>
+            
+            <div className="overflow-y-auto max-h-96 text-xs leading-relaxed max-w-none text-foreground/90 p-4 border border-border/40 rounded-2xl bg-secondary/5 font-medium">
+              <MarkdownRenderer text={aiActionResult.text} isLightMode={isLightMode} />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 5: Running AI actions loading */}
+      {isRunningAiAction && (
+        <div className="fixed inset-0 bg-black/60 z-[9999] flex flex-col gap-3 items-center justify-center">
+          <Sparkles className="w-8 h-8 text-primary animate-spin" />
+          <span className="text-xs font-semibold text-white tracking-wide animate-pulse">Running AI collaborator query...</span>
+        </div>
+      )}
+
+      {/* Mobile Action Menu Overlay */}
+      {selectedMobileMsg && (
+        <div className="fixed inset-0 bg-black/75 z-[999] flex items-end sm:hidden" onClick={() => setSelectedMobileMsg(null)}>
+          <div className={`w-full rounded-t-3xl p-6 flex flex-col gap-3.5 shadow-2xl border-t ${
+            isLightMode ? 'bg-white border-slate-200' : 'bg-[#141624] border-border'
+          }`} onClick={e => e.stopPropagation()}>
+            
+            <div className="w-12 h-1.5 bg-muted-foreground/30 rounded-full mx-auto mb-2 shrink-0" />
+            
+            <div className="flex items-center justify-between border-b border-border/40 pb-2">
+              <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Message Quick Actions</span>
+              <button onClick={() => setSelectedMobileMsg(null)} className="text-xs text-primary font-bold">Close</button>
+            </div>
+
+            <div className="flex justify-between items-center py-2 px-2 bg-secondary/10 rounded-2xl gap-1 shrink-0 overflow-x-auto">
+              {EMOJIS.map(emoji => (
+                <button 
+                  key={emoji} 
+                  onClick={() => handleToggleReaction(selectedMobileMsg.ts, emoji, selectedMobileMsg.text, selectedMobileMsg.user)}
+                  className="text-xl px-1 hover:scale-110 cursor-pointer"
+                >
+                  {emoji}
+                </button>
+              ))}
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 text-xs font-semibold mt-2">
+              <button onClick={() => { setActiveThreadParentId(selectedMobileMsg.ts); setSelectedMobileMsg(null); }} className="w-full text-left p-3 hover:bg-secondary/25 rounded-2xl flex items-center gap-2 border border-border/20"><MessageSquare className="w-4 h-4 text-primary" /> Reply Thread</button>
+              <button onClick={() => handleToggleBookmark(selectedMobileMsg)} className="w-full text-left p-3 hover:bg-secondary/25 rounded-2xl flex items-center gap-2 border border-border/20"><Bookmark className="w-4 h-4 text-amber-500" /> {selectedMobileMsg.isBookmarked ? 'Unsave Msg' : 'Save Message'}</button>
+              <button onClick={() => handleTogglePin(selectedMobileMsg)} className="w-full text-left p-3 hover:bg-secondary/25 rounded-2xl flex items-center gap-2 border border-border/20"><Pin className="w-4 h-4 text-sky-400" /> {selectedMobileMsg.isPinned ? 'Unpin Msg' : 'Pin Message'}</button>
+              <button onClick={() => { setInfoModalMessage({ id: selectedMobileMsg.ts, role: selectedMobileMsg.user === 'US' ? 'user' : 'assistant', content: selectedMobileMsg.text, created_at: new Date(parseFloat(selectedMobileMsg.ts) * 1000).toISOString(), isPinned: selectedMobileMsg.isPinned, isBookmarked: selectedMobileMsg.isBookmarked }); setSelectedMobileMsg(null); }} className="w-full text-left p-3 hover:bg-secondary/25 rounded-2xl flex items-center gap-2 border border-border/20"><Info className="w-4 h-4 text-purple-400" /> Message Info</button>
+            </div>
+
+            <div className="border-t border-border/40 my-1" />
+
+            <div className="flex flex-col gap-1.5 text-xs font-semibold">
+              <button onClick={() => handleRunAiAction(selectedMobileMsg.ts, 'explain', 'AI Explanation', selectedMobileMsg.text)} className="w-full text-left p-2.5 hover:bg-secondary/25 rounded-xl flex items-center gap-2"><Sparkles className="w-4 h-4 text-primary" /> Explain message with AI</button>
+              <button onClick={() => { setTaskMessage(selectedMobileMsg); setTaskForm({ task: selectedMobileMsg.text.slice(0, 100), owner: 'Unassigned', dueDate: '', priority: 'medium' }); }} className="w-full text-left p-2.5 hover:bg-secondary/25 rounded-xl flex items-center gap-2"><Check className="w-4 h-4 text-indigo-400" /> Convert to Task</button>
+              <button onClick={() => setReminderMessage(selectedMobileMsg)} className="w-full text-left p-2.5 hover:bg-secondary/25 rounded-xl flex items-center gap-2"><Bell className="w-4 h-4 text-yellow-400" /> Remind Me Later</button>
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 6: Image Lightbox */}
+      {activeImageLightbox && (
+        <div className="fixed inset-0 bg-black/90 z-[9999] flex items-center justify-center p-4" onClick={() => setActiveImageLightbox(null)}>
+          <div className="relative max-w-4xl w-full flex flex-col items-center gap-4" onClick={e => e.stopPropagation()}>
+            <button 
+              onClick={() => setActiveImageLightbox(null)} 
+              className="absolute -top-10 right-0 text-white hover:text-slate-300 font-bold text-sm bg-white/10 px-3 py-1.5 rounded-xl transition-all"
+            >
+              ✕ Close
+            </button>
+            <img 
+              src={activeImageLightbox.url} 
+              alt={activeImageLightbox.name} 
+              className="max-h-[75vh] max-w-full rounded-2xl object-contain shadow-2xl border border-white/10" 
+            />
+            <div className="flex flex-col sm:flex-row items-center justify-between w-full text-white bg-black/60 px-5 py-3 rounded-2xl border border-white/5 backdrop-blur-md gap-2">
+              <div className="min-w-0 text-center sm:text-left">
+                <p className="text-xs font-bold truncate max-w-md">{activeImageLightbox.name}</p>
+                {activeImageLightbox.size && (
+                  <p className="text-[10px] text-slate-400 mt-0.5">
+                    Size: {(activeImageLightbox.size / (1024 * 1024)).toFixed(2)} MB
+                  </p>
+                )}
+              </div>
+              <a 
+                href={`${activeImageLightbox.url}&download=true`} 
+                download={activeImageLightbox.name}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-[12px] font-semibold text-white bg-[#7c6af7] hover:bg-[#7c6af7]/90 transition-all shadow-lg shadow-[#7c6af7]/20"
+              >
+                Download Image
+              </a>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 7: Video Player */}
+      {activeVideoPlayer && (
+        <div className="fixed inset-0 bg-black/90 z-[9999] flex items-center justify-center p-4" onClick={() => setActiveVideoPlayer(null)}>
+          <div className="relative max-w-3xl w-full flex flex-col items-center gap-4" onClick={e => e.stopPropagation()}>
+            <button 
+              onClick={() => setActiveVideoPlayer(null)} 
+              className="absolute -top-10 right-0 text-white hover:text-slate-300 font-bold text-sm bg-white/10 px-3 py-1.5 rounded-xl transition-all"
+            >
+              ✕ Close
+            </button>
+            <video 
+              src={activeVideoPlayer.url} 
+              controls 
+              autoPlay
+              className="max-h-[70vh] max-w-full rounded-2xl shadow-2xl border border-white/10" 
+            />
+            <div className="flex flex-col sm:flex-row items-center justify-between w-full text-white bg-black/60 px-5 py-3 rounded-2xl border border-white/5 backdrop-blur-md gap-2">
+              <div className="min-w-0 text-center sm:text-left">
+                <p className="text-xs font-bold truncate max-w-md">{activeVideoPlayer.name}</p>
+                {activeVideoPlayer.size && (
+                  <p className="text-[10px] text-slate-400 mt-0.5">
+                    Size: {(activeVideoPlayer.size / (1024 * 1024)).toFixed(2)} MB
+                  </p>
+                )}
+              </div>
+              <a 
+                href={`${activeVideoPlayer.url}&download=true`} 
+                download={activeVideoPlayer.name}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-[12px] font-semibold text-white bg-[#7c6af7] hover:bg-[#7c6af7]/90 transition-all shadow-lg shadow-[#7c6af7]/20"
+              >
+                Download Video
+              </a>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 8: PDF Viewer */}
+      {activePdfViewer && (
+        <div className="fixed inset-0 bg-black/70 z-[9999] flex items-center justify-center p-4" onClick={() => setActivePdfViewer(null)}>
+          <div className={`relative max-w-4xl w-full h-[85vh] rounded-3xl shadow-2xl border flex flex-col overflow-hidden ${
+            isLightMode ? 'bg-white border-slate-200' : 'bg-[#141624] border-border'
+          }`} onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between p-4 border-b border-border/40 shrink-0">
+              <div>
+                <h4 className="text-xs font-bold uppercase tracking-wider flex items-center gap-1.5">
+                  <FileText className="w-4 h-4 text-primary" /> {
+                    activePdfViewer.filetype && ['doc', 'docx'].includes(activePdfViewer.filetype) ? 'Word Document Preview' :
+                    activePdfViewer.filetype && ['xls', 'xlsx'].includes(activePdfViewer.filetype) ? 'Excel Spreadsheet Preview' :
+                    activePdfViewer.filetype && ['ppt', 'pptx'].includes(activePdfViewer.filetype) ? 'PowerPoint Presentation Preview' :
+                    'PDF Document Preview'
+                  }
+                </h4>
+                <p className="text-[10px] text-muted-foreground mt-0.5 truncate max-w-md">{activePdfViewer.name}</p>
+              </div>
+              <div className="flex items-center gap-3">
+                <a 
+                  href={activePdfViewer.originalUrl || `${activePdfViewer.url}&download=true`} 
+                  download={activePdfViewer.name}
+                  className="text-xs text-primary hover:underline font-bold"
+                >
+                  {
+                    activePdfViewer.filetype && ['doc', 'docx'].includes(activePdfViewer.filetype) ? 'Download Word Document' :
+                    activePdfViewer.filetype && ['xls', 'xlsx'].includes(activePdfViewer.filetype) ? 'Download Excel Spreadsheet' :
+                    activePdfViewer.filetype && ['ppt', 'pptx'].includes(activePdfViewer.filetype) ? 'Download PowerPoint Presentation' :
+                    'Download PDF'
+                  }
+                </a>
+                <button onClick={() => setActivePdfViewer(null)} className="text-xs text-muted-foreground hover:text-foreground font-bold bg-secondary/20 px-3 py-1.5 rounded-xl transition-all">✕ Close</button>
+              </div>
+            </div>
+            <div className="flex-1 bg-secondary/5 relative">
+              <iframe 
+                src={activePdfViewer.url} 
+                className="w-full h-full border-0" 
+                title={activePdfViewer.name} 
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 9: Code Viewer */}
+      {activeCodeViewer && (
+        <div className="fixed inset-0 bg-black/70 z-[9999] flex items-center justify-center p-4" onClick={() => setActiveCodeViewer(null)}>
+          <div className={`relative max-w-4xl w-full h-[80vh] rounded-3xl shadow-2xl border flex flex-col overflow-hidden ${
+            isLightMode ? 'bg-white border-slate-200' : 'bg-[#141624] border-border'
+          }`} onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between p-4 border-b border-border/40 shrink-0">
+              <div>
+                <h4 className="text-xs font-bold uppercase tracking-wider flex items-center gap-1.5">
+                  <FileCode className="w-4 h-4 text-[#7c6af7]" /> Source Code Viewer
+                </h4>
+                <p className="text-[10px] text-muted-foreground mt-0.5 truncate max-w-md">{activeCodeViewer.name}</p>
+              </div>
+              <div className="flex items-center gap-3">
+                <button 
+                  onClick={() => activeCodeViewer.content && navigator.clipboard.writeText(activeCodeViewer.content)}
+                  className="text-xs text-primary hover:underline font-bold"
+                >
+                  Copy Code
+                </button>
+                <button onClick={() => setActiveCodeViewer(null)} className="text-xs text-muted-foreground hover:text-foreground font-bold bg-secondary/20 px-3 py-1.5 rounded-xl transition-all">✕ Close</button>
+              </div>
+            </div>
+            <div className="flex-1 overflow-auto p-4 bg-secondary/5 font-mono text-xs leading-relaxed">
+              <pre className="whitespace-pre-wrap font-mono select-text text-foreground/90">{activeCodeViewer.content}</pre>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
@@ -1518,3 +3453,580 @@ function fmtWindow(mins: number) {
   if (mins === 1440) return 'Today';
   return `Last ${mins / 1440} day(s)`;
 }
+
+interface MessageItemProps {
+  msg: any;
+  idx: number;
+  isHighlighted?: boolean;
+  activeEmojiPickerMsgId: string | null;
+  setActiveEmojiPickerMsgId: (id: string | null) => void;
+  activeAiMenuMsgId: string | null;
+  setActiveAiMenuMsgId: (id: string | null) => void;
+  setActiveThreadParentId: (id: string | null) => void;
+  handleToggleReaction: (ts: string, emoji: string, text: string, user: string) => void;
+  handleToggleBookmark: (msg: any) => void;
+  handleTogglePin: (msg: any) => void;
+  handleRunAiAction: (ts: string, action: string, title: string, text: string) => void;
+  setTaskMessage: (msg: any) => void;
+  setTaskForm: (form: any) => void;
+  setReminderMessage: (msg: any) => void;
+  setInfoModalMessage: (msg: any) => void;
+  handleMessageTouchStart: (msg: any) => void;
+  handleMessageTouchEnd: () => void;
+  onOpenImageLightbox: (url: string, name: string, size?: number) => void;
+  onOpenVideoPlayer: (url: string, name: string, size?: number) => void;
+  onOpenPdfViewer: (url: string, name: string, size?: number, originalUrl?: string, filetype?: string) => void;
+  onOpenCodeViewer: (file: any) => void;
+}
+
+const MessageItem = React.memo(({
+  msg,
+  idx,
+  isHighlighted = false,
+  activeEmojiPickerMsgId,
+  setActiveEmojiPickerMsgId,
+  activeAiMenuMsgId,
+  setActiveAiMenuMsgId,
+  setActiveThreadParentId,
+  handleToggleReaction,
+  handleToggleBookmark,
+  handleTogglePin,
+  handleRunAiAction,
+  setTaskMessage,
+  setTaskForm,
+  setReminderMessage,
+  setInfoModalMessage,
+  handleMessageTouchStart,
+  handleMessageTouchEnd,
+  onOpenImageLightbox,
+  onOpenVideoPlayer,
+  onOpenPdfViewer,
+  onOpenCodeViewer
+}: MessageItemProps) => {
+  const { user, slackUsers } = useAuth();
+  const { theme } = useTheme();
+  const isLightMode = theme === 'light';
+
+  const EMOJIS = ['👍', '❤️', '😂', '🔥', '👏', '🎉', '😮', '😢', '👀', '🚀'];
+
+  const getUserAvatar = (userId: string) => {
+    return slackUsers[userId]?.avatar || null;
+  };
+
+  const getUserInitials = (userId: string) => {
+    if (!userId) return 'U';
+    const clean = userId.replace(/[<@>]/g, '');
+    const mapped = slackUsers[clean];
+    if (mapped?.realName) {
+      const parts = mapped.realName.split(' ');
+      if (parts.length > 1) return (parts[0][0] + parts[1][0]).toUpperCase();
+      return mapped.realName.slice(0, 2).toUpperCase();
+    }
+    return clean.slice(0, 2).toUpperCase();
+  };
+
+  const avatarColor = (userId: string) => {
+    const colors = ['#7c6af7', '#0ea5e9', '#10b981', '#f59e0b', '#ec4899', '#3b82f6'];
+    let hash = 0;
+    for (let i = 0; i < userId.length; i++) {
+      hash = userId.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    return colors[Math.abs(hash) % colors.length];
+  };
+
+  const getUserDisplayName = (userId: string) => {
+    if (!userId) return 'Unknown';
+    const clean = userId.replace(/[<@>]/g, '');
+    const mapped = slackUsers[clean];
+    return mapped?.realName || mapped?.name || clean;
+  };
+
+  const fmtDate = (ts: string) => {
+    const d = new Date(parseFloat(ts) * 1000);
+    return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  };
+  const fmtTime = (ts: string) => {
+    const d = new Date(parseFloat(ts) * 1000);
+    return d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+  };
+
+
+
+  const avatar = getUserAvatar(msg.user);
+  const isMsgUser = msg.user === 'US' || msg.user === user?.id?.toString();
+  
+  // Group Reactions by emoji
+  const reactionsMap: Record<string, any[]> = {};
+  if (msg.reactions) {
+    msg.reactions.forEach((r: any) => {
+      if (!reactionsMap[r.emoji]) reactionsMap[r.emoji] = [];
+      reactionsMap[r.emoji].push(r);
+    });
+  }
+
+  const prevReactionsKeysRef = React.useRef<string[]>([]);
+  React.useEffect(() => {
+    const currentKeys = Object.keys(reactionsMap);
+    const removedKeys = prevReactionsKeysRef.current.filter(k => !currentKeys.includes(k));
+    for (const rk of removedKeys) {
+      console.log(`[Frontend removed emoji] emoji: ${rk} from message: ${msg.ts}`);
+    }
+    prevReactionsKeysRef.current = currentKeys;
+  }, [reactionsMap, msg.ts]);
+
+  const elementRef = React.useRef<HTMLDivElement>(null);
+  React.useEffect(() => {
+    if (isHighlighted && elementRef.current) {
+      const el = elementRef.current;
+      const timer = setTimeout(() => {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 150);
+      return () => clearTimeout(timer);
+    }
+  }, [isHighlighted]);
+
+  return (
+    <div 
+      ref={elementRef}
+      id={`msg-${msg.ts}`}
+      className={`msg-bubble flex gap-3 items-start px-3 py-2.5 rounded-xl relative group transition-all duration-500 border border-transparent ${
+        isHighlighted
+          ? isLightMode 
+            ? 'bg-amber-100/60 border-amber-300 shadow-[0_0_12px_rgba(245,158,11,0.15)] scale-[1.01]' 
+            : 'bg-amber-500/10 border-amber-500/30 shadow-[0_0_12px_rgba(245,158,11,0.1)] scale-[1.01]'
+          : isLightMode 
+            ? 'hover:bg-slate-100/50' 
+            : 'hover:bg-white/[0.02]'
+      }`}
+      onTouchStart={() => handleMessageTouchStart(msg)}
+      onTouchEnd={handleMessageTouchEnd}
+    >
+      {/* Interactive Actions Toolbar */}
+      <div data-msg-toolbar className={`absolute -top-3.5 z-40 flex items-center bg-card border border-border shadow-2xl rounded-2xl p-1 gap-1 transition-opacity duration-150 right-3 ${
+        (activeEmojiPickerMsgId === msg.ts || activeAiMenuMsgId === msg.ts)
+          ? 'opacity-100 pointer-events-auto'
+          : (activeEmojiPickerMsgId !== null || activeAiMenuMsgId !== null)
+            ? 'opacity-0 pointer-events-none'
+            : 'opacity-0 group-hover:opacity-100'
+      }`}>
+        
+        {/* Emojis selector trigger */}
+        <div className="relative">
+          <button 
+            type="button"
+            className="p-1 rounded-xl hover:bg-secondary/40 text-muted-foreground hover:text-foreground"
+            title="Add Reaction"
+            onClick={(e) => {
+              e.stopPropagation();
+              setActiveEmojiPickerMsgId(activeEmojiPickerMsgId === msg.ts ? null : msg.ts);
+              setActiveAiMenuMsgId(null);
+            }}
+          >
+            <SmilePlus className="w-3.5 h-3.5" />
+          </button>
+          
+          {activeEmojiPickerMsgId === msg.ts && (
+            <div className="absolute bottom-8 flex gap-1 bg-card border border-border shadow-2xl rounded-2xl p-2 z-50 right-0" onClick={e => e.stopPropagation()}>
+              {EMOJIS.map(emoji => (
+                <button 
+                  key={emoji} 
+                  type="button"
+                  onClick={() => handleToggleReaction(msg.ts, emoji, msg.text, msg.user)}
+                  className="text-base hover:scale-125 transition-transform px-1 cursor-pointer"
+                >
+                  {emoji}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Thread reply */}
+        <button 
+          type="button"
+          onClick={() => setActiveThreadParentId(msg.ts)}
+          className="p-1.5 rounded-xl hover:bg-secondary/40 text-muted-foreground hover:text-foreground"
+          title="Reply in Thread"
+        >
+          <MessageSquare className="w-3.5 h-3.5" />
+        </button>
+
+        {/* Bookmark / Save */}
+        <button 
+          type="button"
+          onClick={() => handleToggleBookmark(msg)}
+          className={`p-1.5 rounded-xl hover:bg-secondary/40 transition-colors ${
+            msg.isBookmarked ? 'text-amber-500' : 'text-muted-foreground hover:text-foreground'
+          }`}
+          title={msg.isBookmarked ? "Remove Bookmark" : "Save Message"}
+        >
+          <Bookmark className="w-3.5 h-3.5" fill={msg.isBookmarked ? "currentColor" : "none"} />
+        </button>
+
+        {/* Pin */}
+        <button 
+          type="button"
+          onClick={() => handleTogglePin(msg)}
+          className={`p-1.5 rounded-xl hover:bg-secondary/40 transition-colors ${
+            msg.isPinned ? 'text-primary' : 'text-muted-foreground hover:text-foreground'
+          }`}
+          title={msg.isPinned ? "Unpin Message" : "Pin Message"}
+        >
+          <Pin className="w-3.5 h-3.5" />
+        </button>
+
+        {/* AI actions dropdown */}
+        <div className="relative">
+          <button 
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setActiveAiMenuMsgId(activeAiMenuMsgId === msg.ts ? null : msg.ts);
+              setActiveEmojiPickerMsgId(null);
+            }}
+            className={`p-1.5 rounded-xl hover:bg-secondary/40 flex items-center transition-colors ${
+              activeAiMenuMsgId === msg.ts ? 'bg-[#7c6af7]/10 text-[#7c6af7] dark:bg-[#7c6af7]/20 dark:text-[#a78bfa]' : 'text-[#7c6af7] hover:opacity-85'
+            }`}
+            title="AI Actions"
+          >
+            <Sparkles className="w-3.5 h-3.5" />
+          </button>
+          
+          {activeAiMenuMsgId === msg.ts && (
+            <div className={`ai-actions-dropdown absolute ${idx < 3 ? 'top-full mt-1.5' : 'bottom-full mb-1.5'} w-52 rounded-xl shadow-2xl p-2 z-50 right-0`} onClick={e => e.stopPropagation()}>
+              <button type="button" onClick={() => handleRunAiAction(msg.ts, 'explain', 'AI Explanation', msg.text)} className="w-full text-left p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg flex items-center gap-2 text-[11px] font-semibold text-slate-800 dark:text-slate-100"><Info className="w-3.5 h-3.5 text-sky-500 shrink-0" /> Explain Message</button>
+              <button type="button" onClick={() => handleRunAiAction(msg.ts, 'summarize', 'AI Summary', msg.text)} className="w-full text-left p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg flex items-center gap-2 text-[11px] font-semibold text-slate-800 dark:text-slate-100"><Compass className="w-3.5 h-3.5 text-emerald-500 shrink-0" /> Summarize Points</button>
+              <button type="button" onClick={() => handleRunAiAction(msg.ts, 'translate', 'AI Translation', msg.text)} className="w-full text-left p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg flex items-center gap-2 text-[11px] font-semibold text-slate-800 dark:text-slate-100"><Terminal className="w-3.5 h-3.5 text-purple-500 shrink-0" /> Translate Message</button>
+              <button type="button" onClick={() => handleRunAiAction(msg.ts, 'improve', 'Improved Text', msg.text)} className="w-full text-left p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg flex items-center gap-2 text-[11px] font-semibold text-slate-800 dark:text-slate-100"><Edit3 className="w-3.5 h-3.5 text-pink-500 shrink-0" /> Improve Grammar</button>
+              <button type="button" onClick={() => handleRunAiAction(msg.ts, 'rewrite', 'Professional Rewrite', msg.text)} className="w-full text-left p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg flex items-center gap-2 text-[11px] font-semibold text-slate-800 dark:text-slate-100"><Award className="w-3.5 h-3.5 text-amber-500 shrink-0" /> Rewrite Professionally</button>
+              <div className="border-t border-slate-200 dark:border-slate-600 my-1.5" />
+              <button type="button" onClick={() => { setTaskMessage(msg); setTaskForm({ task: msg.text.slice(0, 100), owner: 'Unassigned', dueDate: '', priority: 'medium' }); }} className="w-full text-left p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg flex items-center gap-2 text-[11px] font-semibold text-slate-800 dark:text-slate-100"><Check className="w-3.5 h-3.5 text-indigo-500 shrink-0" /> Convert to Task</button>
+              <button type="button" onClick={() => setReminderMessage(msg)} className="w-full text-left p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg flex items-center gap-2 text-[11px] font-semibold text-slate-800 dark:text-slate-100"><Bell className="w-3.5 h-3.5 text-yellow-500 shrink-0" /> Remind Me Later</button>
+            </div>
+          )}
+        </div>
+
+        {/* More Actions info button */}
+        <button 
+          type="button"
+          onClick={() => setInfoModalMessage({ id: msg.ts, role: isMsgUser ? 'user' : 'assistant', content: msg.text, created_at: new Date(parseFloat(msg.ts) * 1000).toISOString(), isPinned: msg.isPinned, isBookmarked: msg.isBookmarked })}
+          className="p-1.5 rounded-xl hover:bg-secondary/40 text-muted-foreground hover:text-foreground"
+          title="Message Info"
+        >
+          <MoreVertical className="w-3.5 h-3.5" />
+        </button>
+      </div>
+
+      {avatar ? (
+        <img src={avatar} alt="" className="w-8 h-8 rounded-xl object-cover shrink-0" />
+      ) : (
+        <div className="w-8 h-8 rounded-xl flex items-center justify-center text-white text-[11px] font-bold uppercase shrink-0"
+             style={{ background: avatarColor(msg.user || 'U'), opacity: 0.85 }}>
+          {getUserInitials(msg.user)}
+        </div>
+      )}
+      
+      <div className="min-w-0 flex-1">
+        <div className="flex items-baseline gap-2 mb-1">
+          <span className={`text-[11px] font-semibold font-sans flex items-center gap-1.5 ${isLightMode ? 'text-slate-700' : 'text-white'}`}>
+            {getUserDisplayName(msg.user)}
+            {msg.isPinned && <Pin className="w-2.5 h-2.5 text-primary rotate-45 shrink-0" />}
+            {msg.isBookmarked && <Bookmark className="w-2.5 h-2.5 text-amber-500 shrink-0" fill="currentColor" />}
+          </span>
+          <span className="text-[9px]" style={{ color: isLightMode ? '#6b7280' : '#4b5563' }}>{fmtDate(msg.ts)} {fmtTime(msg.ts)}</span>
+        </div>
+        <div 
+          className="text-[12px] leading-relaxed slack-message-body"
+          style={{ color: isLightMode ? '#334155' : '#d1d5db' }}
+        >
+          <SlackMrkdwnRenderer text={msg.text || ''} users={slackUsers} />
+        </div>
+        
+        {/* Render File Attachments */}
+        {msg.files && msg.files.length > 0 && (
+          <div className="mt-2.5 flex flex-col gap-2.5 max-w-lg">
+            {msg.files.map((file: any) => {
+              const isImage = file.mimetype?.startsWith('image/');
+              const isVideo = file.mimetype?.startsWith('video/') || ['mp4', 'mov', 'avi', 'mkv', 'webm'].includes(file.filetype || '');
+              const isAudio = file.mimetype?.startsWith('audio/') || ['mp3', 'wav', 'aac', 'm4a'].includes(file.filetype || '');
+              const isPdf = file.mimetype === 'application/pdf' || file.filetype === 'pdf';
+              const isCode = ['java', 'javascript', 'typescript', 'python', 'cpp', 'c', 'html', 'css', 'react', 'node', 'markdown', 'sql', 'log', 'js', 'ts', 'py', 'cpp', 'html', 'css', 'md', 'sql'].includes(file.filetype || '');
+
+              const sizeFriendly = file.size ? (file.size / (1024 * 1024)).toFixed(2) + ' MB' : '';
+              
+              const getProxyDownloadUrl = (f: any, download: boolean = false) => {
+                const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
+                const token = getAuthToken() || '';
+                const fileUrl = f.url_private_download || f.url_private || '';
+                return `${BACKEND_URL}/api/files/${f.id}?token=${encodeURIComponent(token)}&url=${encodeURIComponent(fileUrl)}&filename=${encodeURIComponent(f.name || '')}${download ? '&download=true' : ''}`;
+              };
+              
+              const downloadUrl = getProxyDownloadUrl(file);
+
+              // 1. Image Lightbox trigger
+              if (isImage) {
+                return (
+                  <div key={file.id} className="rounded-xl overflow-hidden border border-border/40 bg-card max-w-sm hover:border-primary/40 transition-all shadow-sm">
+                    <img 
+                      src={downloadUrl} 
+                      alt={file.name} 
+                      className="max-h-48 w-full object-cover cursor-pointer hover:opacity-95 transition-opacity" 
+                      onClick={() => onOpenImageLightbox(downloadUrl, file.name, file.size)}
+                    />
+                    <div className="p-2.5 text-[10px] text-muted-foreground border-t border-border/40 flex items-center justify-between gap-2">
+                      <span className="truncate font-semibold text-foreground/80">{file.name}</span>
+                      {sizeFriendly && <span className="shrink-0">{sizeFriendly}</span>}
+                    </div>
+                  </div>
+                );
+              }
+
+              // 2. Video Player trigger
+              if (isVideo) {
+                const durationMin = file.duration_ms ? Math.floor(file.duration_ms / 1000 / 60) : 0;
+                const durationSec = file.duration_ms ? Math.floor((file.duration_ms / 1000) % 60).toString().padStart(2, '0') : '';
+                const durationStr = file.duration_ms ? `${durationMin}:${durationSec}` : '';
+
+                return (
+                  <div 
+                    key={file.id} 
+                    onClick={() => onOpenVideoPlayer(downloadUrl, file.name, file.size)}
+                    className="flex items-center gap-3 p-3 rounded-xl border border-border/30 hover:border-primary/40 transition-all cursor-pointer bg-card hover:bg-secondary/10"
+                  >
+                    <div className="w-10 h-10 rounded-lg bg-red-500/10 text-red-500 flex items-center justify-center shrink-0 relative overflow-hidden group/vid">
+                      {file.thumb_video ? (
+                        <img src={downloadUrl} alt="" className="w-full h-full object-cover" />
+                      ) : (
+                        <FileVideo className="w-5 h-5" />
+                      )}
+                      <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-80 group-hover/vid:opacity-100 transition-opacity">
+                        <Play className="w-3 h-3 text-white fill-current" />
+                      </div>
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[11px] font-semibold truncate text-foreground">{file.name}</p>
+                      <p className="text-[9px] text-muted-foreground">
+                        {sizeFriendly ? `${sizeFriendly} • ` : ''}Video
+                        {durationStr ? ` (${durationStr})` : ''}
+                      </p>
+                    </div>
+                    <span className="text-[9px] font-bold text-primary hover:underline shrink-0 flex items-center gap-1">
+                      <Play className="w-2.5 h-2.5 fill-current" /> Play
+                    </span>
+                  </div>
+                );
+              }
+
+              // 3. Audio Player inline
+              if (isAudio) {
+                return (
+                  <div 
+                    key={file.id} 
+                    className="p-3.5 rounded-xl border border-border/30 bg-card flex items-center gap-3.5 max-w-sm hover:border-primary/30 transition-all shadow-sm"
+                  >
+                    <div className="w-10 h-10 rounded-lg bg-emerald-500/10 text-emerald-400 flex items-center justify-center shrink-0">
+                      <Activity className="w-5 h-5" />
+                    </div>
+                    <div className="min-w-0 flex-1 flex flex-col gap-0.5">
+                      <p className="text-[11px] font-semibold truncate text-foreground">{file.name}</p>
+                      <p className="text-[9px] text-muted-foreground">{sizeFriendly ? `${sizeFriendly} • ` : ''}Audio File</p>
+                      <audio src={downloadUrl} controls className="w-full h-6 mt-1 scale-95 origin-left" />
+                    </div>
+                  </div>
+                );
+              }
+
+              // 4. PDF Viewer trigger
+              if (isPdf) {
+                return (
+                  <div 
+                    key={file.id} 
+                    className="flex items-center gap-3 p-3 rounded-xl border border-border/30 bg-card hover:bg-secondary/5 transition-all max-w-sm w-full"
+                  >
+                    <div className="w-10 h-10 rounded-lg bg-orange-500/10 text-orange-500 flex items-center justify-center shrink-0">
+                      <FileText className="w-5 h-5" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[11px] font-semibold truncate text-foreground">{file.name}</p>
+                      <p className="text-[9px] text-muted-foreground">{sizeFriendly ? `${sizeFriendly} • ` : ''}PDF Document</p>
+                    </div>
+                    <div className="flex items-center gap-2.5 shrink-0 ml-1">
+                      <button
+                        onClick={() => onOpenPdfViewer(downloadUrl, file.name, file.size)}
+                        className="text-[9px] font-bold text-primary hover:underline"
+                      >
+                        Open
+                      </button>
+                      <span className="text-muted-foreground/30 text-[10px]">|</span>
+                      <a
+                        href={getProxyDownloadUrl(file, true)}
+                        download={file.name}
+                        className="text-[9px] font-bold text-primary hover:underline"
+                      >
+                        Download
+                      </a>
+                    </div>
+                  </div>
+                );
+              }
+
+              // 5. Code Viewer trigger
+              if (isCode) {
+                return (
+                  <div 
+                    key={file.id} 
+                    onClick={() => onOpenCodeViewer(file)}
+                    className="flex items-center gap-3 p-3 rounded-xl border border-border/30 hover:border-primary/40 transition-all cursor-pointer bg-card hover:bg-secondary/10"
+                  >
+                    <div className="w-10 h-10 rounded-lg bg-slate-500/10 text-slate-400 flex items-center justify-center shrink-0">
+                      <FileCode className="w-5 h-5" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[11px] font-semibold truncate text-foreground">{file.name}</p>
+                      <p className="text-[9px] text-muted-foreground">{sizeFriendly ? `${sizeFriendly} • ` : ''}Source Code</p>
+                    </div>
+                    <span className="text-[9px] font-bold text-primary hover:underline shrink-0">View Code</span>
+                  </div>
+                );
+              }
+
+              // 6. Generic Files / Office docs / Word / Excel / PowerPoint
+              let brandColorBg = 'bg-primary/10';
+              let brandColorText = 'text-primary';
+              let FileIcon: any = FileText;
+              let fileTypeName = file.pretty_type || file.filetype || 'Document';
+
+              if (['doc', 'docx'].includes(file.filetype || '')) {
+                brandColorBg = 'bg-blue-500/10';
+                brandColorText = 'text-blue-500';
+                FileIcon = FileText;
+                fileTypeName = 'Word Document';
+              } else if (['xls', 'xlsx', 'csv'].includes(file.filetype || '')) {
+                brandColorBg = 'bg-emerald-500/10';
+                brandColorText = 'text-emerald-500';
+                FileIcon = FileSpreadsheet;
+                fileTypeName = 'Excel Spreadsheet';
+              } else if (['ppt', 'pptx'].includes(file.filetype || '')) {
+                brandColorBg = 'bg-orange-600/10';
+                brandColorText = 'text-orange-600';
+                FileIcon = Presentation;
+                fileTypeName = 'PowerPoint Presentation';
+              } else if (['zip', 'rar', '7z', 'tar', 'gz'].includes(file.filetype || '')) {
+                brandColorBg = 'bg-amber-500/10';
+                brandColorText = 'text-amber-500';
+                FileIcon = FileArchive;
+                fileTypeName = 'Compressed Archive';
+              }
+
+              const previewPdfUrl = file.converted_pdf
+                ? (() => {
+                    const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
+                    const token = getAuthToken() || '';
+                    const previewName = file.name ? (file.name.endsWith('.pdf') ? file.name : `${file.name}.pdf`) : 'preview.pdf';
+                    return `${BACKEND_URL}/api/files/${file.id}?token=${encodeURIComponent(token)}&url=${encodeURIComponent(file.converted_pdf)}&filename=${encodeURIComponent(previewName)}`;
+                  })()
+                : null;
+
+              if (previewPdfUrl) {
+                return (
+                  <div 
+                    key={file.id} 
+                    className="flex items-center gap-3 p-3 rounded-xl border border-border/30 bg-card hover:bg-secondary/5 transition-all max-w-sm w-full"
+                  >
+                    <div className={`w-10 h-10 rounded-lg ${brandColorBg} ${brandColorText} flex items-center justify-center shrink-0`}>
+                      <FileIcon className="w-5 h-5" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[11px] font-semibold truncate text-foreground">{file.name}</p>
+                      <p className="text-[9px] text-muted-foreground uppercase">{sizeFriendly ? `${sizeFriendly} • ` : ''}{fileTypeName}</p>
+                    </div>
+                    <div className="flex items-center gap-2.5 shrink-0 ml-1">
+                      <button
+                        onClick={() => onOpenPdfViewer(previewPdfUrl, file.name, file.size, getProxyDownloadUrl(file, true), file.filetype)}
+                        className="text-[9px] font-bold text-primary hover:underline"
+                      >
+                        Open
+                      </button>
+                      <span className="text-muted-foreground/30 text-[10px]">|</span>
+                      <a
+                        href={getProxyDownloadUrl(file, true)}
+                        download={file.name}
+                        className="text-[9px] font-bold text-primary hover:underline"
+                      >
+                        Download
+                      </a>
+                    </div>
+                  </div>
+                );
+              }
+
+              return (
+                <a 
+                  key={file.id}
+                  href={getProxyDownloadUrl(file, true)} 
+                  download={file.name}
+                  className="flex items-center gap-3 p-3 rounded-xl border border-border/30 hover:border-primary/30 transition-all bg-card hover:bg-secondary/5"
+                >
+                  <div className={`w-10 h-10 rounded-lg ${brandColorBg} ${brandColorText} flex items-center justify-center shrink-0`}>
+                    <FileIcon className="w-5 h-5" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[11px] font-semibold truncate text-foreground">{file.name}</p>
+                    <p className="text-[9px] text-muted-foreground uppercase">{sizeFriendly ? `${sizeFriendly} • ` : ''}{fileTypeName}</p>
+                  </div>
+                  <ExternalLink className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                </a>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Reactions Bar list */}
+        {Object.keys(reactionsMap).length > 0 && (
+          <div className="flex flex-wrap items-center gap-1 mt-1.5">
+            {Object.keys(reactionsMap).map(emoji => {
+              const list = reactionsMap[emoji];
+              const userReacted = user ? list.some(r => r.user_id === user.id) : false;
+              const namesList = list.map(r => (user && r.user_id === user.id) ? 'You' : (slackUsers[r.user_id]?.realName || `User ${r.user_id}`)).join(', ');
+              return (
+                <div 
+                  key={emoji}
+                  onClick={() => handleToggleReaction(msg.ts, emoji, msg.text, msg.user)}
+                  className={`flex items-center gap-1 text-[9px] px-2 py-0.5 rounded-full border transition-all cursor-pointer ${
+                    userReacted 
+                      ? 'bg-primary/10 border-primary/30 text-primary font-bold shadow-sm' 
+                      : 'bg-secondary/10 border-border/30 hover:bg-secondary/20 text-muted-foreground'
+                  }`}
+                  title={`Reacted by: ${namesList}`}
+                >
+                  <span>{emoji}</span>
+                  <span>{list.length}</span>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Thread Replies count link */}
+        {msg.replyCount && msg.replyCount > 0 ? (
+          <button
+            type="button"
+            onClick={() => setActiveThreadParentId(msg.ts)}
+            className="text-[10px] text-primary font-bold hover:underline flex items-center gap-1 mt-1.5"
+          >
+            <MessageSquare className="w-3 h-3" />
+            {msg.replyCount} {msg.replyCount === 1 ? 'reply' : 'replies'}
+          </button>
+        ) : null}
+      </div>
+    </div>
+  );
+}, (prevProps, nextProps) => {
+  return prevProps.msg.ts === nextProps.msg.ts &&
+         prevProps.msg.text === nextProps.msg.text &&
+         prevProps.msg.isPinned === nextProps.msg.isPinned &&
+         prevProps.msg.isBookmarked === nextProps.msg.isBookmarked &&
+         JSON.stringify(prevProps.msg.reactions) === JSON.stringify(nextProps.msg.reactions) &&
+         (prevProps.activeEmojiPickerMsgId === prevProps.msg.ts) === (nextProps.activeEmojiPickerMsgId === nextProps.msg.ts) &&
+         (prevProps.activeAiMenuMsgId === prevProps.msg.ts) === (nextProps.activeAiMenuMsgId === nextProps.msg.ts);
+});

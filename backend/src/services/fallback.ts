@@ -318,3 +318,70 @@ ${actionRows.join('\n') || '| No action items detected | — | — | — |'}
 ---
 *Report Generated on ${new Date().toLocaleString()}*`;
 }
+
+export function generateLocalFallbackAiAction(
+  action: string,
+  content: string
+): string {
+  const words = content.trim().split(/\s+/).filter(Boolean);
+  const sentences = content.split(/[.!?]+/).map(s => s.trim()).filter(Boolean);
+  
+  // Extract capital/acronym terms (e.g. API, JWT, DB, next.js)
+  const technicalTerms = Array.from(new Set(content.match(/\b([A-Z]{2,10}|[a-z]+[A-Z][a-zA-Z]*|[a-zA-Z]+\.[a-zA-Z]+)\b/g) || []));
+
+  switch (action) {
+    case 'explain':
+      let explanation = `### 🔍 Local AI Message Explanation (Offline Mode)\n\n`;
+      explanation += `**Message Summary:**\n* The text contains **${words.length} words** and **${sentences.length} sentence(s)**.\n`;
+      if (technicalTerms.length > 0) {
+        explanation += `\n**Key Technical Terms Detected:**\n`;
+        for (const term of technicalTerms.slice(0, 8)) {
+          explanation += `* **${term}** (Identified as a specialized workspace entity or system reference).\n`;
+        }
+      }
+      explanation += `\n**Detailed Analysis:**\n`;
+      explanation += `* **Primary Intent:** The sentence structure suggests a communication regarding: *"${sentences[0] || 'general update'}"*.\n`;
+      explanation += `* **Actionability:** This message is a standard conversational post. If it contains a request or issue, look for action items or deadlines in the task section.\n\n`;
+      explanation += `*(Note: This analysis was generated locally because the Gemini API is currently rate-limited/offline.)*`;
+      return explanation;
+
+    case 'summarize':
+      let summary = `### 📋 Local AI Message Summary (Offline Mode)\n\n`;
+      summary += `* **Main Point:** ${sentences[0] || 'No content.'}\n`;
+      if (sentences.length > 1) {
+        summary += `* **Supporting Details:**\n`;
+        for (const s of sentences.slice(1, 5)) {
+          summary += `  - ${s}\n`;
+        }
+      }
+      summary += `* **Scale:** Message length is ${words.length} words.\n\n`;
+      summary += `*(Note: Generated locally due to API rate-limiting.)*`;
+      return summary;
+
+    case 'translate':
+      let translation = `### 🌐 Local Translation (Offline Mode)\n\n`;
+      translation += `**Original text:**\n> ${content}\n\n`;
+      translation += `*The Gemini API is currently offline/rate-limited (429), preventing a full sentence translation. Here is a localized review:*\n\n`;
+      translation += `* **Detected Language:** English/Workspace Lingo\n`;
+      translation += `* **Suggested Translation Context:** The message is requesting or discussing: *"${sentences[0]}"*.\n\n`;
+      translation += `*(Note: Full translation will resume as soon as the Gemini API quota resets.)*`;
+      return translation;
+
+    case 'improve':
+      let improvement = `### ✏️ Local Grammar Improvement (Offline Mode)\n\n`;
+      const improvedSentences = sentences.map(s => s.charAt(0).toUpperCase() + s.slice(1));
+      improvement += `**Suggested Text:**\n${improvedSentences.join('. ')}.\n\n`;
+      improvement += `*(Note: Cleaned up spacing, sentence capitalization, and basic punctuation locally due to API rate-limiting.)*`;
+      return improvement;
+
+    case 'rewrite':
+      let rewrite = `### 👔 Local Professional Rewrite (Offline Mode)\n\n`;
+      const cleanContent = sentences.map(s => s.charAt(0).toUpperCase() + s.slice(1)).join('. ');
+      rewrite += `**Professional Workplace Version:**\n"Regarding the discussion: ${cleanContent || 'No message content was provided.'}"\n\n`;
+      rewrite += `*(Note: Generated locally with a formal workplace tone due to Gemini API rate-limiting.)*`;
+      return rewrite;
+
+    default:
+      return `### ⚙️ Local Text Analysis (Offline Mode)\n\n${content}\n\n*(Note: Generated locally due to API rate-limiting.)*`;
+  }
+}

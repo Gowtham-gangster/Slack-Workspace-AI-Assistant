@@ -67,11 +67,12 @@ export class MCPClientManager {
         }
       });
       if (!authTestResponse.ok) {
-        const errText = await authTestResponse.text();
-        throw new Error(`Slack API error: ${authTestResponse.status} ${errText}`);
+        // Do not expose raw API response (may contain sensitive info)
+        throw new Error(`Slack API returned HTTP ${authTestResponse.status} during credential validation.`);
       }
       const authData = await authTestResponse.json() as any;
       if (!authData.ok) {
+        // Expose only the Slack error code, not the full response
         throw new Error(`Slack Authentication Failed: ${authData.error || 'invalid_auth'}`);
       }
       if (teamId && authData.team_id !== teamId) {

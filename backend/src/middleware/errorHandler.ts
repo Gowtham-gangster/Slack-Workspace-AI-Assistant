@@ -60,3 +60,29 @@ export function requestIdMiddleware(req: Request, res: Response, next: NextFunct
 export function notFoundHandler(req: Request, res: Response) {
   res.status(404).json({ error: `Route ${req.method} ${req.path} not found.` });
 }
+
+/**
+ * Sanitizes AI/LLM errors into clean user-facing messages.
+ * Prevents raw JSON blobs (429 rate limit errors) from being shown to users.
+ */
+export function sanitizeAIError(error: any, fallbackMessage = 'AI service is temporarily unavailable. Please try again.'): string {
+  const msg: string = error?.message || String(error) || '';
+  if (msg.includes('429') || msg.includes('RESOURCE_EXHAUSTED') || msg.includes('quota') || msg.includes('rate limit') || msg.includes('rate-limit')) {
+    return 'AI quota exceeded. Please wait a moment and try again.';
+  }
+  if (msg.includes('503') || msg.includes('UNAVAILABLE') || msg.includes('overloaded')) {
+    return 'AI service is temporarily overloaded. Please try again in a few seconds.';
+  }
+  if (msg.includes('401') || msg.includes('API key') || msg.includes('invalid_auth')) {
+    return 'AI API key is invalid or not configured. Please check your Settings.';
+  }
+  if (msg.includes('LLM error')) {
+    // Strip out raw JSON blobs from LLM error messages
+    return fallbackMessage;
+  }
+  // If the message looks like it could contain a JSON blob, sanitize it
+  if (msg.includes('"code"') || msg.includes('"message"') || msg.includes('"status"')) {
+    return fallbackMessage;
+  }
+  return fallbackMessage;
+}

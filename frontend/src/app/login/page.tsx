@@ -6,6 +6,7 @@ import { apiFetch } from '../../lib/api';
 import { useTheme } from '../../components/ThemeContext';
 import { Sparkles, Lock, Mail, AlertCircle, ArrowLeft, User, Check, Sun, Moon, Eye, EyeOff } from 'lucide-react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import Script from 'next/script';
 import { motion } from 'framer-motion';
 
@@ -25,19 +26,13 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
-  const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
   const [mounted, setMounted] = useState(false);
+  const router = useRouter();
 
   useEffect(() => {
     setMounted(true);
-    const handleMouseMove = (e: MouseEvent) => {
-      setMousePosition({ x: e.clientX, y: e.clientY });
-    };
-    window.addEventListener('mousemove', handleMouseMove);
-    return () => {
-      window.removeEventListener('mousemove', handleMouseMove);
-    };
-  }, []);
+    router.prefetch('/dashboard');
+  }, [router]);
 
   const ambientParticles = useMemo(() => {
     return Array.from({ length: 25 }).map((_, i) => ({
@@ -246,17 +241,7 @@ export default function LoginPage() {
         </motion.div>
       </div>
 
-      {/* 2. Interactive Cursor Tracking Glow */}
-      {mounted && (
-        <motion.div
-          className="absolute w-[600px] h-[600px] rounded-full bg-[#7c6af7]/10 blur-[150px] pointer-events-none"
-          animate={{
-            x: mousePosition.x - 300,
-            y: mousePosition.y - 300,
-          }}
-          transition={{ type: 'spring', damping: 50, stiffness: 120, mass: 0.6 }}
-        />
-      )}
+
 
       {/* 3. Slow-drifting Ambient Blobs */}
       {/* Purple/Indigo Blob */}
@@ -439,14 +424,14 @@ export default function LoginPage() {
           <div>
             <label className={`block text-[11px] font-bold uppercase tracking-wider mb-2 ml-1 transition-colors duration-500 ${
               isLightMode ? 'text-slate-600' : 'text-slate-400'
-            }`}>Email Address</label>
+            }`}>Email or Username</label>
             <div className="relative">
               <Mail className={`absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 transition-colors duration-500 ${
                 isLightMode ? 'text-slate-500' : 'text-slate-400'
               }`} />
               <input
-                type="email"
-                placeholder="Enter email address"
+                type="text"
+                placeholder="Enter email or username"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className={`w-full pl-11 pr-4 py-3 rounded-xl border focus:ring-1 transition-all outline-none ${

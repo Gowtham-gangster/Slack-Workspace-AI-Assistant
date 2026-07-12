@@ -131,8 +131,12 @@ export default function ProfilePage() {
               {profileStatus && (
                 <div className={`p-4 rounded-2xl border text-xs flex items-center gap-2.5 ${
                   profileStatus.type === 'success' 
-                    ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' 
-                    : 'bg-red-500/10 border-red-500/20 text-red-400'
+                    ? isLightMode
+                      ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
+                      : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' 
+                    : isLightMode
+                      ? 'bg-red-50 border-red-200 text-red-700'
+                      : 'bg-red-500/10 border-red-500/20 text-red-400'
                 }`}>
                   {profileStatus.type === 'success' ? <CheckCircle className="w-4.5 h-4.5" /> : <XCircle className="w-4.5 h-4.5" />}
                   <p>{profileStatus.message}</p>
@@ -147,6 +151,7 @@ export default function ProfilePage() {
                   <div className="relative">
                     <User className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                     <input
+                      suppressHydrationWarning
                       type="text"
                       value={fullName}
                       onChange={(e) => setFullName(e.target.value)}
@@ -165,6 +170,7 @@ export default function ProfilePage() {
                   <div className="relative">
                     <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                     <input
+                      suppressHydrationWarning
                       type="email"
                       value={profileEmail}
                       onChange={(e) => setProfileEmail(e.target.value)}
@@ -184,6 +190,7 @@ export default function ProfilePage() {
                     <div className="relative">
                       <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                       <input
+                        suppressHydrationWarning
                         type="password"
                         value={profilePassword}
                         onChange={(e) => setProfilePassword(e.target.value)}
@@ -202,6 +209,7 @@ export default function ProfilePage() {
                     <div className="relative">
                       <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                       <input
+                        suppressHydrationWarning
                         type="password"
                         value={profileConfirmPassword}
                         onChange={(e) => setProfileConfirmPassword(e.target.value)}
@@ -215,6 +223,7 @@ export default function ProfilePage() {
                 </div>
 
                 <button
+                  suppressHydrationWarning
                   type="submit"
                   disabled={updateProfileMutation.isPending}
                   className="px-6 py-3.5 rounded-xl bg-primary hover:bg-primary/95 text-white font-bold text-xs transition-all shadow-md shadow-primary/10 flex items-center gap-2 disabled:opacity-50"
@@ -238,11 +247,14 @@ export default function ProfilePage() {
                 </p>
                 <div className="flex gap-3 pt-2">
                   <button
+                    suppressHydrationWarning
                     type="button"
                     onClick={() => { if (theme !== 'light') toggleTheme(); }}
                     className={`flex-1 py-3 px-4 rounded-xl text-xs font-semibold border flex items-center justify-center gap-2 transition-all duration-300 ${
                       theme === 'light'
                         ? 'bg-primary/10 border-primary text-primary shadow-sm shadow-primary/5 font-bold'
+                        : isLightMode
+                        ? 'bg-slate-100/50 border-slate-200 text-slate-500 hover:text-slate-800 hover:bg-slate-200/80'
                         : 'bg-white/[0.02] border-white/[0.06] text-slate-400 hover:text-white hover:bg-white/[0.05]'
                     }`}
                   >
@@ -250,11 +262,14 @@ export default function ProfilePage() {
                     Light Theme
                   </button>
                   <button
+                    suppressHydrationWarning
                     type="button"
                     onClick={() => { if (theme !== 'dark') toggleTheme(); }}
                     className={`flex-1 py-3 px-4 rounded-xl text-xs font-semibold border flex items-center justify-center gap-2 transition-all duration-300 ${
                       theme === 'dark'
                         ? 'bg-primary/10 border-primary text-primary shadow-sm shadow-primary/5 font-bold'
+                        : isLightMode
+                        ? 'bg-slate-100/50 border-slate-200 text-slate-500 hover:text-slate-800 hover:bg-slate-200/80'
                         : 'bg-white/[0.02] border-white/[0.06] text-slate-400 hover:text-white hover:bg-white/[0.05]'
                     }`}
                   >
@@ -278,19 +293,29 @@ export default function ProfilePage() {
 
                 <div className="space-y-3 pt-6">
                   <button
+                    suppressHydrationWarning
                     type="button"
                     onClick={confirmDeleteAccount}
                     disabled={deleteAccountMutation.isPending}
-                    className="w-full py-3.5 rounded-xl border border-red-600/30 bg-red-600/10 hover:bg-red-600/15 text-red-400 hover:text-red-300 font-bold text-xs transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                    className={`w-full py-3.5 rounded-xl border font-bold text-xs transition-all flex items-center justify-center gap-2 disabled:opacity-50 ${
+                      isLightMode
+                        ? 'border-red-200 bg-red-50 hover:bg-red-100 text-red-600 hover:text-red-700'
+                        : 'border-red-600/30 bg-red-600/10 hover:bg-red-600/15 text-red-400 hover:text-red-300'
+                    }`}
                   >
                     <Trash2 className="w-4 h-4" />
                     Delete User Account Permanently
                   </button>
 
                   <button
+                    suppressHydrationWarning
                     type="button"
                     onClick={logout}
-                    className="w-full py-3.5 rounded-xl border border-slate-500/25 bg-slate-500/5 hover:bg-slate-500/10 text-slate-300 hover:text-white font-bold text-xs transition-all flex items-center justify-center gap-2"
+                    className={`w-full py-3.5 rounded-xl border font-bold text-xs transition-all flex items-center justify-center gap-2 ${
+                      isLightMode
+                        ? 'border-slate-300 bg-slate-100/50 hover:bg-slate-200/80 text-slate-700 hover:text-slate-900'
+                        : 'border-slate-500/25 bg-slate-500/5 hover:bg-slate-500/10 text-slate-300 hover:text-white'
+                    }`}
                   >
                     <LogOut className="w-4 h-4" />
                     Sign Out of Session

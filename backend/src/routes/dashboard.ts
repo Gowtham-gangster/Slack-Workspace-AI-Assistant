@@ -6,34 +6,45 @@ import { generateText } from '../services/ai.js';
 
 const router = Router();
 
+// Simple in-memory cache for workspace insights (TTL: 5 minutes)
+const insightsCache = new Map<number, { insights: any[]; expiresAt: number }>();
+const INSIGHTS_CACHE_TTL_MS = 5 * 60 * 1000;
+
 // GET /api/dashboard/stats
 router.get('/stats', authenticateJWT, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const userId = req.user!.id;
-    const channelCountRow = await db.queryOne<{ count: number }>('SELECT COUNT(*) as count FROM slack_channels WHERE db_user_id = ?', [userId]);
-    const messageCountRow = await db.queryOne<{ count: number }>('SELECT COUNT(*) as count FROM slack_messages WHERE db_user_id = ?', [userId]);
-    const reportCountRow = await db.queryOne<{ count: number }>('SELECT COUNT(*) as count FROM saved_reports WHERE user_id = ?', [userId]);
-    const actionCountRow = await db.queryOne<{ count: number }>('SELECT COUNT(*) as count FROM action_items WHERE user_id = ?', [userId]);
-    
-    // Get recent reports
-    const recentReports = await db.query<any>(`
-      SELECT id, title, type, created_at 
-      FROM saved_reports 
-      WHERE user_id = ?
-      ORDER BY created_at DESC 
-      LIMIT 5
-    `, [userId]);
 
-    // Get recent searches (from tool executions where tool_name = 'slack_search_messages')
-    const recentSearchesRows = await db.query<any>(`
-      SELECT DISTINCT te.arguments, te.executed_at 
-      FROM tool_executions te
-      JOIN chat_messages cm ON te.message_id = cm.id
-      JOIN chat_sessions cs ON cm.session_id = cs.id
-      WHERE cs.user_id = ? AND (te.tool_name = 'slack_search_messages' OR te.tool_name = 'search_messages')
-      ORDER BY te.executed_at DESC 
-      LIMIT 5
-    `, [userId]);
+    // Run all stats and recent records queries in parallel (PERF-01)
+    const [
+      channelCountRow,
+      messageCountRow,
+      reportCountRow,
+      actionCountRow,
+      recentReports,
+      recentSearchesRows
+    ] = await Promise.all([
+      db.queryOne<{ count: number }>('SELECT COUNT(*) as count FROM slack_channels WHERE db_user_id = ?', [userId]),
+      db.queryOne<{ count: number }>('SELECT COUNT(*) as count FROM slack_messages WHERE db_user_id = ?', [userId]),
+      db.queryOne<{ count: number }>('SELECT COUNT(*) as count FROM saved_reports WHERE user_id = ?', [userId]),
+      db.queryOne<{ count: number }>('SELECT COUNT(*) as count FROM action_items WHERE user_id = ?', [userId]),
+      db.query<any>(`
+        SELECT id, title, type, created_at 
+        FROM saved_reports 
+        WHERE user_id = ?
+        ORDER BY created_at DESC 
+        LIMIT 5
+      `, [userId]),
+      db.query<any>(`
+        SELECT DISTINCT te.arguments, te.executed_at 
+        FROM tool_executions te
+        JOIN chat_messages cm ON te.message_id = cm.id
+        JOIN chat_sessions cs ON cm.session_id = cs.id
+        WHERE cs.user_id = ? AND (te.tool_name = 'slack_search_messages' OR te.tool_name = 'search_messages')
+        ORDER BY te.executed_at DESC 
+        LIMIT 5
+      `, [userId])
+    ]);
 
     const recentSearches = recentSearchesRows.map((s: any) => {
       try {
@@ -74,11 +85,27 @@ router.get('/stats', authenticateJWT, async (req: AuthenticatedRequest, res: Res
 router.get('/intelligence-score', authenticateJWT, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const userId = req.user!.id;
-    const channelCount = (await db.queryOne<{ count: number }>('SELECT COUNT(*) as count FROM slack_channels WHERE db_user_id = ?', [userId]))?.count || 0;
-    const messageCount = (await db.queryOne<{ count: number }>('SELECT COUNT(*) as count FROM slack_messages WHERE db_user_id = ?', [userId]))?.count || 0;
-    const reportCount = (await db.queryOne<{ count: number }>('SELECT COUNT(*) as count FROM saved_reports WHERE user_id = ?', [userId]))?.count || 0;
-    const actionCount = (await db.queryOne<{ count: number }>('SELECT COUNT(*) as count FROM action_items WHERE user_id = ?', [userId]))?.count || 0;
-    const completedCount = (await db.queryOne<{ count: number }>('SELECT COUNT(*) as count FROM action_items WHERE user_id = ? AND status = ?', [userId, 'completed']))?.count || 0;
+
+    // Run all score stats queries in parallel (PERF-01)
+    const [
+      channelCountRow,
+      messageCountRow,
+      reportCountRow,
+      actionCountRow,
+      completedCountRow
+    ] = await Promise.all([
+      db.queryOne<{ count: number }>('SELECT COUNT(*) as count FROM slack_channels WHERE db_user_id = ?', [userId]),
+      db.queryOne<{ count: number }>('SELECT COUNT(*) as count FROM slack_messages WHERE db_user_id = ?', [userId]),
+      db.queryOne<{ count: number }>('SELECT COUNT(*) as count FROM saved_reports WHERE user_id = ?', [userId]),
+      db.queryOne<{ count: number }>('SELECT COUNT(*) as count FROM action_items WHERE user_id = ?', [userId]),
+      db.queryOne<{ count: number }>('SELECT COUNT(*) as count FROM action_items WHERE user_id = ? AND status = ?', [userId, 'completed'])
+    ]);
+
+    const channelCount = channelCountRow?.count || 0;
+    const messageCount = messageCountRow?.count || 0;
+    const reportCount = reportCountRow?.count || 0;
+    const actionCount = actionCountRow?.count || 0;
+    const completedCount = completedCountRow?.count || 0;
     const mcpConnected = MCPClientManager.getInstance(userId).getConnectionStatus().connected;
 
     // Compute sub-scores (0-100)
@@ -114,13 +141,22 @@ router.get('/intelligence-score', authenticateJWT, async (req: AuthenticatedRequ
 router.get('/insights', authenticateJWT, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const userId = req.user!.id;
+
+    // Check in-memory cache first (PERF-02)
+    const cached = insightsCache.get(userId);
+    if (cached && Date.now() < cached.expiresAt) {
+      return res.json({ insights: cached.insights });
+    }
+
     const messageCount = (await db.queryOne<{ count: number }>('SELECT COUNT(*) as count FROM slack_messages WHERE db_user_id = ?', [userId]))?.count || 0;
     const channelCount = (await db.queryOne<{ count: number }>('SELECT COUNT(*) as count FROM slack_channels WHERE db_user_id = ?', [userId]))?.count || 0;
 
     if (messageCount < 5) {
-      return res.json({ insights: [
+      const emptyInsights = [
         { type: 'info', text: 'Sync your Slack workspace to unlock AI-powered insights about your team.' }
-      ]});
+      ];
+      insightsCache.set(userId, { insights: emptyInsights, expiresAt: Date.now() + INSIGHTS_CACHE_TTL_MS });
+      return res.json({ insights: emptyInsights });
     }
 
     // Sample recent messages for AI insight generation
@@ -158,12 +194,16 @@ Examples of good insights:
         clean = lines.join('\n').trim();
       }
       const insights = JSON.parse(clean);
-      res.json({ insights: Array.isArray(insights) ? insights : [] });
+      const parsedInsights = Array.isArray(insights) ? insights : [];
+      insightsCache.set(userId, { insights: parsedInsights, expiresAt: Date.now() + INSIGHTS_CACHE_TTL_MS });
+      res.json({ insights: parsedInsights });
     } catch {
-      res.json({ insights: [
+      const fallbackInsights = [
         { type: 'info', text: `${messageCount} messages indexed across ${channelCount} channels.` },
         { type: 'positive', text: 'Workspace knowledge base is ready for AI queries.' },
-      ]});
+      ];
+      insightsCache.set(userId, { insights: fallbackInsights, expiresAt: Date.now() + INSIGHTS_CACHE_TTL_MS });
+      res.json({ insights: fallbackInsights });
     }
   } catch (error) {
     console.error('Insights generation failed:', error);

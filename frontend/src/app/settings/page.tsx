@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Sidebar from '../../components/Sidebar';
-import { apiFetch } from '../../lib/api';
+import { apiFetch, getAuthToken } from '../../lib/api';
 import { useTheme } from '../../components/ThemeContext';
 import { 
   Settings as SettingsIcon, 
@@ -23,6 +23,12 @@ interface SettingsData {
   mcp_server_url?: string;
   mcp_slack_bot_token?: string;
   mcp_slack_team_id?: string;
+  slack_workspace_name?: string;
+  slack_workspace_icon?: string;
+  slack_bot_user_id?: string;
+  slack_connected_user_id?: string;
+  slack_connected_at?: string;
+  slack_enterprise_id?: string;
   openai_api_key?: string;
   openai_model_name?: string;
   openai_api_base?: string;
@@ -41,6 +47,37 @@ export default function SettingsPage() {
 
   const containerRef = useRef<HTMLDivElement>(null);
 
+  // Parse Slack OAuth status or error query params
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const status = params.get('status');
+      const error = params.get('error');
+
+      if (status === 'connected') {
+        setSaveStatus({ type: 'success', message: 'Successfully connected to your Slack Workspace!' });
+        window.history.replaceState({}, document.title, window.location.pathname);
+      } else if (error) {
+        let errorMsg = 'Slack connection failed.';
+        if (error === 'access_denied') {
+          errorMsg = 'Slack OAuth authorization was denied or canceled.';
+        } else if (error === 'invalid_state') {
+          errorMsg = 'OAuth state validation failed (CSRF check).';
+        } else if (error === 'invalid_user') {
+          errorMsg = 'User identification mismatch during OAuth.';
+        } else if (error === 'server_configuration_missing') {
+          errorMsg = 'Slack App configuration (Client ID/Secret) is missing on the server.';
+        } else if (error === 'token_exchange_failed') {
+          errorMsg = 'Failed to exchange authorization code for Slack tokens.';
+        } else {
+          errorMsg = `Slack OAuth failed: ${decodeURIComponent(error)}`;
+        }
+        setSaveStatus({ type: 'error', message: errorMsg });
+        window.history.replaceState({}, document.title, window.location.pathname);
+      }
+    }
+  }, []);
+
   useEffect(() => {
     if (saveStatus && containerRef.current) {
       containerRef.current.scrollTo({ top: 0, behavior: 'smooth' });
@@ -58,6 +95,25 @@ export default function SettingsPage() {
       setFormData(settings);
     }
   }, [settings]);
+
+  const handleConnectSlack = () => {
+    const token = getAuthToken();
+    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
+    window.location.href = `${backendUrl}/api/auth/slack?token=${encodeURIComponent(token || '')}`;
+  };
+
+  const handleDisconnectSlack = async () => {
+    if (confirm('Are you sure you want to disconnect the Slack Workspace? This will stop conversation syncing.')) {
+      try {
+        await apiFetch('/api/auth/slack/disconnect', { method: 'POST' });
+        setSaveStatus({ type: 'success', message: 'Slack Workspace disconnected successfully.' });
+        queryClient.invalidateQueries({ queryKey: ['settings'] });
+        queryClient.invalidateQueries({ queryKey: ['dashboardStats'] });
+      } catch (err: any) {
+        setSaveStatus({ type: 'error', message: err?.message || 'Failed to disconnect Slack.' });
+      }
+    }
+  };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -145,8 +201,12 @@ export default function SettingsPage() {
           {saveStatus && (
             <div className={`p-4 rounded-2xl border text-xs flex items-center gap-2.5 ${
               saveStatus.type === 'success' 
-                ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' 
-                : 'bg-red-500/10 border-red-500/20 text-red-400'
+                ? isLightMode
+                  ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
+                  : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' 
+                : isLightMode
+                  ? 'bg-red-50 border-red-200 text-red-700'
+                  : 'bg-red-500/10 border-red-500/20 text-red-400'
             }`}>
               {saveStatus.type === 'success' ? <CheckCircle className="w-4.5 h-4.5" /> : <XCircle className="w-4.5 h-4.5" />}
               <p>{saveStatus.message}</p>
@@ -171,54 +231,88 @@ export default function SettingsPage() {
                     <h3 className={`text-sm font-bold ${isLightMode ? 'text-slate-800' : 'text-white'}`}>Slack MCP Integration</h3>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div>
-                      <label className="block text-xs font-semibold text-muted-foreground mb-1.5 ml-1">
-                        Slack Bot Token (SLACK_BOT_TOKEN)
-                      </label>
-                      <input
-                        type="password"
-                        name="mcp_slack_bot_token"
-                        value={formData.mcp_slack_bot_token || ''}
-                        onChange={handleChange}
-                        placeholder="xoxb-..."
-                        className={`w-full px-4 py-3 rounded-xl bg-input border border-border/80 focus:border-primary/80 focus:ring-1 focus:ring-primary/40 text-sm placeholder-muted-foreground/60 transition-all outline-none ${
-                          isLightMode ? 'text-slate-800 placeholder-slate-400 bg-slate-100/50' : 'text-white'
-                        }`}
-                      />
-                    </div>
+                  {formData.mcp_slack_bot_token ? (
+                    <div className="space-y-6 animate-fade-in">
+                      <div className="flex items-center gap-4 bg-emerald-500/[0.03] p-4 rounded-2xl border border-emerald-500/10">
+                        {formData.slack_workspace_icon ? (
+                          <img
+                            src={formData.slack_workspace_icon}
+                            alt="Workspace Icon"
+                            className="w-12 h-12 rounded-xl object-cover border border-border/80 shadow-sm"
+                          />
+                        ) : (
+                          <div className="w-12 h-12 rounded-xl bg-primary/20 flex items-center justify-center text-primary font-bold text-lg">
+                            {(formData.slack_workspace_name || 'S').charAt(0).toUpperCase()}
+                          </div>
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <h4 className={`text-sm font-bold truncate ${isLightMode ? 'text-slate-800' : 'text-white'}`}>
+                            {formData.slack_workspace_name || 'Slack Workspace'}
+                          </h4>
+                          <p className="text-[10px] text-muted-foreground font-mono truncate">
+                            ID: {formData.mcp_slack_team_id || 'Unknown'}
+                          </p>
+                        </div>
+                        <span className="px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[10px] font-bold uppercase tracking-wider">
+                          Connected
+                        </span>
+                      </div>
 
-                    <div>
-                      <label className="block text-xs font-semibold text-muted-foreground mb-1.5 ml-1">
-                        Slack Team ID (SLACK_TEAM_ID)
-                      </label>
-                      <input
-                        type="text"
-                        name="mcp_slack_team_id"
-                        value={formData.mcp_slack_team_id || ''}
-                        onChange={handleChange}
-                        placeholder="T..."
-                        className={`w-full px-4 py-3 rounded-xl bg-input border border-border/80 focus:border-primary/80 focus:ring-1 focus:ring-primary/40 text-sm placeholder-muted-foreground/60 transition-all outline-none ${
-                          isLightMode ? 'text-slate-800 placeholder-slate-400 bg-slate-100/50' : 'text-white'
-                        }`}
-                      />
-                    </div>
-                  </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                        <div className="bg-secondary/5 p-3.5 rounded-xl border border-border/20">
+                          <span className="block text-muted-foreground text-[10px] font-semibold uppercase tracking-wider mb-1 ml-0.5">Connected User</span>
+                          <span className={`font-mono ${isLightMode ? 'text-slate-700' : 'text-slate-200'}`}>
+                            {formData.slack_connected_user_id || 'Unknown'}
+                          </span>
+                        </div>
+                        <div className="bg-secondary/5 p-3.5 rounded-xl border border-border/20">
+                          <span className="block text-muted-foreground text-[10px] font-semibold uppercase tracking-wider mb-1 ml-0.5">Connected At</span>
+                          <span className={isLightMode ? 'text-slate-700' : 'text-slate-200'}>
+                            {formData.slack_connected_at ? new Date(formData.slack_connected_at).toLocaleString() : 'Unknown'}
+                          </span>
+                        </div>
+                      </div>
 
-                  <div className={`p-4 rounded-2xl border text-[11px] leading-relaxed ${
-                    isLightMode ? 'bg-slate-50 border-slate-200/60 text-slate-600' : 'bg-secondary/20 border-border/40 text-muted-foreground'
-                  }`}>
-                    <div className="flex gap-2">
-                      <HelpCircle className="w-4 h-4 text-primary shrink-0 mt-0.5" />
-                      <div>
-                        <p className={`font-semibold mb-1 ${isLightMode ? 'text-slate-700' : 'text-slate-300'}`}>How to obtain Slack Credentials</p>
-                        <ul className={`list-disc pl-4 space-y-1 ${isLightMode ? 'text-slate-600' : 'text-slate-400'}`}>
-                          <li><strong>Slack Bot Token</strong>: Go to <a href="https://api.slack.com/apps" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">Slack API Apps</a>, select your app, navigate to <strong>OAuth & Permissions</strong>, and copy the <em>Bot User OAuth Token</em> (starts with <code>xoxb-</code>).</li>
-                          <li><strong>Slack Team ID</strong>: Open Slack in your browser; the Team ID is the ID starting with <code>T</code> in the address URL (e.g. <code>client/T...</code>).</li>
-                        </ul>
+                      <div className="flex gap-4">
+                        <button
+                          type="button"
+                          onClick={handleConnectSlack}
+                          className="px-4 py-2.5 rounded-xl bg-primary hover:bg-primary/95 text-white font-bold text-xs transition-all flex items-center gap-1.5 shadow-sm"
+                        >
+                          <RefreshCw className="w-3.5 h-3.5" />
+                          Reconnect Slack
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleDisconnectSlack}
+                          className={`px-4 py-2.5 rounded-xl border font-bold text-xs transition-all flex items-center gap-1.5 ${
+                            isLightMode
+                              ? 'border-red-200 bg-red-50 hover:bg-red-100 text-red-600'
+                              : 'border-red-500/25 bg-red-500/5 hover:bg-red-500/10 text-red-400'
+                          }`}
+                        >
+                          <XCircle className="w-3.5 h-3.5" />
+                          Disconnect Slack
+                        </button>
                       </div>
                     </div>
-                  </div>
+                  ) : (
+                    <div className="space-y-6 animate-fade-in">
+                      <div className="text-center py-8 border-2 border-dashed border-border/40 rounded-2xl bg-secondary/[0.02]">
+                        <p className="text-xs text-muted-foreground mb-4 max-w-md mx-auto px-4">
+                          Slack Workspace is not connected. Connect now to automatically authorize the required scopes and sync your workspace channels.
+                        </p>
+                        <button
+                          type="button"
+                          onClick={handleConnectSlack}
+                          className="px-5 py-3 rounded-xl bg-primary hover:bg-primary/90 text-white font-bold text-xs transition-all inline-flex items-center gap-2 shadow-md shadow-primary/20"
+                        >
+                          <Link2 className="w-4 h-4" />
+                          Connect Slack Workspace
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* AI & OpenAI settings */}
@@ -357,7 +451,11 @@ export default function SettingsPage() {
                     type="button"
                     onClick={confirmClearSettings}
                     disabled={clearSettingsMutation.isPending}
-                    className="w-full py-3 rounded-xl border border-red-500/25 bg-red-500/5 hover:bg-red-500/10 text-red-400 hover:text-red-300 font-bold text-xs transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                    className={`w-full py-3 rounded-xl border font-bold text-xs transition-all flex items-center justify-center gap-2 disabled:opacity-50 ${
+                      isLightMode
+                        ? 'border-red-200 bg-red-50 hover:bg-red-100 text-red-600 hover:text-red-700'
+                        : 'border-red-500/25 bg-red-500/5 hover:bg-red-500/10 text-red-400 hover:text-red-300'
+                    }`}
                   >
                     <Trash2 className="w-4.5 h-4.5" />
                     Reset System Settings

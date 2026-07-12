@@ -4,6 +4,7 @@ import React, { useState, useEffect, Suspense } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Sidebar from '../../components/Sidebar';
 import { apiFetch } from '../../lib/api';
+import AIErrorAlert from '../../components/AIErrorAlert';
 import { 
   FileText, 
   Plus, 
@@ -376,7 +377,11 @@ function ReportsPageContent() {
                   <button
                     onClick={() => deleteMutation.mutate(selectedReport.id)}
                     disabled={deleteMutation.isPending}
-                    className="p-2 text-red-400 hover:bg-red-500/10 border border-border/50 hover:border-red-500/25 rounded-xl transition-all"
+                    className={`p-2 rounded-xl border transition-all ${
+                      isLightMode
+                        ? 'text-red-600 hover:bg-red-50 hover:border-red-200 border-slate-200'
+                        : 'text-red-400 hover:bg-red-500/10 border-border/50 hover:border-red-500/25'
+                    }`}
                     title="Delete Report"
                   >
                     <Trash2 className="w-4 h-4" />
@@ -391,7 +396,7 @@ function ReportsPageContent() {
                   isLightMode ? 'bg-slate-50 border border-slate-200/60' : 'bg-secondary/10 border border-border/40'
                 }`}>
                   <Info className="w-5 h-5 text-primary shrink-0" />
-                  <div className={`text-[11px] leading-normal ${isLightMode ? 'text-slate-605' : 'text-slate-300'}`}>
+                  <div className={`text-[11px] leading-normal ${isLightMode ? 'text-slate-600' : 'text-slate-300'}`}>
                     This report summarizes <span className={`font-semibold ${isLightMode ? 'text-slate-800 font-bold' : 'text-white'}`}>{getMetadata(selectedReport).messageCount || 'multiple'} Slack messages</span> from channel <span className={`font-semibold ${isLightMode ? 'text-slate-800 font-bold' : 'text-white'}`}>{getMetadata(selectedReport).channelName || 'Workspace'}</span>. The content is locally indexed in your assistant's RAG layer for semantic search.
                   </div>
                 </div>
@@ -530,10 +535,11 @@ function ReportsPageContent() {
             </h3>
 
             {genError && (
-              <div className="mb-4 p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs flex items-center gap-2">
-                <AlertCircle className="w-4 h-4 shrink-0" />
-                <p>{genError}</p>
-              </div>
+              <AIErrorAlert
+                error={genError}
+                onRetry={() => generateMutation.mutate(formData)}
+                className="mb-4"
+              />
             )}
 
             <form onSubmit={(e) => {
@@ -608,7 +614,7 @@ function ReportsPageContent() {
                   onClick={() => setShowCreateModal(false)}
                   className={`px-4 py-2.5 rounded-xl border text-xs font-medium transition-all ${
                     isLightMode 
-                      ? 'border-slate-200 text-slate-650 hover:bg-slate-50' 
+                      ? 'border-slate-200 text-slate-600 hover:bg-slate-50' 
                       : 'border-border/60 text-slate-300 hover:bg-secondary/40'
                   }`}
                 >

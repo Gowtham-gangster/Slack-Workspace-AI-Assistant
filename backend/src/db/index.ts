@@ -69,14 +69,19 @@ export async function initializeDatabase() {
 
   try {
     await db.execute('ALTER TABLE users DROP COLUMN role');
-  } catch (err) {
-    // Ignore error if column already dropped
+  } catch (err: any) {
+    // Ignore only "Unknown column" errors — not real schema failures
+    if (err?.code !== 'ER_CANT_DROP_FIELD_OR_KEY' && err?.code !== 'ER_BAD_FIELD_ERROR' && !err?.message?.includes("Can't DROP")) {
+      console.warn('[Migration] ALTER TABLE users DROP COLUMN role:', err?.message);
+    }
   }
 
   try {
     await db.execute('ALTER TABLE users ADD COLUMN full_name VARCHAR(255) DEFAULT NULL');
-  } catch (err) {
-    // Ignore error if column already exists
+  } catch (err: any) {
+    if (err?.code !== 'ER_DUP_FIELDNAME') {
+      console.warn('[Migration] ALTER TABLE users ADD COLUMN full_name:', err?.message);
+    }
   }
 
 
@@ -99,10 +104,130 @@ export async function initializeDatabase() {
       role VARCHAR(50) NOT NULL,
       content TEXT NOT NULL,
       reasoning TEXT,
+      deleted TINYINT DEFAULT 0,
+      edited_at TIMESTAMP NULL DEFAULT NULL,
+      slack_channel_id VARCHAR(255) DEFAULT NULL,
+      slack_message_ts VARCHAR(255) DEFAULT NULL,
+      slack_thread_ts VARCHAR(255) DEFAULT NULL,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (session_id) REFERENCES chat_sessions(id) ON DELETE CASCADE
     )
   `);
+
+  try {
+    await db.execute('ALTER TABLE chat_messages ADD COLUMN deleted TINYINT DEFAULT 0');
+  } catch (err) {}
+
+  try {
+    await db.execute('ALTER TABLE chat_messages ADD COLUMN edited_at TIMESTAMP NULL DEFAULT NULL');
+  } catch (err) {}
+
+  try {
+    await db.execute('ALTER TABLE chat_messages ADD COLUMN slack_channel_id VARCHAR(255) DEFAULT NULL');
+  } catch (err) {}
+
+  try {
+    await db.execute('ALTER TABLE chat_messages ADD COLUMN slack_message_ts VARCHAR(255) DEFAULT NULL');
+  } catch (err) {}
+
+  try {
+    await db.execute('ALTER TABLE chat_messages ADD COLUMN slack_thread_ts VARCHAR(255) DEFAULT NULL');
+  } catch (err) {}
+
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS chat_reactions (
+      message_id VARCHAR(255) NOT NULL,
+      user_id INT NOT NULL,
+      emoji VARCHAR(50) NOT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (message_id, user_id, emoji),
+      FOREIGN KEY (message_id) REFERENCES chat_messages(id) ON DELETE CASCADE,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    )
+  `);
+
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS slack_processed_events (
+      event_id VARCHAR(255) PRIMARY KEY,
+      processed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS chat_threads (
+      id VARCHAR(255) PRIMARY KEY,
+      parent_message_id VARCHAR(255) NOT NULL,
+      session_id VARCHAR(255) NOT NULL,
+      role VARCHAR(50) NOT NULL,
+      content TEXT NOT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (parent_message_id) REFERENCES chat_messages(id) ON DELETE CASCADE,
+      FOREIGN KEY (session_id) REFERENCES chat_sessions(id) ON DELETE CASCADE
+    )
+  `);
+
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS chat_pins (
+      session_id VARCHAR(255) NOT NULL,
+      message_id VARCHAR(255) NOT NULL,
+      pinned_by INT NOT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (session_id, message_id),
+      FOREIGN KEY (session_id) REFERENCES chat_sessions(id) ON DELETE CASCADE,
+      FOREIGN KEY (message_id) REFERENCES chat_messages(id) ON DELETE CASCADE,
+      FOREIGN KEY (pinned_by) REFERENCES users(id) ON DELETE CASCADE
+    )
+  `);
+
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS chat_bookmarks (
+      user_id INT NOT NULL,
+      session_id VARCHAR(255) NOT NULL,
+      message_id VARCHAR(255) NOT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (user_id, message_id),
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY (message_id) REFERENCES chat_messages(id) ON DELETE CASCADE
+    )
+  `);
+
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS chat_reminders (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      user_id INT NOT NULL,
+      message_id VARCHAR(255) NOT NULL,
+      session_id VARCHAR(255) DEFAULT NULL,
+      content TEXT DEFAULT NULL,
+      remind_at TIMESTAMP NOT NULL,
+      notified TINYINT DEFAULT 0,
+      email_sent TINYINT DEFAULT 0,
+      dismissed TINYINT DEFAULT 0,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY (message_id) REFERENCES chat_messages(id) ON DELETE CASCADE
+    )
+  `);
+
+  // Migrate existing chat_reminders table with new columns
+  const reminderMigrations = [
+    "ALTER TABLE chat_reminders ADD COLUMN session_id VARCHAR(255) DEFAULT NULL",
+    "ALTER TABLE chat_reminders ADD COLUMN content TEXT DEFAULT NULL",
+    "ALTER TABLE chat_reminders ADD COLUMN notified TINYINT DEFAULT 0",
+    "ALTER TABLE chat_reminders ADD COLUMN email_sent TINYINT DEFAULT 0",
+    "ALTER TABLE chat_reminders ADD COLUMN dismissed TINYINT DEFAULT 0",
+  ];
+  for (const sql of reminderMigrations) {
+    try { await db.execute(sql); } catch (e: any) {
+      if (e?.code !== 'ER_DUP_FIELDNAME') console.warn('[Migration]', sql, e?.message);
+    }
+  }
+
+  // Add email column to users if not present
+  try {
+    await db.execute('ALTER TABLE users ADD COLUMN email VARCHAR(255) DEFAULT NULL');
+  } catch (e: any) {
+    if (e?.code !== 'ER_DUP_FIELDNAME') console.warn('[Migration] ALTER TABLE users ADD COLUMN email:', e?.message);
+  }
 
   // Drop old slack tables if they do not contain db_user_id column
   try {
@@ -277,6 +402,50 @@ export async function initializeDatabase() {
   `);
 
 
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS slack_files (
+      id VARCHAR(255) PRIMARY KEY,
+      url_private TEXT NOT NULL,
+      url_private_download TEXT,
+      name VARCHAR(255),
+      mimetype VARCHAR(255),
+      size INT,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  // Chat message file attachments
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS chat_message_files (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      message_id VARCHAR(255) NOT NULL,
+      file_id VARCHAR(255) NOT NULL,
+      file_name VARCHAR(255),
+      file_size INT,
+      file_type VARCHAR(255),
+      url_private TEXT,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (message_id) REFERENCES chat_messages(id) ON DELETE CASCADE,
+      FOREIGN KEY (file_id) REFERENCES slack_files(id) ON DELETE CASCADE
+    )
+  `);
+
+  // Notifications system
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS notifications (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      user_id INT NOT NULL,
+      type VARCHAR(50) NOT NULL,
+      title VARCHAR(255) NOT NULL,
+      message TEXT NOT NULL,
+      link TEXT,
+      read_status TINYINT DEFAULT 0,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+      INDEX idx_user_read (user_id, read_status, created_at)
+    )
+  `);
+
   // Refresh tokens for JWT token rotation
   await db.execute(`
     CREATE TABLE IF NOT EXISTS refresh_tokens (
@@ -302,6 +471,33 @@ export async function initializeDatabase() {
       INDEX idx_attempted_at (attempted_at)
     )
   `);
+
+  // PERF-05: Index for the reminder polling job (runs every 60s)
+  try {
+    await db.execute('ALTER TABLE chat_reminders ADD INDEX idx_remind_poll (remind_at, dismissed, email_sent)');
+  } catch (e: any) {
+    // Ignore if index already exists
+    if (e?.code !== 'ER_DUP_KEYNAME') console.warn('[Migration] Add remind_at index:', e?.message);
+  }
+
+  // Add secondary performance indexes
+  const performanceIndexes = [
+    { table: 'slack_messages', index: 'idx_slack_msg_chan_created', definition: '(db_user_id, channel_id, created_at)' },
+    { table: 'embeddings', index: 'idx_embed_entity', definition: '(user_id, entity_type, entity_id)' },
+    { table: 'action_items', index: 'idx_actions_user_status', definition: '(user_id, status)' },
+    { table: 'chat_messages', index: 'idx_msg_session_created', definition: '(session_id, created_at)' },
+    { table: 'chat_threads', index: 'idx_threads_parent_created', definition: '(parent_message_id, created_at)' }
+  ];
+
+  for (const idx of performanceIndexes) {
+    try {
+      await db.execute(`ALTER TABLE ${idx.table} ADD INDEX ${idx.index} ${idx.definition}`);
+    } catch (e: any) {
+      if (e?.code !== 'ER_DUP_KEYNAME') {
+        console.warn(`[Migration] Add index ${idx.index} on ${idx.table}:`, e?.message);
+      }
+    }
+  }
 
   // Seed default admin user if users is empty
   const userCountResult = await db.query<any>('SELECT COUNT(*) as count FROM users');
@@ -333,5 +529,37 @@ export async function initializeDatabase() {
       }
       console.log('Seeded default configuration settings for admin user.');
     }
+  }
+
+  // HTML to mrkdwn database migration for legacy messages
+  try {
+    const tablesToMigrate = ['chat_messages', 'chat_threads'];
+    for (const tableName of tablesToMigrate) {
+      const rows = await db.query<any>(`SELECT id, content FROM ${tableName}`);
+      for (const row of rows) {
+        if (row.content && (
+          row.content.includes('<strong') || row.content.includes('<em') || 
+          row.content.includes('<del') || row.content.includes('<u') || 
+          row.content.includes('<b>') || row.content.includes('<i>') || 
+          row.content.includes('<s>') || row.content.includes('<u>')
+        )) {
+          const clean = row.content
+            .replace(/<\/?strong>/gi, '*')
+            .replace(/<\/?b>/gi, '*')
+            .replace(/<\/?em>/gi, '_')
+            .replace(/<\/?i>/gi, '_')
+            .replace(/<\/?del>/gi, '~')
+            .replace(/<\/?s>/gi, '~')
+            .replace(/<\/?strike>/gi, '~')
+            .replace(/<\/?u>/gi, '')
+            .replace(/<br\s*\/?>/gi, '\n');
+          
+          await db.execute(`UPDATE ${tableName} SET content = ? WHERE id = ?`, [clean, row.id]);
+          console.log(`[Migration] Migrated message ID ${row.id} in ${tableName} from HTML to mrkdwn.`);
+        }
+      }
+    }
+  } catch (migErr) {
+    console.error('[Migration] Failed HTML migration:', migErr);
   }
 }

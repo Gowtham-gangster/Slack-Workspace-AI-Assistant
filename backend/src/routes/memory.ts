@@ -3,6 +3,7 @@ import { db } from '../db/index.js';
 import { authenticateJWT, AuthenticatedRequest } from '../middleware/auth.js';
 import { generateText } from '../services/ai.js';
 import { MCPClientManager, parseMCPResponse } from '../services/mcpClient.js';
+import { sanitizeAIError } from '../middleware/errorHandler.js';
 
 const router = Router();
 
@@ -132,7 +133,7 @@ Ensure all arrays are present. If no matching details are found for a field, ret
 
   } catch (error: any) {
     console.error('Memory query failed:', error);
-    res.status(500).json({ error: error?.message || 'Failed to query workspace memory.' });
+    res.status(500).json({ error: sanitizeAIError(error, 'Failed to query workspace memory.') });
   }
 });
 

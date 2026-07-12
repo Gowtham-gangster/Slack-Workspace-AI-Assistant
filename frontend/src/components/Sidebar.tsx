@@ -2,9 +2,11 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from './AuthContext';
 import { useTheme } from './ThemeContext';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { apiFetch } from '../lib/api';
 import {
   LayoutDashboard,
   FileText,
@@ -19,24 +21,72 @@ import {
   Network,
   BookOpen,
   BarChart3,
+  Bookmark,
+  MessageSquare,
 } from 'lucide-react';
 
 const menuItems = [
-  { name: 'Dashboard',    path: '/dashboard',   icon: LayoutDashboard, desc: 'Overview & command center' },
-  { name: 'Intelligence', path: '/intelligence', icon: Brain,           desc: 'Topics, sentiment, health' },
-  { name: 'Action Center',path: '/actions',      icon: CheckSquare,     desc: 'Tasks & action items' },
-  { name: 'Timeline',     path: '/timeline',     icon: Clock,           desc: 'Activity timeline' },
-  { name: 'Knowledge',    path: '/knowledge',    icon: Network,         desc: 'AI knowledge graph' },
-  { name: 'Memory',       path: '/memory',       icon: BookOpen,        desc: 'Workspace memory' },
-  { name: 'Reports',      path: '/reports',      icon: FileText,        desc: 'Analytics & exports' },
-  { name: 'Settings',     path: '/settings',     icon: SettingsIcon,    desc: 'Keys & config' },
+  { name: 'Dashboard',      path: '/dashboard',    icon: LayoutDashboard, desc: 'Overview & command center' },
+  { name: 'Intelligence',   path: '/intelligence',  icon: Brain,           desc: 'Topics, sentiment, health' },
+  { name: 'Action Center',  path: '/actions',       icon: CheckSquare,     desc: 'Tasks & action items' },
+  { name: 'Timeline',       path: '/timeline',      icon: Clock,           desc: 'Activity timeline' },
+  { name: 'Knowledge',      path: '/knowledge',     icon: Network,         desc: 'AI knowledge graph' },
+  { name: 'Memory',         path: '/memory',        icon: BookOpen,        desc: 'Workspace memory' },
+  { name: 'Reports',        path: '/reports',       icon: FileText,        desc: 'Analytics & exports' },
+  { name: 'Settings',       path: '/settings',      icon: SettingsIcon,    desc: 'Keys & config' },
 ];
 
-export default function Sidebar() {
+const Sidebar = React.memo(function Sidebar() {
   const pathname = usePathname();
+  const router = useRouter();
   const { user, logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const isLightMode = theme === 'light';
+  const queryClient = useQueryClient();
+
+  // Intent-based prefetching for all page routes and data queries (PERF-04)
+  const handlePrefetch = React.useCallback((path: string) => {
+    // 1. Prefetch routing chunks
+    router.prefetch(path);
+
+    // 2. Prefetch API endpoints needed for the targeted page
+    const prefetchOptions = { staleTime: 5000 };
+    if (path === '/dashboard') {
+      queryClient.prefetchQuery({ queryKey: ['dashboardStats'], queryFn: () => apiFetch('/api/dashboard/stats'), ...prefetchOptions });
+      queryClient.prefetchQuery({ queryKey: ['channelsList'], queryFn: () => apiFetch('/api/channels'), ...prefetchOptions });
+      queryClient.prefetchQuery({ queryKey: ['intelligenceScore'], queryFn: () => apiFetch('/api/dashboard/intelligence-score'), ...prefetchOptions });
+      queryClient.prefetchQuery({ queryKey: ['dashboardInsights'], queryFn: () => apiFetch('/api/dashboard/insights'), ...prefetchOptions });
+      queryClient.prefetchQuery({ queryKey: ['bookmarkedMessages'], queryFn: () => apiFetch('/api/chat/bookmarks'), ...prefetchOptions });
+      queryClient.prefetchQuery({ queryKey: ['myReminders'], queryFn: () => apiFetch('/api/chat/reminders'), ...prefetchOptions });
+    } else if (path === '/intelligence') {
+      queryClient.prefetchQuery({ queryKey: ['channelsList'], queryFn: () => apiFetch('/api/channels'), ...prefetchOptions });
+      queryClient.prefetchQuery({ queryKey: ['intelligenceTopics'], queryFn: () => apiFetch('/api/intelligence/topics'), ...prefetchOptions });
+      queryClient.prefetchQuery({ queryKey: ['teamActivity'], queryFn: () => apiFetch('/api/intelligence/team-activity'), ...prefetchOptions });
+      queryClient.prefetchQuery({ queryKey: ['channelHealth'], queryFn: () => apiFetch('/api/intelligence/channel-health'), ...prefetchOptions });
+    } else if (path === '/actions') {
+      queryClient.prefetchQuery({ queryKey: ['actionItems'], queryFn: () => apiFetch('/api/actions'), ...prefetchOptions });
+      queryClient.prefetchQuery({ queryKey: ['channelsList'], queryFn: () => apiFetch('/api/channels'), ...prefetchOptions });
+    } else if (path === '/timeline') {
+      queryClient.prefetchQuery({ queryKey: ['channelsList'], queryFn: () => apiFetch('/api/channels'), ...prefetchOptions });
+    } else if (path === '/knowledge') {
+      queryClient.prefetchQuery({ queryKey: ['channelsList'], queryFn: () => apiFetch('/api/channels'), ...prefetchOptions });
+    } else if (path === '/reports') {
+      queryClient.prefetchQuery({ queryKey: ['messageVolume'], queryFn: () => apiFetch('/api/analytics/message-volume'), ...prefetchOptions });
+      queryClient.prefetchQuery({ queryKey: ['channelActivity'], queryFn: () => apiFetch('/api/analytics/channel-activity'), ...prefetchOptions });
+      queryClient.prefetchQuery({ queryKey: ['taskCompletionStats'], queryFn: () => apiFetch('/api/analytics/task-completion'), ...prefetchOptions });
+      queryClient.prefetchQuery({ queryKey: ['reports'], queryFn: () => apiFetch('/api/reports'), ...prefetchOptions });
+      queryClient.prefetchQuery({ queryKey: ['channels'], queryFn: () => apiFetch('/api/channels'), ...prefetchOptions });
+    } else if (path === '/settings') {
+      queryClient.prefetchQuery({ queryKey: ['settings'], queryFn: () => apiFetch('/api/settings'), ...prefetchOptions });
+    }
+  }, [router, queryClient]);
+
+  // Prefetch all navigation routes in the background on mount (PERF-04)
+  React.useEffect(() => {
+    menuItems.forEach((item) => {
+      router.prefetch(item.path);
+    });
+  }, [router]);
 
   const initials = (user?.fullName || user?.username || 'US').slice(0, 2).toUpperCase();
 
@@ -70,12 +120,13 @@ export default function Sidebar() {
       <nav className="flex-1 px-2 py-4 space-y-0.5 overflow-y-auto">
         <p className="text-[9px] font-semibold uppercase tracking-widest px-2 mb-2" style={{ color: isLightMode ? '#94a3b8' : '#374151' }}>Navigation</p>
         {menuItems.map((item) => {
-          const isActive = pathname === item.path || (item.path !== '/' && pathname.startsWith(item.path));
+          const isActive = pathname === item.path || (item.path !== '/' && (item.path === '/chat' ? pathname === '/chat' : pathname.startsWith(item.path)));
           const Icon = item.icon;
           return (
             <Link
               key={item.path}
               href={item.path}
+              onMouseEnter={() => handlePrefetch(item.path)}
               className="flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-[12px] font-medium transition-all duration-200 group relative overflow-hidden"
               style={isActive ? {
                 background: 'linear-gradient(135deg, rgba(124,106,247,0.18), rgba(99,102,241,0.10))',
@@ -96,10 +147,12 @@ export default function Sidebar() {
                      : { background: isLightMode ? 'rgba(0,0,0,0.04)' : 'rgba(255,255,255,0.04)' }}>
                 <Icon className="w-3 h-3" style={isActive ? { color: isLightMode ? '#6366f1' : '#a78bfa' } : { color: isLightMode ? '#64748b' : '#6b7280' }} />
               </div>
-              <div className="min-w-0">
-                <div className="leading-none text-[12px]">{item.name}</div>
-                <div className="text-[9px] mt-0.5 leading-none font-normal" style={{ color: isActive ? (isLightMode ? 'rgba(99,102,241,0.7)' : 'rgba(167,139,250,0.5)') : (isLightMode ? '#94a3b8' : '#374151') }}>
-                  {item.desc}
+              <div className="min-w-0 flex-1 flex items-center justify-between">
+                <div>
+                  <div className="leading-none text-[12px]">{item.name}</div>
+                  <div className="text-[9px] mt-0.5 leading-none font-normal" style={{ color: isActive ? (isLightMode ? 'rgba(99,102,241,0.7)' : 'rgba(167,139,250,0.5)') : (isLightMode ? '#94a3b8' : '#374151') }}>
+                    {item.desc}
+                  </div>
                 </div>
               </div>
             </Link>
@@ -114,6 +167,7 @@ export default function Sidebar() {
       <div className="p-3">
         {/* Theme Toggle */}
         <button
+          suppressHydrationWarning
           onClick={toggleTheme}
           className="w-full flex items-center justify-between px-2.5 py-2 rounded-xl text-[11px] font-medium transition-all duration-200 border mb-2.5 outline-none cursor-pointer"
           style={{
@@ -137,6 +191,7 @@ export default function Sidebar() {
         {/* User card */}
         <Link
           href="/profile"
+          onMouseEnter={() => router.prefetch('/profile')}
           className={`flex items-center gap-2.5 p-2.5 rounded-xl mb-2 cursor-pointer border transition-all block ${
             isLightMode ? 'hover:bg-slate-100/80 border-slate-200/80' : 'hover:bg-white/[0.05] border-white/[0.06]'
           }`}
@@ -160,6 +215,7 @@ export default function Sidebar() {
 
         {/* Logout */}
         <button
+          suppressHydrationWarning
           onClick={logout}
           className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-[11px] font-medium transition-all duration-200"
           style={{
@@ -183,4 +239,6 @@ export default function Sidebar() {
       </div>
     </aside>
   );
-}
+});
+
+export default Sidebar;

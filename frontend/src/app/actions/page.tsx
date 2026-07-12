@@ -235,9 +235,13 @@ export default function ActionCenterPage() {
           </div>
 
           {error && (
-            <div className="flex items-center gap-3 p-4 rounded-2xl mb-6" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)' }}>
-              <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
-              <p className="text-sm text-red-400">{(error as any)?.message || 'Failed to fetch tasks.'}</p>
+            <div className="flex items-center gap-3 p-4 rounded-2xl mb-6" 
+                 style={{ 
+                   background: isLightMode ? 'rgba(239,68,68,0.05)' : 'rgba(239,68,68,0.08)', 
+                   border: isLightMode ? '1px solid rgba(239,68,68,0.15)' : '1px solid rgba(239,68,68,0.2)' 
+                 }}>
+              <AlertCircle className={`w-4 h-4 shrink-0 ${isLightMode ? 'text-red-650' : 'text-red-400'}`} style={isLightMode ? { color: '#dc2626' } : {}} />
+              <p className={`text-sm font-medium ${isLightMode ? 'text-red-800' : 'text-red-400'}`}>{(error as any)?.message || 'Failed to fetch tasks.'}</p>
             </div>
           )}
 

@@ -60,40 +60,33 @@ export async function searchSemanticStore(
 ): Promise<SearchResult[]> {
   try {
     const queryVector = await generateEmbedding(queryText, userId);
-    
-    // Retrieve user-scoped embeddings from MySQL
+
+    // Load recent embeddings only (most relevant workspace context — prevents OOM on large corpora)
     const allEmbeddings = await db.query<{
       entity_type: 'message' | 'thread' | 'report';
       entity_id: string;
       content: string;
       embedding: string;
     }>(`
-      SELECT entity_type, entity_id, content, embedding 
+      SELECT entity_type, entity_id, content, embedding
       FROM embeddings
       WHERE user_id = ?
+      ORDER BY id DESC
+      LIMIT 500
     `, [userId]);
 
-    const results: SearchResult[] = [];
+    const candidates: SearchResult[] = [];
 
     for (const row of allEmbeddings) {
       try {
         const rowVector = JSON.parse(row.embedding) as number[];
         const similarity = cosineSimilarity(queryVector, rowVector);
-
         if (similarity >= threshold) {
-          // If it's a message, check if we can join channel info
-          let channelId: string | undefined = undefined;
-          if (row.entity_type === 'message') {
-            const msgInfo = await db.queryOne<{ channel_id: string }>('SELECT channel_id FROM slack_messages WHERE db_user_id = ? AND id = ?', [userId, row.entity_id]);
-            channelId = msgInfo?.channel_id;
-          }
-
-          results.push({
+          candidates.push({
             entityType: row.entity_type,
             entityId: row.entity_id,
             content: row.content,
             similarity,
-            channelId
           });
         }
       } catch (parseError) {
@@ -101,9 +94,33 @@ export async function searchSemanticStore(
       }
     }
 
-    // Sort by similarity descending and return top K
-    results.sort((a, b) => b.similarity - a.similarity);
-    return results.slice(0, limit);
+    // Sort by similarity descending and slice to limit before hitting DB again
+    candidates.sort((a, b) => b.similarity - a.similarity);
+    const topCandidates = candidates.slice(0, limit);
+
+    // Batch-fetch channel IDs for all message-type results in one query (PERF-03)
+    const messageIds = topCandidates
+      .filter(c => c.entityType === 'message')
+      .map(c => c.entityId);
+
+    const channelMap = new Map<string, string>();
+    if (messageIds.length > 0) {
+      const placeholders = messageIds.map(() => '?').join(',');
+      const channelRows = await db.query<{ id: string; channel_id: string }>(
+        `SELECT id, channel_id FROM slack_messages WHERE db_user_id = ? AND id IN (${placeholders})`,
+        [userId, ...messageIds]
+      );
+      for (const row of channelRows) channelMap.set(row.id, row.channel_id);
+    }
+
+    // Attach channelId where available
+    for (const c of topCandidates) {
+      if (c.entityType === 'message') {
+        c.channelId = channelMap.get(c.entityId);
+      }
+    }
+
+    return topCandidates;
   } catch (error) {
     console.error('Local semantic search failed:', error);
     return [];
@@ -174,7 +191,9 @@ export async function syncSlackWorkspace(userId: number, channelLimit = 10, mess
 
       const parsedHistory = parseMCPResponse(historyResponse);
       const messages = parsedHistory?.messages || (Array.isArray(parsedHistory) ? parsedHistory : []);
+
       if (Array.isArray(messages)) {
+        // Save all messages in the channel to database first
         for (const msg of messages) {
           const msgId = msg.ts;
           const msgUserId = msg.user || 'bot';
@@ -186,15 +205,31 @@ export async function syncSlackWorkspace(userId: number, channelLimit = 10, mess
 
           await db.execute(insertMessageQuery, [userId, msgId, channelId, msgUserId, text, threadTs, replyCount]);
           messagesSynced++;
+        }
 
-          // 3. Generate embedding and index for RAG if not already embedded
-          const alreadyEmbedded = await db.queryOne<{ 1: number }>(
-            "SELECT 1 FROM embeddings WHERE user_id = ? AND entity_type = 'message' AND entity_id = ?",
-            [userId, msgId]
+        // Batched embedding check (PERF-03 & PERF-09)
+        const msgIds = messages.map((m: any) => m.ts).filter(Boolean);
+        let embeddedMsgIdsSet = new Set<string>();
+        if (msgIds.length > 0) {
+          const placeholders = msgIds.map(() => '?').join(',');
+          const rows = await db.query<{ entity_id: string }>(
+            `SELECT entity_id FROM embeddings WHERE user_id = ? AND entity_type = 'message' AND entity_id IN (${placeholders})`,
+            [userId, ...msgIds]
           );
-          if (!alreadyEmbedded) {
+          embeddedMsgIdsSet = new Set(rows.map(r => r.entity_id));
+        }
+
+        const messagesToEmbed = messages.filter((m: any) => m.ts && m.text?.trim() && !embeddedMsgIdsSet.has(m.ts));
+
+        // Process embeddings in parallel batches of 5 to optimize network request latency
+        const BATCH_SIZE = 5;
+        for (let i = 0; i < messagesToEmbed.length; i += BATCH_SIZE) {
+          const batch = messagesToEmbed.slice(i, i + BATCH_SIZE);
+          await Promise.all(batch.map(async (msg: any) => {
+            const msgId = msg.ts;
+            const msgUserId = msg.user || 'bot';
+            const text = msg.text || '';
             try {
-              // Concatenate details for richer semantic search context
               const semanticText = `[Channel: #${channelName}] [User: ${msgUserId}]: ${text}`;
               const vector = await generateEmbedding(semanticText, userId);
               await saveEmbedding(userId, 'message', msgId, text, vector);
@@ -202,7 +237,7 @@ export async function syncSlackWorkspace(userId: number, channelLimit = 10, mess
             } catch (embedError) {
               console.error(`Failed to generate embedding for message ${msgId}:`, embedError);
             }
-          }
+          }));
         }
       }
     }

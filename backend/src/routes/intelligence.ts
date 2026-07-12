@@ -3,6 +3,7 @@ import { db } from '../db/index.js';
 import { authenticateJWT, AuthenticatedRequest } from '../middleware/auth.js';
 import { generateText } from '../services/ai.js';
 import { MCPClientManager, parseMCPResponse } from '../services/mcpClient.js';
+import { cache, TTL, cacheKey } from '../services/cache.js';
 
 const router = Router();
 
@@ -11,6 +12,12 @@ const router = Router();
 router.get('/topics', authenticateJWT, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const userId = req.user!.id;
+    const key = cacheKey(userId, 'intelligence_topics');
+    const cached = cache.get<any[]>(key);
+    if (cached) {
+      return res.json(cached);
+    }
+
     const messages = await db.query<any>(
       'SELECT text FROM slack_messages WHERE db_user_id = ? ORDER BY created_at DESC LIMIT 2000',
       [userId]
@@ -43,12 +50,15 @@ router.get('/topics', authenticateJWT, async (req: AuthenticatedRequest, res: Re
     // Sort by count descending
     const sorted = results.filter(r => r.count > 0).sort((a, b) => b.count - a.count);
 
-    // Calculate trend (mock: top topics get positive trend)
-    const withTrend = sorted.map((item, i) => ({
+    // Deterministic trend: top topics get positive trend proportional to their share,
+    // lower topics get small negative trend. No randomness — cache is stable.
+    const maxCount = sorted[0]?.count || 1;
+    const withTrend = sorted.map((item) => ({
       ...item,
-      trend: i < 3 ? Math.floor(Math.random() * 40 + 10) : -Math.floor(Math.random() * 20 + 5),
+      trend: Math.round(((item.count / maxCount) - 0.5) * 60), // range: -30 to +30
     }));
 
+    cache.set(key, withTrend, TTL.INTELLIGENCE);
     res.json(withTrend);
   } catch (error) {
     console.error('Failed to extract topics:', error);
@@ -60,6 +70,12 @@ router.get('/topics', authenticateJWT, async (req: AuthenticatedRequest, res: Re
 router.get('/team-activity', authenticateJWT, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const userId = req.user!.id;
+    const key = cacheKey(userId, 'intelligence_team_activity');
+    const cached = cache.get<any[]>(key);
+    if (cached) {
+      return res.json(cached);
+    }
+
     const rows = await db.query<any>(
       `SELECT user_id, COUNT(*) as message_count
        FROM slack_messages
@@ -93,6 +109,7 @@ router.get('/team-activity', authenticateJWT, async (req: AuthenticatedRequest, 
       contribution: total > 0 ? Math.round((Number(r.message_count) / total) * 100) : 0,
     }));
 
+    cache.set(key, result, TTL.INTELLIGENCE);
     res.json(result);
   } catch (error) {
     console.error('Failed to get team activity:', error);
@@ -126,34 +143,69 @@ router.post('/sentiment', authenticateJWT, async (req: AuthenticatedRequest, res
 
     const msgText = messages.map((m: any) => m.text || '').filter(Boolean).slice(0, 30).join('\n');
 
-    const prompt = `Analyze the sentiment of these Slack messages and return ONLY a valid JSON object with no markdown or code blocks.
+    // ── Helper: local keyword-based sentiment fallback ──────────────
+    const computeLocalSentiment = (text: string) => {
+      const lower = text.toLowerCase();
+      const positiveWords = ['great', 'good', 'awesome', 'nice', 'love', 'perfect', 'excellent', 'happy', 'thanks', 'thank', 'appreciate', 'wonderful', 'fantastic', 'amazing', 'well done', 'congrats', 'congratulations', 'yes', 'sure', 'absolutely', 'agree', 'fixed', 'done', 'completed', 'shipped', 'launched', 'resolved', '✅', '👍', '🎉', '🚀', '😊', '👏'];
+      const negativeWords = ['bad', 'issue', 'error', 'fail', 'failed', 'broken', 'bug', 'crash', 'problem', 'slow', 'stuck', 'blocked', 'sorry', 'unfortunately', 'delay', 'critical', 'urgent', 'asap', 'down', 'outage', 'revert', 'rollback', 'frustrated', 'annoyed', '❌', '⚠️', '🔴', '😞', '😕'];
 
-Messages:
-${msgText}
+      let posScore = 0, negScore = 0;
+      for (const w of positiveWords) posScore += (lower.split(w).length - 1);
+      for (const w of negativeWords) negScore += (lower.split(w).length - 1);
 
-Return exactly this JSON structure:
-{"positive": <0-100 integer>, "neutral": <0-100 integer>, "negative": <0-100 integer>, "score": <0-100 overall positivity integer>, "summary": "<one sentence insight>"}
+      const total = posScore + negScore;
+      if (total === 0) return { positive: 40, neutral: 45, negative: 15, score: 62, summary: 'Neutral and informational team communication.' };
 
-The three values must sum to 100.`;
+      const posRatio = Math.round((posScore / total) * 100);
+      const negRatio = Math.round((negScore / total) * 100);
+      const neutral = Math.max(0, 100 - posRatio - negRatio);
+      const score = Math.round(40 + (posRatio - negRatio) * 0.5);
 
-    const aiResult = await generateText(prompt, userId);
-    let clean = aiResult.trim();
-    if (clean.startsWith('```')) {
-      const lines = clean.split('\n');
-      if (lines[0].startsWith('```')) lines.shift();
-      if (lines[lines.length - 1].startsWith('```')) lines.pop();
-      clean = lines.join('\n').trim();
-    }
+      let summary = 'Balanced team communication with mixed signals.';
+      if (posRatio > 60) summary = 'Predominantly positive and upbeat team conversations.';
+      else if (negRatio > 40) summary = 'Some tension or issues being discussed in the team.';
+      else if (posRatio > negRatio) summary = 'Generally positive team communication.';
 
+      return { positive: posRatio, neutral, negative: negRatio, score: Math.max(0, Math.min(100, score)), summary };
+    };
+
+    // ── Try AI first, fall back to local if quota exceeded ──────────
     try {
-      const parsed = JSON.parse(clean);
-      res.json(parsed);
-    } catch {
-      res.json({ positive: 60, neutral: 30, negative: 10, score: 72, summary: 'Generally positive team communication.' });
+      const prompt = `Analyze the sentiment of these Slack messages and return ONLY a valid JSON object with no markdown or code blocks.\n\nMessages:\n${msgText}\n\nReturn exactly this JSON structure:\n{"positive": <0-100 integer>, "neutral": <0-100 integer>, "negative": <0-100 integer>, "score": <0-100 overall positivity integer>, "summary": "<one sentence insight>"}\n\nThe three values must sum to 100.`;
+
+      const aiResult = await generateText(prompt, userId);
+      let clean = aiResult.trim();
+      if (clean.startsWith('```')) {
+        const lines = clean.split('\n');
+        if (lines[0].startsWith('```')) lines.shift();
+        if (lines[lines.length - 1].startsWith('```')) lines.pop();
+        clean = lines.join('\n').trim();
+      }
+
+      try {
+        const result = JSON.parse(clean);
+        return res.json(result);
+      } catch {
+        // AI returned non-JSON — use local fallback
+        return res.json(computeLocalSentiment(msgText));
+      }
+    } catch (aiError: any) {
+      // If AI quota/rate-limit hit, compute locally instead of failing
+      const isQuotaError = aiError?.message?.includes('429') || aiError?.message?.includes('RESOURCE_EXHAUSTED') || aiError?.message?.includes('quota');
+      if (isQuotaError) {
+        console.warn('[Intelligence] AI quota exceeded for sentiment — using local keyword fallback.');
+        return res.json(computeLocalSentiment(msgText));
+      }
+      throw aiError; // re-throw unexpected errors
     }
   } catch (error: any) {
     console.error('Sentiment analysis failed:', error);
-    res.status(500).json({ error: error?.message || 'Failed to analyze sentiment.' });
+    // Never expose raw LLM error JSON to the user
+    const isQuota = error?.message?.includes('429') || error?.message?.includes('quota') || error?.message?.includes('RESOURCE_EXHAUSTED');
+    const userMessage = isQuota
+      ? 'AI quota exceeded. Please wait a moment and try again.'
+      : 'Failed to analyze sentiment. Please try again later.';
+    res.status(500).json({ error: userMessage });
   }
 });
 
@@ -161,6 +213,12 @@ The three values must sum to 100.`;
 router.get('/channel-health', authenticateJWT, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const userId = req.user!.id;
+    const key = cacheKey(userId, 'intelligence_channel_health');
+    const cached = cache.get<any[]>(key);
+    if (cached) {
+      return res.json(cached);
+    }
+
     const channels = await db.query<any>(
       `SELECT sc.id, sc.name, sc.member_count, sc.last_synced_at,
               COUNT(sm.id) as msg_count
@@ -195,6 +253,7 @@ router.get('/channel-health', authenticateJWT, async (req: AuthenticatedRequest,
       };
     });
 
+    cache.set(key, result, TTL.INTELLIGENCE);
     res.json(result);
   } catch (error) {
     console.error('Channel health failed:', error);

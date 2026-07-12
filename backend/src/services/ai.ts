@@ -9,6 +9,14 @@ const GEMINI_FALLBACK_MODELS = [
   'gemini-2.5-flash-lite',
 ];
 
+// ── In-memory cache for API config (TTL: 60s per user) ──────────────
+const apiConfigCache = new Map<number, { value: Awaited<ReturnType<typeof _getAPIConfigUncached>>; expiresAt: number }>();
+const API_CONFIG_TTL_MS = 60_000;
+
+// ── In-memory cache for MCP tools (TTL: 5 min per user) ─────────────
+const mcpToolsCache = new Map<number, { value: any[]; expiresAt: number }>();
+const MCP_TOOLS_TTL_MS = 5 * 60_000;
+
 /** Sleep helper */
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -36,10 +44,22 @@ async function fetchWithRetry(
       if (response.ok) return response;
 
       const status = response.status;
-      // Clone so we can read body twice if needed
       const errText = await response.text();
 
       if (status === 503 || status === 429) {
+        // Daily quota limit exceeded - fail fast immediately without any retries
+        const isDailyQuotaExceeded = status === 429 && (
+          errText.includes('Quota exceeded') ||
+          errText.includes('free_tier') ||
+          errText.includes('daily') ||
+          errText.includes('RESOURCE_EXHAUSTED')
+        );
+
+        if (isDailyQuotaExceeded) {
+          console.error(`[AI] Daily LLM quota exceeded for model ${model}. Failing fast.`);
+          throw new Error(`LLM error: ${status} ${errText}`);
+        }
+
         const isOverload = errText.includes('UNAVAILABLE') || errText.includes('overloaded') || status === 429;
         if (isOverload) {
           const waitMs = Math.pow(2, attempt) * 1000; // 1s, 2s, 4s
@@ -53,6 +73,13 @@ async function fetchWithRetry(
       // Non-retryable error — throw immediately
       throw new Error(`LLM error: ${status} ${errText}`);
     }
+    
+    // If the error was a rate limit/quota limit (429), do not try fallback models (they share the key/quota)
+    if (lastError?.message?.includes('429')) {
+      console.warn(`[AI] Model failed with 429 rate limit. Skipping fallback models to prevent delay.`);
+      break;
+    }
+    
     // All retries exhausted for this model, try next fallback
     console.warn(`[AI] All retries exhausted for model ${model}. Trying next fallback...`);
   }
@@ -74,42 +101,55 @@ interface StreamedToolCall {
   arguments: string;
 }
 
-export async function getAPIConfig(userId: number): Promise<{ apiKey: string; apiBase: string; model: string; embedModel: string }> {
-  const apiKeyRow = await db.queryOne<{ value: string }>('SELECT value FROM settings WHERE user_id = ? AND `key` = ?', [userId, 'openai_api_key']);
-  const apiBaseRow = await db.queryOne<{ value: string }>('SELECT value FROM settings WHERE user_id = ? AND `key` = ?', [userId, 'openai_api_base']);
-  const modelRow = await db.queryOne<{ value: string }>('SELECT value FROM settings WHERE user_id = ? AND `key` = ?', [userId, 'openai_model_name']);
-  const embedModelRow = await db.queryOne<{ value: string }>('SELECT value FROM settings WHERE user_id = ? AND `key` = ?', [userId, 'openai_embedding_model_name']);
+/** Raw uncached implementation — do not call directly outside of getAPIConfig */
+async function _getAPIConfigUncached(userId: number): Promise<{ apiKey: string; apiBase: string; model: string; embedModel: string }> {
+  // Batch all 4 settings in a single query for speed
+  const rows = await db.query<{ key: string; value: string }>(
+    'SELECT `key`, value FROM settings WHERE user_id = ? AND `key` IN (?, ?, ?, ?)',
+    [userId, 'openai_api_key', 'openai_api_base', 'openai_model_name', 'openai_embedding_model_name']
+  );
+  const settingsMap: Record<string, string> = {};
+  for (const r of rows) settingsMap[r.key] = r.value;
 
-  let apiKey = apiKeyRow?.value || process.env.OPENAI_API_KEY || '';
-  let apiBase = apiBaseRow?.value || 'https://api.openai.com/v1';
-  let model = modelRow?.value || 'gemini-2.5-flash';
-  let embedModel = embedModelRow?.value || 'gemini-embedding-2';
+  let apiKey = settingsMap['openai_api_key'] || process.env.OPENAI_API_KEY || '';
+  let apiBase = settingsMap['openai_api_base'] || 'https://api.openai.com/v1';
+  let model = settingsMap['openai_model_name'] || 'gemini-2.5-flash';
+  let embedModel = settingsMap['openai_embedding_model_name'] || 'gemini-embedding-2';
 
   // Normalize apiBase
   apiBase = apiBase.trim();
-  if (apiBase.endsWith('/')) {
-    apiBase = apiBase.slice(0, -1);
-  }
+  if (apiBase.endsWith('/')) apiBase = apiBase.slice(0, -1);
 
   // Detect Gemini API key or base URL
   const isGemini = apiKey.startsWith('AIzaSy') || apiKey.startsWith('AQ.') || apiBase.includes('generativelanguage.googleapis.com');
 
   if (isGemini) {
-    // Always force correct Gemini OpenAI-compatible base URL
     if (!apiBase.includes('generativelanguage.googleapis.com')) {
       apiBase = 'https://generativelanguage.googleapis.com/v1beta/openai';
     }
-    // Replace any legacy OpenAI or old Gemini model names with supported Gemini models
     if (model === 'gpt-4o' || model.startsWith('gpt-') || model.includes('gemini-1.')) {
       model = 'gemini-2.5-flash';
     }
-    // Replace any legacy embedding model names with the supported Gemini embedding model
     if (embedModel.startsWith('text-embedding-') || !embedModel.startsWith('gemini-')) {
       embedModel = 'gemini-embedding-2';
     }
   }
 
   return { apiKey, apiBase, model, embedModel };
+}
+
+/** Cached wrapper — returns config from memory if fresh, otherwise re-fetches */
+export async function getAPIConfig(userId: number): Promise<{ apiKey: string; apiBase: string; model: string; embedModel: string }> {
+  const cached = apiConfigCache.get(userId);
+  if (cached && Date.now() < cached.expiresAt) return cached.value;
+  const value = await _getAPIConfigUncached(userId);
+  apiConfigCache.set(userId, { value, expiresAt: Date.now() + API_CONFIG_TTL_MS });
+  return value;
+}
+
+/** Call this when the user updates their settings so config is re-fetched next time */
+export function invalidateAPIConfigCache(userId: number): void {
+  apiConfigCache.delete(userId);
 }
 
 export async function generateEmbedding(text: string, userId: number): Promise<number[]> {
@@ -173,6 +213,83 @@ export async function generateText(prompt: string, userId: number): Promise<stri
   return data.choices?.[0]?.message?.content || '';
 }
 
+export async function generateTextStream(
+  prompt: string,
+  userId: number,
+  onToken: (token: string) => void
+): Promise<string> {
+  const { apiKey, apiBase, model } = await getAPIConfig(userId);
+
+  if (!apiKey) {
+    throw new Error('API Key is not configured in Settings.');
+  }
+
+  const response = await fetchWithRetry(
+    (currentModel) => ({
+      url: `${apiBase}/chat/completions`,
+      init: {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`
+        },
+        body: JSON.stringify({
+          model: currentModel,
+          messages: [{ role: 'user', content: prompt }],
+          temperature: 0.1,
+          stream: true
+        })
+      }
+    }),
+    model
+  );
+
+  const body = response.body;
+  if (!body) {
+    throw new Error('Response body is empty');
+  }
+
+  let textResponse = '';
+  const decoder = new TextDecoder('utf-8');
+  let buffer = '';
+  for await (const chunk of body as any) {
+    buffer += decoder.decode(chunk, { stream: true });
+    const lines = buffer.split('\n');
+    buffer = lines.pop() || '';
+
+    for (const line of lines) {
+      const cleaned = line.trim();
+      if (!cleaned) continue;
+      if (cleaned === 'data: [DONE]') continue;
+      if (cleaned.startsWith('data: ')) {
+        try {
+          const json = JSON.parse(cleaned.slice(6));
+          const delta = json.choices?.[0]?.delta;
+          if (delta?.content) {
+            textResponse += delta.content;
+            onToken(delta.content);
+          }
+        } catch (e) {
+          // ignore parsing error
+        }
+      }
+    }
+  }
+
+  if (buffer && buffer.startsWith('data: ')) {
+    try {
+      const json = JSON.parse(buffer.slice(6));
+      const delta = json.choices?.[0]?.delta;
+      if (delta?.content) {
+        textResponse += delta.content;
+        onToken(delta.content);
+      }
+    } catch (e) {}
+  }
+
+  return textResponse;
+}
+
 export async function runAgentCompletion(
   messages: Message[],
   messageId: string, // current message ID for logging tool calls
@@ -187,10 +304,16 @@ export async function runAgentCompletion(
 
   const mcpManager = MCPClientManager.getInstance(userId);
   
-  // 1. Fetch available tools from the Slack MCP Server
+  // 1. Fetch available tools from the Slack MCP Server (cached per user, 5-min TTL)
   let mcpTools: any[] = [];
   try {
-    mcpTools = await mcpManager.listTools();
+    const toolsCached = mcpToolsCache.get(userId);
+    if (toolsCached && Date.now() < toolsCached.expiresAt) {
+      mcpTools = toolsCached.value;
+    } else {
+      mcpTools = await mcpManager.listTools();
+      mcpToolsCache.set(userId, { value: mcpTools, expiresAt: Date.now() + MCP_TOOLS_TTL_MS });
+    }
   } catch (error) {
     console.warn('Failed to retrieve MCP tools. AI agent will run without Slack tools.', error);
   }

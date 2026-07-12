@@ -7,6 +7,7 @@ import { apiFetch } from '../../lib/api';
 import { useTheme } from '../../components/ThemeContext';
 import { useAuth } from '../../components/AuthContext';
 import { Clock, Hash, AlertCircle, Zap, ChevronDown, ChevronUp } from 'lucide-react';
+import AIErrorAlert from '../../components/AIErrorAlert';
 
 const CATEGORY_CONFIG: Record<string, { color: string; bg: string }> = {
   Deployment:     { color: '#7c6af7', bg: 'rgba(124,106,247,0.12)' },
@@ -152,10 +153,11 @@ export default function TimelinePage() {
           )}
 
           {error && (
-            <div className="flex items-center gap-3 p-4 rounded-2xl" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)' }}>
-              <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
-              <p className="text-sm text-red-400">{(error as any)?.message || 'Failed to generate timeline.'}</p>
-            </div>
+            <AIErrorAlert
+              error={error as any}
+              onRetry={refetch}
+              className="mb-6"
+            />
           )}
 
           {events && events.length === 0 && selectedChannel && !isLoading && (

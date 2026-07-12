@@ -6,6 +6,7 @@ import { MCPClientManager, parseMCPResponse } from '../services/mcpClient.js';
 import { saveEmbedding } from '../services/vectorStore.js';
 import { generateEmbedding, getAPIConfig } from '../services/ai.js';
 import { generateLocalFallbackReport } from '../services/fallback.js';
+import { sanitizeAIError } from '../middleware/errorHandler.js';
 
 const router = Router();
 
@@ -272,7 +273,7 @@ Include:
     });
   } catch (error: any) {
     console.error('Failed to generate report:', error);
-    res.status(500).json({ error: error?.message || 'Failed to generate report.' });
+    res.status(500).json({ error: sanitizeAIError(error, 'Failed to generate report.') });
   }
 });
 
