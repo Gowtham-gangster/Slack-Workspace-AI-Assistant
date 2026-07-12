@@ -180,7 +180,7 @@ async function startServer() {
         FROM chat_reminders r
         JOIN users u ON r.user_id = u.id
         LEFT JOIN chat_messages m ON r.message_id = m.id
-        WHERE r.dismissed = 0 AND r.notified = 0 AND r.remind_at <= ?
+        WHERE r.dismissed = 0 AND r.email_sent = 0 AND r.remind_at <= ?
       `, [now]);
 
       if (dueReminders.length === 0) return;
@@ -206,22 +206,25 @@ async function startServer() {
         }
 
         // 2. Send fallback email notification if SMTP is configured
-        let emailSent = false;
-        if (isEmailConfigured() && userEmail && userEmail.includes('@')) {
-          emailSent = await sendReminderEmail({
-            toEmail: userEmail,
-            toName: userName,
-            messageContent,
-            reminderId: reminder.id,
-            channelName: reminder.session_id || undefined,
-            setAt: new Date(reminder.created_at)
-          });
+        let emailSentStatus = 1; // Default to 1 (processed/skipped)
+        if (isEmailConfigured()) {
+          if (userEmail && userEmail.includes('@')) {
+            const success = await sendReminderEmail({
+              toEmail: userEmail,
+              toName: userName,
+              messageContent,
+              reminderId: reminder.id,
+              channelName: reminder.session_id || undefined,
+              setAt: new Date(reminder.created_at)
+            });
+            emailSentStatus = success ? 1 : 2; // 1 = success, 2 = failed delivery attempt
+          }
         }
 
         // 3. Mark as notified + email_sent in database
         await db.execute(
           'UPDATE chat_reminders SET email_sent = ?, notified = 1 WHERE id = ?',
-          [emailSent ? 1 : 0, reminder.id]
+          [emailSentStatus, reminder.id]
         );
       }
     } catch (err) {
