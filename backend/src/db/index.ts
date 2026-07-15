@@ -105,6 +105,22 @@ export async function initializeDatabase() {
     }
   }
 
+  try {
+    await db.execute('ALTER TABLE users ADD COLUMN reset_token VARCHAR(255) DEFAULT NULL');
+  } catch (err: any) {
+    if (err?.code !== 'ER_DUP_FIELDNAME') {
+      console.warn('[Migration] ALTER TABLE users ADD COLUMN reset_token:', err?.message);
+    }
+  }
+
+  try {
+    await db.execute('ALTER TABLE users ADD COLUMN reset_token_expires TIMESTAMP NULL DEFAULT NULL');
+  } catch (err: any) {
+    if (err?.code !== 'ER_DUP_FIELDNAME') {
+      console.warn('[Migration] ALTER TABLE users ADD COLUMN reset_token_expires:', err?.message);
+    }
+  }
+
 
 
   await db.execute(`

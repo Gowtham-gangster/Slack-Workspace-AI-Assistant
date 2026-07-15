@@ -8,11 +8,12 @@ import { MCPClientManager } from './services/mcpClient.js';
 import { securityMiddleware, sanitizeBody } from './middleware/security.js';
 import { generalLimiter, authLimiter, syncLimiter, summarizeLimiter, reportLimiter, searchLimiter } from './middleware/rateLimiter.js';
 import { requestIdMiddleware, notFoundHandler, globalErrorHandler } from './middleware/errorHandler.js';
-import { sendReminderEmail, isEmailConfigured } from './services/emailService.js';
+import { sendReminderEmail, isEmailConfigured, verifyTransporter, getEmailHealthStatus } from './services/emailService.js';
 
 // Load routes
 import authRoutes from './routes/auth.js';
 import settingsRoutes from './routes/settings.js';
+import emailRoutes from './routes/email.js';
 import channelRoutes from './routes/channels.js';
 import reportsRoutes from './routes/reports.js';
 import dashboardRoutes from './routes/dashboard.js';
@@ -102,6 +103,7 @@ app.use('/api/intelligence', summarizeLimiter);
 
 // ─── 8. REST API Routes ──────────────────────────────────────────────────────
 app.use('/api/auth', authRoutes);
+app.use('/api/email', emailRoutes);
 app.use('/api/settings', settingsRoutes);
 app.use('/api/channels', channelRoutes);
 app.use('/api/reports', reportsRoutes);
@@ -128,11 +130,13 @@ app.get('/auth/slack/callback', (req, res) => {
 });
 
 // ─── 9. Health Check ─────────────────────────────────────────────────────────
-app.get('/health', (req, res) => {
+app.get('/health', async (req, res) => {
+  const emailHealth = await getEmailHealthStatus();
   res.json({
     status: 'ok',
     database: 'connected',
-    mcp: MCPClientManager.getInstance(1).getConnectionStatus()
+    mcp: MCPClientManager.getInstance(1).getConnectionStatus(),
+    email: emailHealth
   });
 });
 
@@ -149,6 +153,19 @@ async function startServer() {
   } catch (error) {
     console.error('CRITICAL: Database initialization failed:', error);
     process.exit(1);
+  }
+
+  // Verify transporter initialization during backend startup
+  try {
+    console.log('[Startup] Verifying email transporter status...');
+    const result = await verifyTransporter();
+    if (result.success) {
+      console.log('[Startup] Email delivery transporter is verified and ready.');
+    } else {
+      console.warn(`[Startup] Email delivery startup warning: ${result.error}`);
+    }
+  } catch (emailErr) {
+    console.error('[Startup] Failed to verify email transporter connection:', emailErr);
   }
 
   const server = http.createServer(app);

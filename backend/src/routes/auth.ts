@@ -5,6 +5,7 @@ import jwt from 'jsonwebtoken';
 import { db } from '../db/index.js';
 import { authenticateJWT, AuthenticatedRequest, signAccessToken, REFRESH_EXPIRY, JWT_SECRET } from '../middleware/auth.js';
 import { MCPClientManager } from '../services/mcpClient.js';
+import { sendNewLoginEmail, sendForgotPasswordEmail, sendAccountDeletionEmail } from '../services/emailService.js';
 
 const router = Router();
 
@@ -149,6 +150,17 @@ router.post('/login', async (req: Request, res: Response) => {
 
     const accessToken = signAccessToken({ id: user.id, email: user.email, fullName: user.full_name });
     const refreshToken = await createRefreshToken(user.id);
+
+    // Send login notification email immediately in the background
+    sendNewLoginEmail({
+      toEmail: user.email,
+      toName: user.full_name || user.email || 'User',
+      ipAddress: ip,
+      userAgent: req.headers['user-agent'] || 'unknown',
+      loginTime: new Date()
+    }).catch(err => {
+      console.error('[Login] Failed to send login notification email:', err);
+    });
 
     res.json({
       token: accessToken,
@@ -336,6 +348,17 @@ router.post('/google', async (req: Request, res: Response) => {
     const accessToken = signAccessToken({ id: user.id, email: user.email, fullName: user.full_name });
     const refreshToken = await createRefreshToken(user.id);
 
+    // Send login notification email immediately in the background
+    sendNewLoginEmail({
+      toEmail: user.email,
+      toName: user.full_name || user.email || 'User',
+      ipAddress: ip,
+      userAgent: req.headers['user-agent'] || 'unknown',
+      loginTime: new Date()
+    }).catch(err => {
+      console.error('[Google Login] Failed to send login notification email:', err);
+    });
+
     res.json({
       token: accessToken,
       refreshToken,
@@ -423,6 +446,15 @@ router.delete('/account', authenticateJWT, async (req: AuthenticatedRequest, res
   const ip = getClientIp(req);
 
   try {
+    const user = await db.queryOne<any>('SELECT * FROM users WHERE id = ?', [req.user.id]);
+    if (user) {
+      // Send deletion email first before database record is removed
+      await sendAccountDeletionEmail({
+        toEmail: user.email,
+        toName: user.full_name || user.email || 'User'
+      });
+    }
+
     await writeAuditLog(req.user.id, 'ACCOUNT_DELETE', req.user.email, ip);
     await db.execute('DELETE FROM users WHERE id = ?', [req.user.id]);
     res.json({ message: 'Account deleted successfully.' });
@@ -493,7 +525,7 @@ router.get('/slack', authenticateJWT, async (req: AuthenticatedRequest, res: Res
 // GET /api/auth/slack/callback — Slack OAuth redirect destination
 router.get('/slack/callback', async (req: Request, res: Response) => {
   const { code, state, error: slackError } = req.query;
-  const frontendSettingsUrl = process.env.FRONTEND_SETTINGS_URL || 'http://localhost:7505/settings';
+  const frontendSettingsUrl = process.env.FRONTEND_SETTINGS_URL || (process.env.FRONTEND_URL ? `${process.env.FRONTEND_URL}/settings` : 'https://slack-workspace-ai-assistant.vercel.app/settings');
 
   if (slackError) {
     console.error('Slack OAuth callback error parameter:', slackError);
@@ -651,6 +683,99 @@ router.post('/slack/disconnect', authenticateJWT, async (req: AuthenticatedReque
   } catch (error) {
     console.error('Failed to disconnect Slack workspace:', error);
     res.status(500).json({ error: 'Failed to disconnect Slack workspace.' });
+  }
+});
+
+// POST /api/auth/forgot-password
+router.post('/forgot-password', async (req: Request, res: Response) => {
+  const { email } = req.body;
+  const ip = getClientIp(req);
+
+  if (!email || typeof email !== 'string') {
+    return res.status(400).json({ error: 'Email address is required.' });
+  }
+
+  try {
+    const user = await db.queryOne<any>('SELECT * FROM users WHERE email = ?', [email]);
+    if (!user) {
+      // Return a generic success message to prevent user enumeration
+      return res.json({
+        message: 'If a user with that email address exists, a password reset link has been sent.'
+      });
+    }
+
+    // Generate valid reset token before sending
+    const resetToken = crypto.randomBytes(32).toString('hex');
+    const resetTokenExpires = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+
+    await db.execute(
+      'UPDATE users SET reset_token = ?, reset_token_expires = ? WHERE id = ?',
+      [resetToken, resetTokenExpires, user.id]
+    );
+
+    await writeAuditLog(user.id, 'FORGOT_PASSWORD_REQUEST', email, ip);
+
+    // Call email service
+    await sendForgotPasswordEmail({
+      toEmail: user.email,
+      toName: user.full_name || user.email || 'User',
+      resetToken
+    });
+
+    res.json({
+      message: 'If a user with that email address exists, a password reset link has been sent.'
+    });
+  } catch (err: any) {
+    console.error('Forgot password error:', err);
+    res.status(500).json({ error: 'Failed to process forgot password request.' });
+  }
+});
+
+// POST /api/auth/reset-password
+router.post('/reset-password', async (req: Request, res: Response) => {
+  const { token, newPassword } = req.body;
+  const ip = getClientIp(req);
+
+  if (!token || !newPassword) {
+    return res.status(400).json({ error: 'Token and new password are required.' });
+  }
+
+  // Password complexity checks
+  const hasUppercase = /[A-Z]/.test(newPassword);
+  const hasLowercase = /[a-z]/.test(newPassword);
+  const hasSpecial = /[^A-Za-z0-9]/.test(newPassword);
+  const isMinLength = newPassword.length >= 8;
+
+  if (!isMinLength || !hasUppercase || !hasLowercase || !hasSpecial) {
+    return res.status(400).json({
+      error: 'Password must be at least 8 characters long and contain at least one uppercase letter, one lowercase letter, and one special character.'
+    });
+  }
+
+  try {
+    const user = await db.queryOne<any>(
+      'SELECT * FROM users WHERE reset_token = ? AND reset_token_expires > ?',
+      [token, new Date()]
+    );
+
+    if (!user) {
+      return res.status(400).json({ error: 'Invalid or expired password reset token.' });
+    }
+
+    const salt = await bcrypt.genSalt(12);
+    const passwordHash = await bcrypt.hash(newPassword, salt);
+
+    await db.execute(
+      'UPDATE users SET password_hash = ?, reset_token = NULL, reset_token_expires = NULL WHERE id = ?',
+      [passwordHash, user.id]
+    );
+
+    await writeAuditLog(user.id, 'PASSWORD_RESET_SUCCESS', user.email, ip);
+
+    res.json({ message: 'Password has been reset successfully.' });
+  } catch (err: any) {
+    console.error('Reset password error:', err);
+    res.status(500).json({ error: 'Failed to reset password.' });
   }
 });
 
