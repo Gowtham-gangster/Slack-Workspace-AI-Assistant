@@ -35,7 +35,7 @@ function getFrontendUrl() {
 }
 
 function getEmailConfig() {
-  const provider = (process.env.EMAIL_PROVIDER || 'gmail').toLowerCase();
+  const provider = (process.env.EMAIL_PROVIDER || 'resend').toLowerCase();
   
   if (provider === 'resend') {
     const apiKey = process.env.RESEND_API_KEY;
@@ -553,7 +553,7 @@ let activeProvider: EmailProvider | null = null;
 export function getActiveProvider(): EmailProvider {
   if (activeProvider) return activeProvider;
 
-  const providerType = (process.env.EMAIL_PROVIDER || 'gmail').toLowerCase();
+  const providerType = (process.env.EMAIL_PROVIDER || 'resend').toLowerCase();
   switch (providerType) {
     case 'resend':
       activeProvider = new ResendProvider();
