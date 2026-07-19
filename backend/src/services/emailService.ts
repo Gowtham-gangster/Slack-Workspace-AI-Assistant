@@ -71,7 +71,19 @@ let transporter: nodemailer.Transporter | null = null;
 let lastVerificationError: string | null = null;
 let isVerified = false;
 
-export function initializeTransporter() {
+function resolveHostToIPv4(hostname: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    dns.lookup(hostname, { family: 4 }, (err, address) => {
+      if (err) {
+        reject(err);
+      } else {
+        resolve(address);
+      }
+    });
+  });
+}
+
+export async function initializeTransporter() {
   if (transporter) {
     return transporter; // Singleton pattern: return existing instance
   }
@@ -92,38 +104,54 @@ export function initializeTransporter() {
 
   try {
     if (config.provider === 'resend') {
+      let resendIp = 'smtp.resend.com';
+      try {
+        resendIp = await resolveHostToIPv4('smtp.resend.com');
+        console.log(`[EmailService] Resolved smtp.resend.com to IPv4: ${resendIp}`);
+      } catch (dnsErr) {
+        console.warn('[EmailService] DNS resolution for smtp.resend.com failed, falling back to hostname.');
+      }
+
       transporter = nodemailer.createTransport({
-        host: 'smtp.resend.com',
+        host: resendIp,
         port: 465,
         secure: true,
         auth: {
           user: 'resend',
           pass: config.apiKey
         },
+        tls: { servername: 'smtp.resend.com' },
         connectionTimeout: 30000, // 30 seconds
         greetingTimeout: 30000,   // 30 seconds
-        socketTimeout: 30000,     // 30 seconds
-        lookup: (hostname: string, options: any, callback: any) => {
-          dns.lookup(hostname, { ...options, family: 4 }, callback);
-        }
+        socketTimeout: 30000      // 30 seconds
       } as any);
       console.log('[EmailService] Singleton Resend SMTP Transporter initialized');
     } else {
+      let smtpIp = config.host || '';
+      if (config.host) {
+        try {
+          smtpIp = await resolveHostToIPv4(config.host);
+          console.log(`[EmailService] Resolved ${config.host} to IPv4: ${smtpIp}`);
+        } catch (dnsErr) {
+          console.warn(`[EmailService] DNS resolution for ${config.host} failed, falling back to hostname.`);
+        }
+      }
+
       transporter = nodemailer.createTransport({
-        host: config.host,
+        host: smtpIp,
         port: config.port,
         secure: config.secure,
         auth: {
           user: config.user,
           pass: config.pass
         },
-        tls: { rejectUnauthorized: false },
+        tls: { 
+          rejectUnauthorized: false,
+          servername: config.host || undefined
+        },
         connectionTimeout: 30000, // 30 seconds
         greetingTimeout: 30000,   // 30 seconds
-        socketTimeout: 30000,     // 30 seconds
-        lookup: (hostname: string, options: any, callback: any) => {
-          dns.lookup(hostname, { ...options, family: 4 }, callback);
-        }
+        socketTimeout: 30000      // 30 seconds
       } as any);
       console.log('[EmailService] Singleton SMTP Transporter initialized successfully');
     }
@@ -158,7 +186,7 @@ export async function verifyTransporter(): Promise<{ success: boolean; error: st
   }
 
   // Ensure singleton is initialized
-  initializeTransporter();
+  await initializeTransporter();
 
   if (!transporter) {
     const errorMsg = 'Transporter not initialized due to configuration errors.';
@@ -309,7 +337,7 @@ async function sendMailInternal(options: MailOptions): Promise<{ success: boolea
   }
 
   // 2. Otherwise use SMTP (requires Pro plan on Railway or works in local environment)
-  initializeTransporter();
+  await initializeTransporter();
 
   if (!transporter) {
     const errorMsg = lastVerificationError || 'Transporter is not initialized.';
