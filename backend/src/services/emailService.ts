@@ -1,4 +1,5 @@
 import nodemailer from 'nodemailer';
+import dns from 'dns';
 
 // ─── Environment Variables Validation ──────────────────────────────────────────
 
@@ -67,8 +68,11 @@ export function initializeTransporter() {
         },
         connectionTimeout: 10000, // 10 seconds
         greetingTimeout: 10000,   // 10 seconds
-        socketTimeout: 15000      // 15 seconds
-      });
+        socketTimeout: 15000,     // 15 seconds
+        lookup: (hostname: string, options: any, callback: any) => {
+          dns.lookup(hostname, { ...options, family: 4 }, callback);
+        }
+      } as any);
       console.log('[EmailService] Transporter initialized for Resend SMTP');
     } else {
       transporter = nodemailer.createTransport({
@@ -82,8 +86,11 @@ export function initializeTransporter() {
         tls: { rejectUnauthorized: false },
         connectionTimeout: 10000, // 10 seconds
         greetingTimeout: 10000,   // 10 seconds
-        socketTimeout: 15000      // 15 seconds
-      });
+        socketTimeout: 15000,     // 15 seconds
+        lookup: (hostname: string, options: any, callback: any) => {
+          dns.lookup(hostname, { ...options, family: 4 }, callback);
+        }
+      } as any);
       console.log('[EmailService] Transporter initialized for SMTP');
     }
     return transporter;
