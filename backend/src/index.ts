@@ -184,11 +184,14 @@ async function startServer() {
 
   // ─── Background Reminder Email Job (runs every 60 seconds) ────────────────
   let reminderJobTick = 0;
+  let isProcessingReminders = false;
   const reminderJob = setInterval(async () => {
+    if (isProcessingReminders) return;
+    isProcessingReminders = true;
     reminderJobTick++;
     try {
       const now = new Date();
-      // Find all due reminders not yet notified
+      // Find all due reminders not yet notified (email_sent = 0)
       const dueReminders = await db.query<any>(`
         SELECT r.id, r.user_id, r.message_id, r.content, r.session_id,
                r.remind_at, r.created_at,
@@ -200,11 +203,20 @@ async function startServer() {
         WHERE r.dismissed = 0 AND r.email_sent = 0 AND r.remind_at <= ?
       `, [now]);
 
-      if (dueReminders.length === 0) return;
+      if (dueReminders.length === 0) {
+        isProcessingReminders = false;
+        return;
+      }
 
       console.log(`[ReminderJob] Found ${dueReminders.length} due reminder(s) to process.`);
 
       for (const reminder of dueReminders) {
+        // Mark as processing (3) immediately to prevent subsequent ticks or overlaps from processing it again
+        await db.execute(
+          'UPDATE chat_reminders SET email_sent = 3 WHERE id = ?',
+          [reminder.id]
+        );
+
         const userEmail = reminder.email;
         const userName = reminder.full_name || reminder.email || 'there';
         const messageContent = reminder.message_content || 'No message content available.';
@@ -238,7 +250,7 @@ async function startServer() {
           }
         }
 
-        // 3. Mark as notified + email_sent in database
+        // 3. Mark as notified + final email_sent status in database
         await db.execute(
           'UPDATE chat_reminders SET email_sent = ?, notified = 1 WHERE id = ?',
           [emailSentStatus, reminder.id]
@@ -246,6 +258,8 @@ async function startServer() {
       }
     } catch (err) {
       console.error('[ReminderJob] Error processing reminders:', err);
+    } finally {
+      isProcessingReminders = false;
     }
 
     // SEC-05 + SEC-06: Hourly cleanup of unbounded audit tables (every 3600 ticks ≈ 60 minutes)

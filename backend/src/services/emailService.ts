@@ -64,7 +64,10 @@ export function initializeTransporter() {
         auth: {
           user: 'resend',
           pass: config.apiKey
-        }
+        },
+        connectionTimeout: 10000, // 10 seconds
+        greetingTimeout: 10000,   // 10 seconds
+        socketTimeout: 15000      // 15 seconds
       });
       console.log('[EmailService] Transporter initialized for Resend SMTP');
     } else {
@@ -76,7 +79,10 @@ export function initializeTransporter() {
           user: config.user,
           pass: config.pass
         },
-        tls: { rejectUnauthorized: false }
+        tls: { rejectUnauthorized: false },
+        connectionTimeout: 10000, // 10 seconds
+        greetingTimeout: 10000,   // 10 seconds
+        socketTimeout: 15000      // 15 seconds
       });
       console.log('[EmailService] Transporter initialized for SMTP');
     }
