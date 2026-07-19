@@ -1,4 +1,9 @@
 import 'dotenv/config';
+import dns from 'dns';
+
+// Force DNS lookup to prefer IPv4. This prevents ENETUNREACH errors on environments like Railway which lack IPv6 outbound routing.
+dns.setDefaultResultOrder('ipv4first');
+
 import http from 'http';
 import express from 'express';
 import cors from 'cors';
