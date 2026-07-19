@@ -104,6 +104,19 @@ export function initializeTransporter() {
 }
 
 export async function verifyTransporter(): Promise<{ success: boolean; error: string | null }> {
+  const config = getEmailConfig();
+  if (config.provider === 'resend') {
+    if (config.errors.length > 0) {
+      isVerified = false;
+      lastVerificationError = `Configuration errors: ${config.errors.join(', ')}`;
+      return { success: false, error: lastVerificationError };
+    }
+    isVerified = true;
+    lastVerificationError = null;
+    console.log('[EmailService] Resend HTTP API configured and verified.');
+    return { success: true, error: null };
+  }
+
   // Re-run initialization to catch latest env settings
   initializeTransporter();
 
@@ -184,6 +197,46 @@ async function sendMailInternal(options: MailOptions): Promise<{ success: boolea
     return { success: false, error: errorMsg };
   }
 
+  const config = getEmailConfig();
+  const fromName = process.env.SMTP_FROM_NAME || 'Slack AI Assistant';
+  const fromEmail = config.from || '';
+
+  // 1. If using Resend HTTP API (recommended for Hobby plans on Railway)
+  if (config.provider === 'resend') {
+    logEmail('QUEUED', options.emailType, options.toEmail);
+    try {
+      const response = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${config.apiKey}`
+        },
+        body: JSON.stringify({
+          from: `"${fromName}" <${fromEmail}>`,
+          to: [options.toEmail],
+          subject: options.subject,
+          html: options.html,
+          text: options.text
+        })
+      });
+
+      const resData = await response.json() as any;
+      if (response.ok && resData.id) {
+        logEmail('SENT', options.emailType, options.toEmail, { messageId: resData.id });
+        return { success: true, messageId: resData.id };
+      } else {
+        const errorMsg = resData.message || `Resend API returned status ${response.status}`;
+        logEmail('FAILED', options.emailType, options.toEmail, { error: errorMsg, response: resData });
+        return { success: false, error: errorMsg };
+      }
+    } catch (err: any) {
+      const errorMsg = err?.message || String(err);
+      logEmail('FAILED', options.emailType, options.toEmail, { error: errorMsg, rawError: err });
+      return { success: false, error: errorMsg };
+    }
+  }
+
+  // 2. Otherwise use SMTP (requires Pro plan on Railway or works in local environment)
   if (!transporter) {
     initializeTransporter();
   }
@@ -195,10 +248,6 @@ async function sendMailInternal(options: MailOptions): Promise<{ success: boolea
   }
 
   logEmail('QUEUED', options.emailType, options.toEmail);
-
-  const config = getEmailConfig();
-  const fromName = process.env.SMTP_FROM_NAME || 'Slack AI Assistant';
-  const fromEmail = config.from || '';
 
   try {
     const info = await transporter.sendMail({
