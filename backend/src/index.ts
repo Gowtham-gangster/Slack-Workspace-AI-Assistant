@@ -13,7 +13,7 @@ import { MCPClientManager } from './services/mcpClient.js';
 import { securityMiddleware, sanitizeBody } from './middleware/security.js';
 import { generalLimiter, authLimiter, syncLimiter, summarizeLimiter, reportLimiter, searchLimiter } from './middleware/rateLimiter.js';
 import { requestIdMiddleware, notFoundHandler, globalErrorHandler } from './middleware/errorHandler.js';
-import { sendReminderEmail, isEmailConfigured, verifyTransporter, getEmailHealthStatus } from './services/emailService.js';
+import { sendReminderEmail, isEmailConfigured, verifyTransporter, getEmailHealthStatus, runStartupVerification } from './services/emailService.js';
 
 // Load routes
 import authRoutes from './routes/auth.js';
@@ -162,17 +162,12 @@ async function startServer() {
     process.exit(1);
   }
 
-  // Verify transporter initialization during backend startup
+  // Verify transporter initialization with retries and diagnostics
   try {
     console.log('[Startup] Verifying email transporter status...');
-    const result = await verifyTransporter();
-    if (result.success) {
-      console.log('[Startup] Email delivery transporter is verified and ready.');
-    } else {
-      console.warn(`[Startup] Email delivery startup warning: ${result.error}`);
-    }
+    await runStartupVerification();
   } catch (emailErr) {
-    console.error('[Startup] Failed to verify email transporter connection:', emailErr);
+    console.error('[Startup] Failed to run email verification diagnostics:', emailErr);
   }
 
   const server = http.createServer(app);

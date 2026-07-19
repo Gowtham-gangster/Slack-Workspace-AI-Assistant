@@ -1,32 +1,50 @@
 import { Router, Request, Response } from 'express';
-import { getEmailHealthStatus, verifyTransporter, sendTestEmail } from '../services/emailService.js';
+import { getEmailHealthStatus, getOrCreateTransporter, sendTestEmail } from '../services/emailService.js';
 
 const router = Router();
+
+// GET /api/system/email-test
+router.get('/email-test', async (req: Request, res: Response) => {
+  try {
+    const transporterInstance = await getOrCreateTransporter();
+    if (!transporterInstance) {
+      return res.status(500).json({
+        success: false,
+        message: 'Transporter is not initialized due to configuration errors.'
+      });
+    }
+
+    await transporterInstance.verify();
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({
+      success: false,
+      code: err?.code || 'N/A',
+      message: err?.message || String(err),
+      response: err?.response || 'N/A',
+      command: err?.command || 'N/A'
+    });
+  }
+});
 
 // GET /api/system/email-health
 router.get('/email-health', async (req: Request, res: Response) => {
   try {
-    const verifyResult = await verifyTransporter();
     const health = await getEmailHealthStatus();
-    
-    const host = process.env.SMTP_HOST || null;
-    const port = process.env.SMTP_PORT ? Number(process.env.SMTP_PORT) : null;
-    const secure = port === 465;
-
     res.json({
-      configured: health.configured,
-      verified: verifyResult.success,
-      provider: health.provider,
-      host: host,
-      port: port,
-      secure: secure,
-      error: verifyResult.error
+      'SMTP configured': health.configured,
+      'SMTP verified': health.verified,
+      'Last successful email': health.lastSuccessfulEmail ? health.lastSuccessfulEmail.toISOString() : null,
+      'Last failed email': health.lastFailedEmail ? health.lastFailedEmail.toISOString() : null,
+      'Failure reason': health.failureReason
     });
   } catch (error: any) {
     res.status(500).json({
-      configured: false,
-      verified: false,
-      error: error?.message || String(error)
+      'SMTP configured': false,
+      'SMTP verified': false,
+      'Last successful email': null,
+      'Last failed email': null,
+      'Failure reason': error?.message || String(error)
     });
   }
 });

@@ -4,6 +4,11 @@ import dns from 'dns';
 // Helper to delay execution
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
+// ─── Email Health Monitoring State ───────────────────────────────────────────
+let lastSuccessfulEmail: Date | null = null;
+let lastFailedEmail: Date | null = null;
+let lastFailureReason: string | null = null;
+
 // ─── Environment Variables Validation ──────────────────────────────────────────
 
 function getFrontendUrl() {
@@ -23,7 +28,7 @@ function getEmailConfig() {
     const host = process.env.SMTP_HOST;
     const portStr = process.env.SMTP_PORT;
     const user = process.env.SMTP_USER;
-    const pass = process.env.SMTP_PASS;
+    const pass = process.env.SMTP_PASS?.replace(/\s/g, ''); // Strip spacing for robustness like Interview Trainer
     const from = process.env.SMTP_FROM || process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER;
     const secure = Number(portStr) === 465;
 
@@ -165,102 +170,12 @@ export async function initializeTransporter() {
   }
 }
 
-export async function verifyTransporter(): Promise<{ success: boolean; error: string | null }> {
-  const config = getEmailConfig();
-  if (config.provider === 'resend' && process.env.RESEND_API_KEY) {
-    if (config.errors.length > 0) {
-      isVerified = false;
-      lastVerificationError = `Configuration errors: ${config.errors.join(', ')}`;
-      return { success: false, error: lastVerificationError };
-    }
-    isVerified = true;
-    lastVerificationError = null;
-    console.log('[EmailService] Resend HTTP API configured and verified.');
-    return { success: true, error: null };
-  }
-
-  if (config.errors.length > 0) {
-    isVerified = false;
-    lastVerificationError = `Configuration errors: ${config.errors.join(', ')}`;
-    return { success: false, error: lastVerificationError };
-  }
-
-  // Ensure singleton is initialized
-  await initializeTransporter();
-
+// Lazy creation helper
+export async function getOrCreateTransporter() {
   if (!transporter) {
-    const errorMsg = 'Transporter not initialized due to configuration errors.';
-    console.error(`[EmailService] Verification failed: ${errorMsg}`);
-    return { success: false, error: errorMsg };
+    await initializeTransporter();
   }
-
-  console.log('[EmailService] SMTP Configuration details:');
-  console.log(`  SMTP Host:   ${config.host}`);
-  console.log(`  SMTP Port:   ${config.port}`);
-  console.log(`  SMTP Secure: ${config.secure}`);
-  console.log(`  SMTP User:   ${config.user}`);
-
-  console.log('[EmailService] Verifying transporter connection...');
-  try {
-    await transporter.verify();
-    isVerified = true;
-    lastVerificationError = null;
-    console.log('[EmailService] Transporter connection verified successfully.');
-    return { success: true, error: null };
-  } catch (err: any) {
-    isVerified = false;
-
-    // Construct complete error details
-    const fullError = {
-      code: err?.code || 'N/A',
-      name: err?.name || 'Error',
-      message: err?.message || String(err),
-      stack: err?.stack || 'No stack trace available'
-    };
-
-    console.error('[EmailService] Transporter verification failed:');
-    console.error(`  Error Code:    ${fullError.code}`);
-    console.error(`  Error Name:    ${fullError.name}`);
-    console.error(`  Error Message: ${fullError.message}`);
-    console.error(`  Stack Trace:   ${fullError.stack}`);
-
-    lastVerificationError = fullError.message;
-    return { success: false, error: fullError.message };
-  }
-}
-
-export function isEmailConfigured(): boolean {
-  const config = getEmailConfig();
-  return config.errors.length === 0;
-}
-
-export async function getEmailHealthStatus(): Promise<{
-  configured: boolean;
-  provider: 'smtp' | 'resend' | 'none';
-  verified: boolean;
-  error: string | null;
-}> {
-  const config = getEmailConfig();
-  const configured = isEmailConfigured();
-  return {
-    configured,
-    provider: configured ? config.provider : 'none',
-    verified: isVerified,
-    error: lastVerificationError
-  };
-}
-
-// ─── Logging Helpers ──────────────────────────────────────────────────────────
-
-function logEmail(status: 'REQUESTED' | 'QUEUED' | 'SENT' | 'FAILED' | 'PROVIDER_RESPONSE', type: string, recipient: string, details?: any) {
-  const logObj = {
-    timestamp: new Date().toISOString(),
-    event: status,
-    emailType: type,
-    to: recipient,
-    ...(details ? { details } : {})
-  };
-  console.log(`[EmailService Log] ${JSON.stringify(logObj, null, 2)}`);
+  return transporter;
 }
 
 // Helper to identify authentication errors
@@ -275,6 +190,215 @@ function isAuthError(err: any): boolean {
     errMsg.includes('password') ||
     errMsg.includes('not accepted')
   );
+}
+
+// Helper to provide detailed explanations for common SMTP timeout/network errors
+function getMeaningfulErrorExplanation(err: any): string {
+  const code = err?.code || '';
+  const msg = (err?.message || '').toLowerCase();
+  
+  if (code === 'ETIMEDOUT') {
+    return 'Connection timed out. The outgoing SMTP port (587 or 465) is blocked by a firewall (e.g. Railway Hobby plan restrictions) or the host is offline.';
+  }
+  if (code === 'ECONNRESET') {
+    return 'Connection reset by peer. The destination SMTP server abruptly closed the socket connection.';
+  }
+  if (code === 'ECONNREFUSED') {
+    return 'Connection refused. The server explicitly rejected the socket request on this port. Check if SMTP_PORT is correct.';
+  }
+  if (isAuthError(err)) {
+    return 'Authentication failed. Verify SMTP_USER and SMTP_PASS (Gmail App Password) credentials. Staging spaces have been automatically stripped.';
+  }
+  if (code === 'ENOTFOUND') {
+    return 'SMTP Host name not found. DNS resolution failed. Check SMTP_HOST value.';
+  }
+  return 'Unknown or general SMTP connection failure.';
+}
+
+// Improved logging function for SMTP errors
+function logSmtpError(err: any, context: string) {
+  const config = getEmailConfig();
+  const secure = Number(process.env.SMTP_PORT) === 465;
+  const nodeVersion = process.version;
+  const railwayEnv = process.env.RAILWAY_ENVIRONMENT || 'N/A';
+  const explanation = getMeaningfulErrorExplanation(err);
+
+  console.error(`[EmailService Error] Details during: ${context}`);
+  console.error(`  SMTP Host:         ${config.host}`);
+  console.error(`  SMTP Port:         ${config.port}`);
+  console.log(`  Secure Mode:       ${secure}`);
+  console.log(`  Node Version:      ${nodeVersion}`);
+  console.log(`  Railway Env:       ${railwayEnv}`);
+  console.error(`  Error Code:        ${err?.code || 'N/A'}`);
+  console.error(`  Error Message:     ${err?.message || String(err)}`);
+  console.error(`  SMTP Response:     ${err?.response || 'N/A'}`);
+  console.log(`  Socket Timeout:    30000ms`);
+  console.log(`  TLS Configuration: rejectUnauthorized=false`);
+  console.error(`  Explanation:       ${explanation}`);
+  if (err?.stack) {
+    console.error(`  Stack Trace:\n${err.stack}`);
+  }
+}
+
+// Diagnostics Startup Print helper
+function printStartupDiagnostics(verified: boolean, verifyError: string | null) {
+  const config = getEmailConfig();
+  const nodeVersion = process.version;
+  const railwayEnv = process.env.RAILWAY_ENVIRONMENT || 'N/A';
+  const isGmail = (config.host || '').toLowerCase().includes('gmail');
+  const sender = config.from || 'N/A';
+  const transportInitialized = transporter !== null;
+
+  console.log('\n=========================');
+  console.log('EMAIL CONFIGURATION');
+  console.log('=========================');
+  console.log(`Host:                  ${config.host}`);
+  console.log(`Port:                  ${config.port}`);
+  console.log(`Secure:                ${config.secure}`);
+  console.log(`Using Gmail:           ${isGmail}`);
+  console.log(`Node version:          ${nodeVersion}`);
+  console.log(`Railway environment:   ${railwayEnv}`);
+  console.log(`Email sender:          ${sender}`);
+  console.log(`Transport initialized: ${transportInitialized}`);
+  console.log(`SMTP verified:         ${verified}`);
+  if (!verified && verifyError) {
+    console.log(`Verification error:    ${verifyError}`);
+  }
+  console.log('=========================\n');
+}
+
+export async function runStartupVerification() {
+  const config = getEmailConfig();
+  
+  // Stop startup if any required environment variable is missing (Task 3)
+  const requiredVars = ['SMTP_HOST', 'SMTP_PORT', 'SMTP_USER', 'SMTP_PASS'];
+  const missing = requiredVars.filter(v => !process.env[v]);
+  if (missing.length > 0) {
+    console.error(`\n[EmailService] CRITICAL: SMTP environment variable check failed.`);
+    console.error(`  Missing required variables: ${missing.join(', ')}`);
+    console.error(`  Process will exit immediately to prevent invalid startup.\n`);
+    process.exit(1);
+  }
+
+  console.log('[EmailService] SMTP Startup diagnostics environment check passed.');
+  console.log(`  SMTP_HOST:        ${process.env.SMTP_HOST}`);
+  console.log(`  SMTP_PORT:        ${process.env.SMTP_PORT}`);
+  console.log(`  SMTP_SECURE:      ${process.env.SMTP_PORT === '465'}`);
+  console.log(`  SMTP_USER:        ${process.env.SMTP_USER}`);
+  console.log(`  SMTP_FROM_EMAIL:  ${process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER}`);
+
+  // Create transporter once
+  await getOrCreateTransporter();
+
+  if (!transporter) {
+    const errorMsg = lastVerificationError || 'Failed to initialize transporter';
+    printStartupDiagnostics(false, errorMsg);
+    console.warn('[EmailService] WARNING: SMTP Transporter failed to initialize. Startup continuing with warnings.');
+    return;
+  }
+
+  let verified = false;
+  let attempt = 1;
+  const backoffs = [1000, 2000, 4000]; // 1s, 2s, 4s (Task 6)
+
+  while (attempt <= 3) {
+    try {
+      console.log(`[EmailService] Attempting SMTP verification (Attempt ${attempt} of 3)...`);
+      await transporter.verify();
+      verified = true;
+      isVerified = true;
+      lastVerificationError = null;
+      console.log('[EmailService] SMTP connection verified successfully.');
+      break;
+    } catch (err: any) {
+      logSmtpError(err, `Startup verification attempt ${attempt}`);
+      lastVerificationError = err?.message || String(err);
+      lastFailureReason = `${err?.code || 'N/A'}: ${err?.message || String(err)} - ${getMeaningfulErrorExplanation(err)}`;
+      lastFailedEmail = new Date();
+
+      if (attempt < 3) {
+        const delayMs = backoffs[attempt - 1];
+        console.log(`[EmailService] Verification failed. Retrying in ${delayMs / 1000}s...`);
+        await delay(delayMs);
+      }
+      attempt++;
+    }
+  }
+
+  printStartupDiagnostics(verified, lastVerificationError);
+
+  if (!verified) {
+    console.warn('[EmailService] WARNING: SMTP verification failed 3 times. Continuing server startup with warning.');
+  }
+}
+
+export async function verifyTransporter(): Promise<{ success: boolean; error: string | null }> {
+  const config = getEmailConfig();
+  if (config.errors.length > 0) {
+    isVerified = false;
+    lastVerificationError = `Configuration errors: ${config.errors.join(', ')}`;
+    return { success: false, error: lastVerificationError };
+  }
+
+  // Ensure singleton is initialized
+  await getOrCreateTransporter();
+
+  if (!transporter) {
+    const errorMsg = 'Transporter not initialized due to configuration errors.';
+    console.error(`[EmailService] Verification failed: ${errorMsg}`);
+    return { success: false, error: errorMsg };
+  }
+
+  try {
+    await transporter.verify();
+    isVerified = true;
+    lastVerificationError = null;
+    return { success: true, error: null };
+  } catch (err: any) {
+    isVerified = false;
+    lastVerificationError = err?.message || String(err);
+    return { success: false, error: lastVerificationError };
+  }
+}
+
+export function isEmailConfigured(): boolean {
+  const config = getEmailConfig();
+  return config.errors.length === 0;
+}
+
+export async function getEmailHealthStatus(): Promise<{
+  configured: boolean;
+  provider: 'smtp' | 'resend' | 'none';
+  verified: boolean;
+  error: string | null;
+  lastSuccessfulEmail: Date | null;
+  lastFailedEmail: Date | null;
+  failureReason: string | null;
+}> {
+  const config = getEmailConfig();
+  const configured = isEmailConfigured();
+  return {
+    configured,
+    provider: configured ? config.provider : 'none',
+    verified: isVerified,
+    error: lastVerificationError,
+    lastSuccessfulEmail,
+    lastFailedEmail,
+    failureReason: lastVerificationError || lastFailureReason
+  };
+}
+
+// ─── Logging Helpers ──────────────────────────────────────────────────────────
+
+function logEmail(status: 'REQUESTED' | 'QUEUED' | 'SENT' | 'FAILED' | 'PROVIDER_RESPONSE', type: string, recipient: string, details?: any) {
+  const logObj = {
+    timestamp: new Date().toISOString(),
+    event: status,
+    emailType: type,
+    to: recipient,
+    ...(details ? { details } : {})
+  };
+  console.log(`[EmailService Log] ${JSON.stringify(logObj, null, 2)}`);
 }
 
 // ─── Send Mail Base ──────────────────────────────────────────────────────────
@@ -323,21 +447,26 @@ async function sendMailInternal(options: MailOptions): Promise<{ success: boolea
       const resData = await response.json() as any;
       if (response.ok && resData.id) {
         logEmail('SENT', options.emailType, options.toEmail, { messageId: resData.id });
+        lastSuccessfulEmail = new Date();
         return { success: true, messageId: resData.id };
       } else {
         const errorMsg = resData.message || `Resend API returned status ${response.status}`;
         logEmail('FAILED', options.emailType, options.toEmail, { error: errorMsg, response: resData });
+        lastFailedEmail = new Date();
+        lastFailureReason = errorMsg;
         return { success: false, error: errorMsg };
       }
     } catch (err: any) {
       const errorMsg = err?.message || String(err);
       logEmail('FAILED', options.emailType, options.toEmail, { error: errorMsg, rawError: err });
+      lastFailedEmail = new Date();
+      lastFailureReason = errorMsg;
       return { success: false, error: errorMsg };
     }
   }
 
   // 2. Otherwise use SMTP (requires Pro plan on Railway or works in local environment)
-  await initializeTransporter();
+  await getOrCreateTransporter();
 
   if (!transporter) {
     const errorMsg = lastVerificationError || 'Transporter is not initialized.';
@@ -369,6 +498,7 @@ async function sendMailInternal(options: MailOptions): Promise<{ success: boolea
 
       logEmail('SENT', options.emailType, options.toEmail, { messageId: info.messageId });
       logEmail('PROVIDER_RESPONSE', options.emailType, options.toEmail, { response: info.response, messageId: info.messageId });
+      lastSuccessfulEmail = new Date();
 
       return { success: true, messageId: info.messageId };
     } catch (err: any) {
@@ -386,13 +516,7 @@ async function sendMailInternal(options: MailOptions): Promise<{ success: boolea
 
   // Email failed permanently after all retries
   const errorMsg = lastError?.message || 'Failed to deliver email after 3 retries.';
-  console.error('[EmailService Log] EMAIL DELIVERY FAILED PERMANENTLY:');
-  console.error(`  Recipient:       ${options.toEmail}`);
-  console.error(`  Subject:         ${options.subject}`);
-  console.error(`  Email Type:      ${options.emailType}`);
-  console.error(`  Last Error Code: ${lastError?.code || 'N/A'}`);
-  console.error(`  Error Message:   ${errorMsg}`);
-  console.error(`  Stack Trace:     ${lastError?.stack || 'N/A'}`);
+  logSmtpError(lastError, 'Permanent send delivery');
 
   logEmail('FAILED', options.emailType, options.toEmail, { error: errorMsg, rawError: lastError });
 
