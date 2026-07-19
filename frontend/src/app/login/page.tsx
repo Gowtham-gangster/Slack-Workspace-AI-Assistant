@@ -13,6 +13,8 @@ import { motion } from 'framer-motion';
 export default function LoginPage() {
   const { login } = useAuth();
   const [isRegistering, setIsRegistering] = useState(false);
+  const [isForgotPassword, setIsForgotPassword] = useState(false);
+  const [forgotPasswordSuccess, setForgotPasswordSuccess] = useState<string | null>(null);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
@@ -110,6 +112,28 @@ export default function LoginPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    if (isForgotPassword) {
+      if (!email) {
+        setError('Email Address is required.');
+        return;
+      }
+      setError(null);
+      setForgotPasswordSuccess(null);
+      setLoading(true);
+      try {
+        const data = await apiFetch('/api/auth/forgot-password', {
+          method: 'POST',
+          body: { email }
+        });
+        setForgotPasswordSuccess(data.message || 'If a user with that email address exists, a password reset link has been sent.');
+      } catch (err: any) {
+        setError(err?.message || 'Failed to request password reset. Please try again.');
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+
     if (isRegistering) {
       if (!fullName.trim()) {
         setError('Full Name is required.');
@@ -367,16 +391,30 @@ export default function LoginPage() {
           <h1 className={`text-2xl font-extrabold tracking-tight text-center transition-colors duration-500 ${
             isLightMode ? 'text-slate-900' : 'text-white'
           }`}>
-            {isRegistering ? 'Create Your Account' : 'Welcome Back'}
+            {isForgotPassword ? 'Reset Your Password' : isRegistering ? 'Create Your Account' : 'Welcome Back'}
           </h1>
           <p className={`text-xs mt-2 text-center max-w-[320px] leading-relaxed transition-colors duration-500 ${
             isLightMode ? 'text-slate-500' : 'text-slate-400'
           }`}>
-            {isRegistering
+            {isForgotPassword
+              ? "Enter the email associated with your account and we'll send you a link to reset your password."
+              : isRegistering
               ? 'Join our workspace to collaborate, analyze threads, and synthesize actions with AI.'
               : 'Sign in to collaborate, search workspace records, and summarize channels with AI.'}
           </p>
         </div>
+
+        {/* Success banner */}
+        {forgotPasswordSuccess && (
+          <motion.div
+            initial={{ scale: 0.95, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            className="mb-6 p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs flex items-center gap-2.5"
+          >
+            <Check className="w-4 h-4 shrink-0 text-emerald-400" />
+            <p className="leading-relaxed font-medium">{forgotPasswordSuccess}</p>
+          </motion.div>
+        )}
 
         {/* Error banner */}
         {error && (
@@ -392,7 +430,7 @@ export default function LoginPage() {
 
         {/* Auth form */}
         <form onSubmit={handleSubmit} className="space-y-4">
-          {isRegistering && (
+          {!isForgotPassword && isRegistering && (
             <motion.div
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: 'auto' }}
@@ -443,36 +481,53 @@ export default function LoginPage() {
             </div>
           </div>
 
-          <div>
-            <label className={`block text-[11px] font-bold uppercase tracking-wider mb-2 ml-1 transition-colors duration-500 ${
-              isLightMode ? 'text-slate-600' : 'text-slate-400'
-            }`}>Password</label>
-            <div className="relative">
-              <Lock className={`absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 transition-colors duration-500 ${
-                isLightMode ? 'text-slate-500' : 'text-slate-400'
-              }`} />
-              <input
-                type={showPassword ? 'text' : 'password'}
-                placeholder="••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className={`w-full pl-11 pr-11 py-3 rounded-xl border focus:ring-1 transition-all outline-none ${
-                  isLightMode
-                    ? 'bg-slate-50/50 border-slate-200 focus:border-[#7c6af7] focus:ring-[#7c6af7]/20 text-slate-900 placeholder-slate-400'
-                    : 'bg-white/[0.02] border-white/[0.08] focus:border-[#7c6af7]/80 focus:ring-[#7c6af7]/30 text-white placeholder-slate-500'
-                }`}
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                className={`absolute right-4 top-1/2 -translate-y-1/2 p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-white/5 transition-all text-slate-400 hover:text-slate-600 dark:hover:text-white`}
-              >
-                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-              </button>
+          {!isForgotPassword && (
+            <div>
+              <div className="flex justify-between items-center mb-2 ml-1">
+                <label className={`block text-[11px] font-bold uppercase tracking-wider transition-colors duration-500 ${
+                  isLightMode ? 'text-slate-600' : 'text-slate-400'
+                }`}>Password</label>
+                {!isRegistering && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsForgotPassword(true);
+                      setError(null);
+                      setForgotPasswordSuccess(null);
+                    }}
+                    className="text-xs text-[#7c6af7] hover:text-[#6366f1] hover:underline font-bold transition-colors"
+                  >
+                    Forgot Password?
+                  </button>
+                )}
+              </div>
+              <div className="relative">
+                <Lock className={`absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 transition-colors duration-500 ${
+                  isLightMode ? 'text-slate-500' : 'text-slate-400'
+                }`} />
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  placeholder="••••••••"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className={`w-full pl-11 pr-11 py-3 rounded-xl border focus:ring-1 transition-all outline-none ${
+                    isLightMode
+                      ? 'bg-slate-50/50 border-slate-200 focus:border-[#7c6af7] focus:ring-[#7c6af7]/20 text-slate-900 placeholder-slate-400'
+                      : 'bg-white/[0.02] border-white/[0.08] focus:border-[#7c6af7]/80 focus:ring-[#7c6af7]/30 text-white placeholder-slate-500'
+                  }`}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className={`absolute right-4 top-1/2 -translate-y-1/2 p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-white/5 transition-all text-slate-400 hover:text-slate-600 dark:hover:text-white`}
+                >
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
             </div>
-          </div>
+          )}
 
-          {isRegistering && password.length > 0 && (
+          {!isForgotPassword && isRegistering && password.length > 0 && (
             <motion.div
               initial={{ opacity: 0, y: -5 }}
               animate={{ opacity: 1, y: 0 }}
@@ -543,7 +598,7 @@ export default function LoginPage() {
             </motion.div>
           )}
 
-          {isRegistering && (
+          {!isForgotPassword && isRegistering && (
             <motion.div
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: 'auto' }}
@@ -579,7 +634,7 @@ export default function LoginPage() {
             </motion.div>
           )}
 
-          {isRegistering && (
+          {!isForgotPassword && isRegistering && (
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -619,6 +674,8 @@ export default function LoginPage() {
           >
             {loading ? (
               <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+            ) : isForgotPassword ? (
+              'Send Reset Link'
             ) : isRegistering ? (
               'Create Account'
             ) : (
@@ -628,50 +685,67 @@ export default function LoginPage() {
         </form>
 
         {/* Divider for SSO */}
-        <div className="flex items-center gap-3 my-6">
-          <span className={`flex-1 border-t transition-colors duration-500 ${isLightMode ? 'border-slate-200' : 'border-white/[0.06]'}`} />
-          <span className={`font-bold tracking-widest text-[9px] uppercase shrink-0 transition-colors duration-500 ${
-            isLightMode ? 'text-slate-400' : 'text-slate-500'
-          }`}>
-            {isRegistering ? 'Or Sign Up With' : 'Or Sign In With'}
-          </span>
-          <span className={`flex-1 border-t transition-colors duration-500 ${isLightMode ? 'border-slate-200' : 'border-white/[0.06]'}`} />
-        </div>
-
-        {/* Google SSO Container */}
-        <div className="flex justify-center w-full min-h-[44px]">
-          <div 
-            id="google-signin-button" 
-            className="w-full flex justify-center" 
-            style={{ display: googleClientConfigured ? 'flex' : 'none' }}
-          />
-          {!googleClientConfigured && (
-            <div className={`w-full p-3 rounded-xl border text-[10px] text-center leading-relaxed transition-all duration-500 ${
-              isLightMode ? 'bg-amber-500/5 border-amber-500/20 text-amber-600' : 'bg-amber-500/5 border-amber-500/10 text-amber-500/70'
-            }`}>
-              Google Sign-In will be active once you replace the placeholder client ID in <code className="text-amber-400">frontend/.env.local</code>.
+        {!isForgotPassword && (
+          <>
+            <div className="flex items-center gap-3 my-6">
+              <span className={`flex-1 border-t transition-colors duration-500 ${isLightMode ? 'border-slate-200' : 'border-white/[0.06]'}`} />
+              <span className={`font-bold tracking-widest text-[9px] uppercase shrink-0 transition-colors duration-500 ${
+                isLightMode ? 'text-slate-400' : 'text-slate-500'
+              }`}>
+                {isRegistering ? 'Or Sign Up With' : 'Or Sign In With'}
+              </span>
+              <span className={`flex-1 border-t transition-colors duration-500 ${isLightMode ? 'border-slate-200' : 'border-white/[0.06]'}`} />
             </div>
-          )}
-        </div>
+
+            {/* Google SSO Container */}
+            <div className="flex justify-center w-full min-h-[44px]">
+              <div 
+                id="google-signin-button" 
+                className="w-full flex justify-center" 
+                style={{ display: googleClientConfigured ? 'flex' : 'none' }}
+              />
+              {!googleClientConfigured && (
+                <div className={`w-full p-3 rounded-xl border text-[10px] text-center leading-relaxed transition-all duration-500 ${
+                  isLightMode ? 'bg-amber-500/5 border-amber-500/20 text-amber-600' : 'bg-amber-500/5 border-amber-500/10 text-amber-500/70'
+                }`}>
+                  Google Sign-In will be active once you replace the placeholder client ID in <code className="text-amber-400">frontend/.env.local</code>.
+                </div>
+              )}
+            </div>
+          </>
+        )}
 
         {/* Toggle registered trigger */}
         <div className="mt-6 text-center">
-          <button
-            onClick={() => {
-              setIsRegistering(!isRegistering);
-              setFullName('');
-              setConfirmPassword('');
-              setAgreeTerms(false);
-              setError(null);
-              setShowPassword(false);
-              setShowConfirmPassword(false);
-            }}
-            className="text-xs text-[#7c6af7] hover:text-[#6366f1] hover:underline font-bold transition-colors"
-          >
-            {isRegistering
-              ? 'Already have an account? Sign In'
-              : "Don't have an account? Sign Up"}
-          </button>
+          {isForgotPassword ? (
+            <button
+              onClick={() => {
+                setIsForgotPassword(false);
+                setError(null);
+                setForgotPasswordSuccess(null);
+              }}
+              className="text-xs text-[#7c6af7] hover:text-[#6366f1] hover:underline font-bold transition-colors"
+            >
+              Back to Sign In
+            </button>
+          ) : (
+            <button
+              onClick={() => {
+                setIsRegistering(!isRegistering);
+                setFullName('');
+                setConfirmPassword('');
+                setAgreeTerms(false);
+                setError(null);
+                setShowPassword(false);
+                setShowConfirmPassword(false);
+              }}
+              className="text-xs text-[#7c6af7] hover:text-[#6366f1] hover:underline font-bold transition-colors"
+            >
+              {isRegistering
+                ? 'Already have an account? Sign In'
+                : "Don't have an account? Sign Up"}
+            </button>
+          )}
         </div>
       </motion.div>
     </main>
