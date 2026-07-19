@@ -1,13 +1,32 @@
 import nodemailer from 'nodemailer';
 import dns from 'dns';
+import net from 'net';
 
 // Helper to delay execution
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+// ─── Email Provider Interface (Step 7) ───────────────────────────────────────
+export interface EmailPayload {
+  toEmail: string;
+  toName: string;
+  subject: string;
+  text: string;
+  html: string;
+  emailType: string;
+}
+
+export interface EmailProvider {
+  name: string;
+  send(payload: EmailPayload): Promise<{ success: boolean; messageId?: string; error?: string }>;
+  verify(): Promise<{ success: boolean; error: string | null }>;
+}
 
 // ─── Email Health Monitoring State ───────────────────────────────────────────
 let lastSuccessfulEmail: Date | null = null;
 let lastFailedEmail: Date | null = null;
 let lastFailureReason: string | null = null;
+let isVerified = false;
+let lastVerificationError: string | null = null;
 
 // ─── Environment Variables Validation ──────────────────────────────────────────
 
@@ -16,19 +35,44 @@ function getFrontendUrl() {
 }
 
 function getEmailConfig() {
-  const isResend = !!process.env.RESEND_API_KEY;
-  if (isResend) {
+  const provider = (process.env.EMAIL_PROVIDER || 'gmail').toLowerCase();
+  
+  if (provider === 'resend') {
     const apiKey = process.env.RESEND_API_KEY;
-    const from = process.env.EMAIL_FROM;
+    const from = process.env.EMAIL_FROM || process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER;
     const errors: string[] = [];
     if (!apiKey) errors.push('RESEND_API_KEY is missing');
     if (!from) errors.push('EMAIL_FROM is missing');
     return { provider: 'resend' as const, apiKey, from, errors };
+  } else if (provider === 'brevo') {
+    const apiKey = process.env.BREVO_API_KEY;
+    const from = process.env.EMAIL_FROM || process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER;
+    const errors: string[] = [];
+    if (!apiKey) errors.push('BREVO_API_KEY is missing');
+    if (!from) errors.push('EMAIL_FROM is missing');
+    return { provider: 'brevo' as const, apiKey, from, errors };
+  } else if (provider === 'sendgrid') {
+    const apiKey = process.env.SENDGRID_API_KEY;
+    const from = process.env.EMAIL_FROM || process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER;
+    const errors: string[] = [];
+    if (!apiKey) errors.push('SENDGRID_API_KEY is missing');
+    if (!from) errors.push('EMAIL_FROM is missing');
+    return { provider: 'sendgrid' as const, apiKey, from, errors };
+  } else if (provider === 'mailgun') {
+    const apiKey = process.env.MAILGUN_API_KEY;
+    const domain = process.env.MAILGUN_DOMAIN;
+    const from = process.env.EMAIL_FROM || process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER;
+    const errors: string[] = [];
+    if (!apiKey) errors.push('MAILGUN_API_KEY is missing');
+    if (!domain) errors.push('MAILGUN_DOMAIN is missing');
+    if (!from) errors.push('EMAIL_FROM is missing');
+    return { provider: 'mailgun' as const, apiKey, domain, from, errors };
   } else {
+    // Default to Gmail SMTP
     const host = process.env.SMTP_HOST;
     const portStr = process.env.SMTP_PORT;
     const user = process.env.SMTP_USER;
-    const pass = process.env.SMTP_PASS?.replace(/\s/g, ''); // Strip spacing for robustness like Interview Trainer
+    const pass = process.env.SMTP_PASS?.replace(/\s/g, ''); // Strip spacing for App Password correctness
     const from = process.env.SMTP_FROM || process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER;
     const secure = Number(portStr) === 465;
 
@@ -44,7 +88,7 @@ function getEmailConfig() {
       errors.push('SMTP_PORT is not a valid number');
     }
 
-    return { provider: 'smtp' as const, host, port, secure, user, pass, from, errors };
+    return { provider: 'gmail' as const, host, port, secure, user, pass, from, errors };
   }
 }
 
@@ -70,11 +114,9 @@ function validateGmailConfig(host: string, port: number, secure: boolean, pass: 
   }
 }
 
-// ─── Transporter Management ──────────────────────────────────────────────────
+// ─── Transporter Management (Gmail/SMTP only) ───────────────────────────────
 
 let transporter: nodemailer.Transporter | null = null;
-let lastVerificationError: string | null = null;
-let isVerified = false;
 
 function resolveHostToIPv4(hostname: string): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -90,76 +132,52 @@ function resolveHostToIPv4(hostname: string): Promise<string> {
 
 export async function initializeTransporter() {
   if (transporter) {
-    return transporter; // Singleton pattern: return existing instance
+    return transporter; // Singleton pattern
   }
 
   const config = getEmailConfig();
+  if (config.provider !== 'gmail') {
+    return null;
+  }
+
   if (config.errors.length > 0) {
     transporter = null;
     isVerified = false;
     lastVerificationError = `Configuration errors: ${config.errors.join(', ')}`;
-    console.error(`[EmailService] CRITICAL: SMTP configuration is incomplete. Missing: ${config.errors.join(', ')}. Email service will be disabled.`);
+    console.error(`[EmailService] CRITICAL: SMTP configuration is incomplete. Missing: ${config.errors.join(', ')}.`);
     return null;
   }
 
-  // Detect Gmail config issues and print warnings if found
-  if (config.provider === 'smtp') {
-    validateGmailConfig(config.host || '', config.port, config.secure, config.pass || '');
-  }
+  validateGmailConfig(config.host || '', config.port, config.secure, config.pass || '');
 
   try {
-    if (config.provider === 'resend') {
-      let resendIp = 'smtp.resend.com';
+    let smtpIp = config.host || '';
+    if (config.host) {
       try {
-        resendIp = await resolveHostToIPv4('smtp.resend.com');
-        console.log(`[EmailService] Resolved smtp.resend.com to IPv4: ${resendIp}`);
+        smtpIp = await resolveHostToIPv4(config.host);
+        console.log(`[EmailService] Resolved ${config.host} to IPv4: ${smtpIp}`);
       } catch (dnsErr) {
-        console.warn('[EmailService] DNS resolution for smtp.resend.com failed, falling back to hostname.');
+        console.warn(`[EmailService] DNS resolution for ${config.host} failed, falling back to hostname.`);
       }
-
-      transporter = nodemailer.createTransport({
-        host: resendIp,
-        port: 465,
-        secure: true,
-        auth: {
-          user: 'resend',
-          pass: config.apiKey
-        },
-        tls: { servername: 'smtp.resend.com' },
-        connectionTimeout: 30000, // 30 seconds
-        greetingTimeout: 30000,   // 30 seconds
-        socketTimeout: 30000      // 30 seconds
-      } as any);
-      console.log('[EmailService] Singleton Resend SMTP Transporter initialized');
-    } else {
-      let smtpIp = config.host || '';
-      if (config.host) {
-        try {
-          smtpIp = await resolveHostToIPv4(config.host);
-          console.log(`[EmailService] Resolved ${config.host} to IPv4: ${smtpIp}`);
-        } catch (dnsErr) {
-          console.warn(`[EmailService] DNS resolution for ${config.host} failed, falling back to hostname.`);
-        }
-      }
-
-      transporter = nodemailer.createTransport({
-        host: smtpIp,
-        port: config.port,
-        secure: config.secure,
-        auth: {
-          user: config.user,
-          pass: config.pass
-        },
-        tls: { 
-          rejectUnauthorized: false,
-          servername: config.host || undefined
-        },
-        connectionTimeout: 30000, // 30 seconds
-        greetingTimeout: 30000,   // 30 seconds
-        socketTimeout: 30000      // 30 seconds
-      } as any);
-      console.log('[EmailService] Singleton SMTP Transporter initialized successfully');
     }
+
+    transporter = nodemailer.createTransport({
+      host: smtpIp,
+      port: config.port,
+      secure: config.secure,
+      auth: {
+        user: config.user,
+        pass: config.pass
+      },
+      tls: { 
+        rejectUnauthorized: false,
+        servername: config.host || undefined
+      },
+      connectionTimeout: 30000,
+      greetingTimeout: 30000,
+      socketTimeout: 30000
+    } as any);
+    console.log('[EmailService] Singleton SMTP Transporter initialized successfully');
     return transporter;
   } catch (err: any) {
     transporter = null;
@@ -176,6 +194,41 @@ export async function getOrCreateTransporter() {
     await initializeTransporter();
   }
   return transporter;
+}
+
+// ─── Raw TCP Socket Tester (Step 2) ──────────────────────────────────────────
+
+export function testTcpConnection(host: string, port: number, timeoutMs = 5000): Promise<{ status: string; error?: string }> {
+  return new Promise((resolve) => {
+    const socket = new net.Socket();
+    let isResolved = false;
+
+    socket.setTimeout(timeoutMs);
+
+    socket.connect(port, host, () => {
+      if (!isResolved) {
+        isResolved = true;
+        socket.destroy();
+        resolve({ status: 'Connected' });
+      }
+    });
+
+    socket.on('error', (err: any) => {
+      if (!isResolved) {
+        isResolved = true;
+        socket.destroy();
+        resolve({ status: err.code || 'ERROR', error: err.message });
+      }
+    });
+
+    socket.on('timeout', () => {
+      if (!isResolved) {
+        isResolved = true;
+        socket.destroy();
+        resolve({ status: 'Timed Out' });
+      }
+    });
+  });
 }
 
 // Helper to identify authentication errors
@@ -198,16 +251,16 @@ function getMeaningfulErrorExplanation(err: any): string {
   const msg = (err?.message || '').toLowerCase();
   
   if (code === 'ETIMEDOUT') {
-    return 'Connection timed out. The outgoing SMTP port (587 or 465) is blocked by a firewall (e.g. Railway Hobby plan restrictions) or the host is offline.';
+    return 'Connection timed out. Outbound SMTP TCP port is blocked by the network or hosting environment (e.g. Railway Hobby plan limitations) or the host is offline.';
   }
   if (code === 'ECONNRESET') {
     return 'Connection reset by peer. The destination SMTP server abruptly closed the socket connection.';
   }
   if (code === 'ECONNREFUSED') {
-    return 'Connection refused. The server explicitly rejected the socket request on this port. Check if SMTP_PORT is correct.';
+    return 'Connection refused. The server explicitly rejected the connection. Check if SMTP_PORT is correct.';
   }
   if (isAuthError(err)) {
-    return 'Authentication failed. Verify SMTP_USER and SMTP_PASS (Gmail App Password) credentials. Staging spaces have been automatically stripped.';
+    return 'Authentication failed. Verify SMTP_USER and SMTP_PASS (Gmail App Password) credentials. Spaces have been automatically stripped.';
   }
   if (code === 'ENOTFOUND') {
     return 'SMTP Host name not found. DNS resolution failed. Check SMTP_HOST value.';
@@ -224,20 +277,307 @@ function logSmtpError(err: any, context: string) {
   const explanation = getMeaningfulErrorExplanation(err);
 
   console.error(`[EmailService Error] Details during: ${context}`);
-  console.error(`  SMTP Host:         ${config.host}`);
-  console.error(`  SMTP Port:         ${config.port}`);
-  console.log(`  Secure Mode:       ${secure}`);
+  if (config.provider === 'gmail') {
+    console.error(`  SMTP Host:         ${(config as any).host}`);
+    console.error(`  SMTP Port:         ${(config as any).port}`);
+    console.log(`  Secure Mode:       ${secure}`);
+    console.log(`  TLS Configuration: rejectUnauthorized=false`);
+  }
   console.log(`  Node Version:      ${nodeVersion}`);
   console.log(`  Railway Env:       ${railwayEnv}`);
   console.error(`  Error Code:        ${err?.code || 'N/A'}`);
   console.error(`  Error Message:     ${err?.message || String(err)}`);
   console.error(`  SMTP Response:     ${err?.response || 'N/A'}`);
   console.log(`  Socket Timeout:    30000ms`);
-  console.log(`  TLS Configuration: rejectUnauthorized=false`);
   console.error(`  Explanation:       ${explanation}`);
   if (err?.stack) {
     console.error(`  Stack Trace:\n${err.stack}`);
   }
+}
+
+// ─── Provider Abstraction Classes (Step 7) ───────────────────────────────────
+
+class GmailProvider implements EmailProvider {
+  name = 'gmail';
+
+  async verify(): Promise<{ success: boolean; error: string | null }> {
+    await getOrCreateTransporter();
+    if (!transporter) {
+      return { success: false, error: lastVerificationError || 'Transporter not initialized.' };
+    }
+    try {
+      await transporter.verify();
+      return { success: true, error: null };
+    } catch (err: any) {
+      return { success: false, error: err?.message || String(err) };
+    }
+  }
+
+  async send(payload: EmailPayload): Promise<{ success: boolean; messageId?: string; error?: string }> {
+    await getOrCreateTransporter();
+    if (!transporter) {
+      return { success: false, error: lastVerificationError || 'Transporter is not initialized.' };
+    }
+
+    const config = getEmailConfig();
+    const fromName = process.env.SMTP_FROM_NAME || 'Slack AI Assistant';
+    const fromEmail = (config as any).from || '';
+
+    const retryDelays = [2000, 5000, 10000]; // 2s, 5s, 10s
+    let attempts = 0;
+    let lastError: any = null;
+
+    while (attempts <= 3) {
+      if (attempts > 0) {
+        const waitTime = retryDelays[attempts - 1];
+        console.log(`[EmailService] Retrying SMTP send to ${payload.toEmail} in ${waitTime / 1000}s (Attempt ${attempts} of 3)...`);
+        await delay(waitTime);
+      }
+
+      try {
+        const info = await transporter.sendMail({
+          from: `"${fromName}" <${fromEmail}>`,
+          to: `"${payload.toName}" <${payload.toEmail}>`,
+          subject: payload.subject,
+          text: payload.text,
+          html: payload.html
+        });
+        return { success: true, messageId: info.messageId };
+      } catch (err: any) {
+        lastError = err;
+        attempts++;
+        console.error(`[EmailService] SMTP Attempt ${attempts} failed for ${payload.toEmail}: ${err?.message || String(err)}`);
+
+        if (isAuthError(err)) {
+          console.error('[EmailService] Authentication failure detected. Skipping SMTP retries.');
+          break;
+        }
+      }
+    }
+
+    logSmtpError(lastError, 'SMTP Gmail Send');
+    return { success: false, error: lastError?.message || 'Failed to deliver email after retries.' };
+  }
+}
+
+class ResendProvider implements EmailProvider {
+  name = 'resend';
+
+  async verify(): Promise<{ success: boolean; error: string | null }> {
+    const key = process.env.RESEND_API_KEY;
+    const from = process.env.EMAIL_FROM || process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER;
+    if (!key) return { success: false, error: 'RESEND_API_KEY is missing.' };
+    if (!from) return { success: false, error: 'EMAIL_FROM is missing.' };
+    return { success: true, error: null };
+  }
+
+  async send(payload: EmailPayload): Promise<{ success: boolean; messageId?: string; error?: string }> {
+    const key = process.env.RESEND_API_KEY;
+    const fromName = process.env.SMTP_FROM_NAME || 'Slack AI Assistant';
+    const fromEmail = process.env.EMAIL_FROM || process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER;
+
+    try {
+      const response = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${key}`
+        },
+        body: JSON.stringify({
+          from: `"${fromName}" <${fromEmail}>`,
+          to: [payload.toEmail],
+          subject: payload.subject,
+          html: payload.html,
+          text: payload.text
+        })
+      });
+
+      const resData = await response.json() as any;
+      if (response.ok && resData.id) {
+        return { success: true, messageId: resData.id };
+      } else {
+        return { success: false, error: resData.message || `Resend API returned status ${response.status}` };
+      }
+    } catch (err: any) {
+      return { success: false, error: err?.message || String(err) };
+    }
+  }
+}
+
+class BrevoProvider implements EmailProvider {
+  name = 'brevo';
+
+  async verify(): Promise<{ success: boolean; error: string | null }> {
+    const key = process.env.BREVO_API_KEY;
+    const from = process.env.EMAIL_FROM || process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER;
+    if (!key) return { success: false, error: 'BREVO_API_KEY is missing.' };
+    if (!from) return { success: false, error: 'EMAIL_FROM is missing.' };
+    return { success: true, error: null };
+  }
+
+  async send(payload: EmailPayload): Promise<{ success: boolean; messageId?: string; error?: string }> {
+    const key = process.env.BREVO_API_KEY;
+    const fromName = process.env.SMTP_FROM_NAME || 'Slack AI Assistant';
+    const fromEmail = process.env.EMAIL_FROM || process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER;
+
+    try {
+      const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'api-key': `${key}`
+        },
+        body: JSON.stringify({
+          sender: { name: fromName, email: fromEmail },
+          to: [{ email: payload.toEmail, name: payload.toName }],
+          subject: payload.subject,
+          htmlContent: payload.html,
+          textContent: payload.text
+        })
+      });
+
+      const resData = await response.json() as any;
+      if (response.ok && (resData.messageId || resData.id)) {
+        return { success: true, messageId: resData.messageId || resData.id };
+      } else {
+        return { success: false, error: resData.message || `Brevo API returned status ${response.status}` };
+      }
+    } catch (err: any) {
+      return { success: false, error: err?.message || String(err) };
+    }
+  }
+}
+
+class SendGridProvider implements EmailProvider {
+  name = 'sendgrid';
+
+  async verify(): Promise<{ success: boolean; error: string | null }> {
+    const key = process.env.SENDGRID_API_KEY;
+    const from = process.env.EMAIL_FROM || process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER;
+    if (!key) return { success: false, error: 'SENDGRID_API_KEY is missing.' };
+    if (!from) return { success: false, error: 'EMAIL_FROM is missing.' };
+    return { success: true, error: null };
+  }
+
+  async send(payload: EmailPayload): Promise<{ success: boolean; messageId?: string; error?: string }> {
+    const key = process.env.SENDGRID_API_KEY;
+    const fromName = process.env.SMTP_FROM_NAME || 'Slack AI Assistant';
+    const fromEmail = process.env.EMAIL_FROM || process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER;
+
+    try {
+      const response = await fetch('https://api.sendgrid.com/v3/mail/send', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${key}`
+        },
+        body: JSON.stringify({
+          personalizations: [{
+            to: [{ email: payload.toEmail, name: payload.toName }]
+          }],
+          from: { email: fromEmail, name: fromName },
+          subject: payload.subject,
+          content: [
+            { type: 'text/plain', value: payload.text },
+            { type: 'text/html', value: payload.html }
+          ]
+        })
+      });
+
+      if (response.ok) {
+        return { success: true, messageId: response.headers.get('x-message-id') || 'SG_SUCCESS' };
+      } else {
+        const resData = await response.json() as any;
+        const errMsg = resData.errors?.[0]?.message || `SendGrid API returned status ${response.status}`;
+        return { success: false, error: errMsg };
+      }
+    } catch (err: any) {
+      return { success: false, error: err?.message || String(err) };
+    }
+  }
+}
+
+class MailgunProvider implements EmailProvider {
+  name = 'mailgun';
+
+  async verify(): Promise<{ success: boolean; error: string | null }> {
+    const key = process.env.MAILGUN_API_KEY;
+    const domain = process.env.MAILGUN_DOMAIN;
+    const from = process.env.EMAIL_FROM || process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER;
+    if (!key) return { success: false, error: 'MAILGUN_API_KEY is missing.' };
+    if (!domain) return { success: false, error: 'MAILGUN_DOMAIN is missing.' };
+    if (!from) return { success: false, error: 'EMAIL_FROM is missing.' };
+    return { success: true, error: null };
+  }
+
+  async send(payload: EmailPayload): Promise<{ success: boolean; messageId?: string; error?: string }> {
+    const key = process.env.MAILGUN_API_KEY;
+    const domain = process.env.MAILGUN_DOMAIN;
+    const fromName = process.env.SMTP_FROM_NAME || 'Slack AI Assistant';
+    const fromEmail = process.env.EMAIL_FROM || process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER;
+
+    try {
+      const basicAuth = Buffer.from(`api:${key}`).toString('base64');
+      const body = new URLSearchParams();
+      body.append('from', `"${fromName}" <${fromEmail}>`);
+      body.append('to', payload.toEmail);
+      body.append('subject', payload.subject);
+      body.append('text', payload.text);
+      body.append('html', payload.html);
+
+      const response = await fetch(`https://api.mailgun.net/v3/${domain}/messages`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'Authorization': `Basic ${basicAuth}`
+        },
+        body: body.toString()
+      });
+
+      const resData = await response.json() as any;
+      if (response.ok && resData.id) {
+        return { success: true, messageId: resData.id };
+      } else {
+        return { success: false, error: resData.message || `Mailgun API returned status ${response.status}` };
+      }
+    } catch (err: any) {
+      return { success: false, error: err?.message || String(err) };
+    }
+  }
+}
+
+// ─── Provider Factory Selection (Step 7) ─────────────────────────────────────
+
+let activeProvider: EmailProvider | null = null;
+
+export function getActiveProvider(): EmailProvider {
+  if (activeProvider) return activeProvider;
+
+  const providerType = (process.env.EMAIL_PROVIDER || 'gmail').toLowerCase();
+  switch (providerType) {
+    case 'resend':
+      activeProvider = new ResendProvider();
+      break;
+    case 'brevo':
+      activeProvider = new BrevoProvider();
+      break;
+    case 'sendgrid':
+      activeProvider = new SendGridProvider();
+      break;
+    case 'mailgun':
+      activeProvider = new MailgunProvider();
+      break;
+    case 'gmail':
+    default:
+      activeProvider = new GmailProvider();
+      break;
+  }
+  return activeProvider;
+}
+
+export function getEmailFromAddress(): string {
+  const config = getEmailConfig();
+  return config.from || '';
 }
 
 // Diagnostics Startup Print helper
@@ -245,17 +585,20 @@ function printStartupDiagnostics(verified: boolean, verifyError: string | null) 
   const config = getEmailConfig();
   const nodeVersion = process.version;
   const railwayEnv = process.env.RAILWAY_ENVIRONMENT || 'N/A';
-  const isGmail = (config.host || '').toLowerCase().includes('gmail');
+  const isGmail = (config.provider === 'gmail');
   const sender = config.from || 'N/A';
   const transportInitialized = transporter !== null;
 
   console.log('\n=========================');
   console.log('EMAIL CONFIGURATION');
   console.log('=========================');
-  console.log(`Host:                  ${config.host}`);
-  console.log(`Port:                  ${config.port}`);
-  console.log(`Secure:                ${config.secure}`);
-  console.log(`Using Gmail:           ${isGmail}`);
+  console.log(`Provider:              ${(process.env.EMAIL_PROVIDER || 'gmail').toUpperCase()}`);
+  if (isGmail) {
+    console.log(`Host:                  ${(config as any).host}`);
+    console.log(`Port:                  ${(config as any).port}`);
+    console.log(`Secure:                ${(config as any).secure}`);
+    console.log(`Using Gmail:           true`);
+  }
   console.log(`Node version:          ${nodeVersion}`);
   console.log(`Railway environment:   ${railwayEnv}`);
   console.log(`Email sender:          ${sender}`);
@@ -266,128 +609,6 @@ function printStartupDiagnostics(verified: boolean, verifyError: string | null) 
   }
   console.log('=========================\n');
 }
-
-export async function runStartupVerification() {
-  const config = getEmailConfig();
-  
-  // Stop startup if any required environment variable is missing (Task 3)
-  const requiredVars = ['SMTP_HOST', 'SMTP_PORT', 'SMTP_USER', 'SMTP_PASS'];
-  const missing = requiredVars.filter(v => !process.env[v]);
-  if (missing.length > 0) {
-    console.error(`\n[EmailService] CRITICAL: SMTP environment variable check failed.`);
-    console.error(`  Missing required variables: ${missing.join(', ')}`);
-    console.error(`  Process will exit immediately to prevent invalid startup.\n`);
-    process.exit(1);
-  }
-
-  console.log('[EmailService] SMTP Startup diagnostics environment check passed.');
-  console.log(`  SMTP_HOST:        ${process.env.SMTP_HOST}`);
-  console.log(`  SMTP_PORT:        ${process.env.SMTP_PORT}`);
-  console.log(`  SMTP_SECURE:      ${process.env.SMTP_PORT === '465'}`);
-  console.log(`  SMTP_USER:        ${process.env.SMTP_USER}`);
-  console.log(`  SMTP_FROM_EMAIL:  ${process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER}`);
-
-  // Create transporter once
-  await getOrCreateTransporter();
-
-  if (!transporter) {
-    const errorMsg = lastVerificationError || 'Failed to initialize transporter';
-    printStartupDiagnostics(false, errorMsg);
-    console.warn('[EmailService] WARNING: SMTP Transporter failed to initialize. Startup continuing with warnings.');
-    return;
-  }
-
-  let verified = false;
-  let attempt = 1;
-  const backoffs = [1000, 2000, 4000]; // 1s, 2s, 4s (Task 6)
-
-  while (attempt <= 3) {
-    try {
-      console.log(`[EmailService] Attempting SMTP verification (Attempt ${attempt} of 3)...`);
-      await transporter.verify();
-      verified = true;
-      isVerified = true;
-      lastVerificationError = null;
-      console.log('[EmailService] SMTP connection verified successfully.');
-      break;
-    } catch (err: any) {
-      logSmtpError(err, `Startup verification attempt ${attempt}`);
-      lastVerificationError = err?.message || String(err);
-      lastFailureReason = `${err?.code || 'N/A'}: ${err?.message || String(err)} - ${getMeaningfulErrorExplanation(err)}`;
-      lastFailedEmail = new Date();
-
-      if (attempt < 3) {
-        const delayMs = backoffs[attempt - 1];
-        console.log(`[EmailService] Verification failed. Retrying in ${delayMs / 1000}s...`);
-        await delay(delayMs);
-      }
-      attempt++;
-    }
-  }
-
-  printStartupDiagnostics(verified, lastVerificationError);
-
-  if (!verified) {
-    console.warn('[EmailService] WARNING: SMTP verification failed 3 times. Continuing server startup with warning.');
-  }
-}
-
-export async function verifyTransporter(): Promise<{ success: boolean; error: string | null }> {
-  const config = getEmailConfig();
-  if (config.errors.length > 0) {
-    isVerified = false;
-    lastVerificationError = `Configuration errors: ${config.errors.join(', ')}`;
-    return { success: false, error: lastVerificationError };
-  }
-
-  // Ensure singleton is initialized
-  await getOrCreateTransporter();
-
-  if (!transporter) {
-    const errorMsg = 'Transporter not initialized due to configuration errors.';
-    console.error(`[EmailService] Verification failed: ${errorMsg}`);
-    return { success: false, error: errorMsg };
-  }
-
-  try {
-    await transporter.verify();
-    isVerified = true;
-    lastVerificationError = null;
-    return { success: true, error: null };
-  } catch (err: any) {
-    isVerified = false;
-    lastVerificationError = err?.message || String(err);
-    return { success: false, error: lastVerificationError };
-  }
-}
-
-export function isEmailConfigured(): boolean {
-  const config = getEmailConfig();
-  return config.errors.length === 0;
-}
-
-export async function getEmailHealthStatus(): Promise<{
-  configured: boolean;
-  provider: 'smtp' | 'resend' | 'none';
-  verified: boolean;
-  error: string | null;
-  lastSuccessfulEmail: Date | null;
-  lastFailedEmail: Date | null;
-  failureReason: string | null;
-}> {
-  const config = getEmailConfig();
-  const configured = isEmailConfigured();
-  return {
-    configured,
-    provider: configured ? config.provider : 'none',
-    verified: isVerified,
-    error: lastVerificationError,
-    lastSuccessfulEmail,
-    lastFailedEmail,
-    failureReason: lastVerificationError || lastFailureReason
-  };
-}
-
 // ─── Logging Helpers ──────────────────────────────────────────────────────────
 
 function logEmail(status: 'REQUESTED' | 'QUEUED' | 'SENT' | 'FAILED' | 'PROVIDER_RESPONSE', type: string, recipient: string, details?: any) {
@@ -401,8 +622,6 @@ function logEmail(status: 'REQUESTED' | 'QUEUED' | 'SENT' | 'FAILED' | 'PROVIDER
   console.log(`[EmailService Log] ${JSON.stringify(logObj, null, 2)}`);
 }
 
-// ─── Send Mail Base ──────────────────────────────────────────────────────────
-
 interface MailOptions {
   toEmail: string;
   toName: string;
@@ -410,6 +629,124 @@ interface MailOptions {
   text: string;
   html: string;
   emailType: string;
+}
+
+// ─── Exported Verification Helpers ───────────────────────────────────────────
+
+export async function verifyTransporter(): Promise<{ success: boolean; error: string | null }> {
+  const provider = getActiveProvider();
+  return provider.verify();
+}
+
+export function isEmailConfigured(): boolean {
+  const config = getEmailConfig();
+  return config.errors.length === 0;
+}
+
+export async function getEmailHealthStatus() {
+  const config = getEmailConfig();
+  const configured = isEmailConfigured();
+  return {
+    configured,
+    provider: configured ? config.provider : 'none' as const,
+    verified: isVerified,
+    error: lastVerificationError,
+    lastSuccessfulEmail,
+    lastFailedEmail,
+    failureReason: lastVerificationError || lastFailureReason
+  };
+}
+
+export async function runStartupVerification() {
+  const provider = getActiveProvider();
+  
+  console.log('\n===============================================');
+  console.log('EMAIL PROVIDER STARTUP DIAGNOSTICS');
+  console.log('===============================================');
+  console.log(`Active Provider:      ${provider.name.toUpperCase()}`);
+  console.log(`Node Version:         ${process.version}`);
+  console.log(`Railway Env:          ${process.env.RAILWAY_ENVIRONMENT || 'N/A'}`);
+  console.log(`Email Sender:         ${getEmailFromAddress()}`);
+
+  if (provider.name === 'gmail') {
+    const host = process.env.SMTP_HOST || 'smtp.gmail.com';
+    const portStr = process.env.SMTP_PORT || '587';
+    console.log(`SMTP Host:            ${host}`);
+    console.log(`SMTP Port:            ${portStr}`);
+    console.log(`SMTP Secure:          ${Number(portStr) === 465}`);
+    
+    // Validate environment variables
+    const requiredVars = ['SMTP_HOST', 'SMTP_PORT', 'SMTP_USER', 'SMTP_PASS'];
+    const missing = requiredVars.filter(v => !process.env[v]);
+    if (missing.length > 0) {
+      console.error(`\n[EmailService] CRITICAL: SMTP environment variable check failed.`);
+      console.error(`  Missing required variables: ${missing.join(', ')}`);
+      console.error(`  Process will exit immediately to prevent invalid startup.\n`);
+      process.exit(1);
+    }
+
+    // Raw TCP socket connectivity test
+    console.log('[EmailService] Performing raw TCP socket connectivity check...');
+    const tcp465 = await testTcpConnection(host, 465, 5000);
+    const tcp587 = await testTcpConnection(host, 587, 5000);
+    
+    console.log(`  TCP Port 465 Reachability: ${tcp465.status}`);
+    console.log(`  TCP Port 587 Reachability: ${tcp587.status}`);
+
+    const selectedPort = Number(portStr);
+    const selectedReach = selectedPort === 465 ? tcp465.status : tcp587.status;
+    if (selectedReach !== 'Connected') {
+      console.error(`\n[EmailService] CRITICAL ERROR: SMTP connection blocked by hosting environment or network.`);
+      console.error(`  Outbound SMTP TCP port ${selectedPort} is unreachable (Status: ${selectedReach}).`);
+      console.error(`  Please verify your hosting environment firewall or switch to an HTTP-based provider.\n`);
+    }
+  } else {
+    // API provider validation
+    const requiredKey = `${provider.name.toUpperCase()}_API_KEY`;
+    if (!process.env[requiredKey]) {
+      console.error(`[EmailService] CRITICAL: Missing required API key for provider ${provider.name}: ${requiredKey}`);
+      process.exit(1);
+    }
+  }
+
+  // Verification retry strategy
+  let verified = false;
+  let attempt = 1;
+  const backoffs = [1000, 2000, 4000]; // 1s, 2s, 4s
+
+  while (attempt <= 3) {
+    try {
+      console.log(`[EmailService] Attempting provider verification (Attempt ${attempt} of 3)...`);
+      const result = await provider.verify();
+      if (result.success) {
+        verified = true;
+        isVerified = true;
+        lastVerificationError = null;
+        console.log(`[EmailService] Provider ${provider.name} verified successfully.`);
+        break;
+      } else {
+        throw new Error(result.error || 'Verification failed');
+      }
+    } catch (err: any) {
+      console.error(`[EmailService] Attempt ${attempt} failed: ${err?.message || String(err)}`);
+      lastVerificationError = err?.message || String(err);
+      lastFailedEmail = new Date();
+      lastFailureReason = `${err?.code || 'N/A'}: ${err?.message || String(err)}`;
+
+      if (attempt < 3) {
+        const delayMs = backoffs[attempt - 1];
+        console.log(`[EmailService] Retrying in ${delayMs / 1000}s...`);
+        await delay(delayMs);
+      }
+      attempt++;
+    }
+  }
+
+  printStartupDiagnostics(verified, lastVerificationError);
+
+  if (!verified) {
+    console.warn(`[EmailService] WARNING: Provider ${provider.name} verification failed 3 times. Continuing server startup with warning.`);
+  }
 }
 
 async function sendMailInternal(options: MailOptions): Promise<{ success: boolean; messageId?: string; error?: string }> {
@@ -421,106 +758,36 @@ async function sendMailInternal(options: MailOptions): Promise<{ success: boolea
     return { success: false, error: errorMsg };
   }
 
-  const config = getEmailConfig();
-  const fromName = process.env.SMTP_FROM_NAME || 'Slack AI Assistant';
-  const fromEmail = config.from || '';
-
-  // 1. If using Resend HTTP API (recommended for Hobby plans on Railway)
-  if (config.provider === 'resend') {
-    logEmail('QUEUED', options.emailType, options.toEmail);
-    try {
-      const response = await fetch('https://api.resend.com/emails', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${config.apiKey}`
-        },
-        body: JSON.stringify({
-          from: `"${fromName}" <${fromEmail}>`,
-          to: [options.toEmail],
-          subject: options.subject,
-          html: options.html,
-          text: options.text
-        })
-      });
-
-      const resData = await response.json() as any;
-      if (response.ok && resData.id) {
-        logEmail('SENT', options.emailType, options.toEmail, { messageId: resData.id });
-        lastSuccessfulEmail = new Date();
-        return { success: true, messageId: resData.id };
-      } else {
-        const errorMsg = resData.message || `Resend API returned status ${response.status}`;
-        logEmail('FAILED', options.emailType, options.toEmail, { error: errorMsg, response: resData });
-        lastFailedEmail = new Date();
-        lastFailureReason = errorMsg;
-        return { success: false, error: errorMsg };
-      }
-    } catch (err: any) {
-      const errorMsg = err?.message || String(err);
-      logEmail('FAILED', options.emailType, options.toEmail, { error: errorMsg, rawError: err });
-      lastFailedEmail = new Date();
-      lastFailureReason = errorMsg;
-      return { success: false, error: errorMsg };
-    }
-  }
-
-  // 2. Otherwise use SMTP (requires Pro plan on Railway or works in local environment)
-  await getOrCreateTransporter();
-
-  if (!transporter) {
-    const errorMsg = lastVerificationError || 'Transporter is not initialized.';
-    logEmail('FAILED', options.emailType, options.toEmail, { error: errorMsg });
-    return { success: false, error: errorMsg };
-  }
-
+  const provider = getActiveProvider();
   logEmail('QUEUED', options.emailType, options.toEmail);
 
-  const retryDelays = [2000, 5000, 10000]; // 2s, 5s, 10s
-  let attempts = 0;
-  let lastError: any = null;
+  try {
+    const result = await provider.send({
+      toEmail: options.toEmail,
+      toName: options.toName,
+      subject: options.subject,
+      text: options.text,
+      html: options.html,
+      emailType: options.emailType
+    });
 
-  while (attempts <= 3) {
-    if (attempts > 0) {
-      const waitTime = retryDelays[attempts - 1];
-      console.log(`[EmailService] Retrying send to ${options.toEmail} in ${waitTime / 1000}s (Attempt ${attempts} of 3)...`);
-      await delay(waitTime);
-    }
-
-    try {
-      const info = await transporter.sendMail({
-        from: `"${fromName}" <${fromEmail}>`,
-        to: `"${options.toName}" <${options.toEmail}>`,
-        subject: options.subject,
-        text: options.text,
-        html: options.html
-      });
-
-      logEmail('SENT', options.emailType, options.toEmail, { messageId: info.messageId });
-      logEmail('PROVIDER_RESPONSE', options.emailType, options.toEmail, { response: info.response, messageId: info.messageId });
+    if (result.success) {
+      logEmail('SENT', options.emailType, options.toEmail, { messageId: result.messageId });
       lastSuccessfulEmail = new Date();
-
-      return { success: true, messageId: info.messageId };
-    } catch (err: any) {
-      lastError = err;
-      attempts++;
-      console.error(`[EmailService] Attempt ${attempts} failed for ${options.toEmail}: ${err?.message || String(err)}`);
-
-      // Skip retrying authentication failures immediately
-      if (isAuthError(err)) {
-        console.error('[EmailService] Authentication failure detected. Skipping retries.');
-        break;
-      }
+      return { success: true, messageId: result.messageId };
+    } else {
+      logEmail('FAILED', options.emailType, options.toEmail, { error: result.error });
+      lastFailedEmail = new Date();
+      lastFailureReason = result.error || 'Unknown error';
+      return { success: false, error: result.error };
     }
+  } catch (err: any) {
+    const errorMsg = err?.message || String(err);
+    logEmail('FAILED', options.emailType, options.toEmail, { error: errorMsg, rawError: err });
+    lastFailedEmail = new Date();
+    lastFailureReason = errorMsg;
+    return { success: false, error: errorMsg };
   }
-
-  // Email failed permanently after all retries
-  const errorMsg = lastError?.message || 'Failed to deliver email after 3 retries.';
-  logSmtpError(lastError, 'Permanent send delivery');
-
-  logEmail('FAILED', options.emailType, options.toEmail, { error: errorMsg, rawError: lastError });
-
-  return { success: false, error: errorMsg };
 }
 
 // ─── Send Reminder Email ──────────────────────────────────────────────────────
