@@ -19,6 +19,7 @@ import { sendReminderEmail, isEmailConfigured, verifyTransporter, getEmailHealth
 import authRoutes from './routes/auth.js';
 import settingsRoutes from './routes/settings.js';
 import emailRoutes from './routes/email.js';
+import systemRoutes from './routes/system.js';
 import channelRoutes from './routes/channels.js';
 import reportsRoutes from './routes/reports.js';
 import dashboardRoutes from './routes/dashboard.js';
@@ -109,6 +110,7 @@ app.use('/api/intelligence', summarizeLimiter);
 // ─── 8. REST API Routes ──────────────────────────────────────────────────────
 app.use('/api/auth', authRoutes);
 app.use('/api/email', emailRoutes);
+app.use('/api/system', systemRoutes);
 app.use('/api/settings', settingsRoutes);
 app.use('/api/channels', channelRoutes);
 app.use('/api/reports', reportsRoutes);

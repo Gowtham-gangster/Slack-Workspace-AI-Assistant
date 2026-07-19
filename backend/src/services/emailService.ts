@@ -1,6 +1,9 @@
 import nodemailer from 'nodemailer';
 import dns from 'dns';
 
+// Helper to delay execution
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
 // ─── Environment Variables Validation ──────────────────────────────────────────
 
 function getFrontendUrl() {
@@ -22,7 +25,7 @@ function getEmailConfig() {
     const user = process.env.SMTP_USER;
     const pass = process.env.SMTP_PASS;
     const from = process.env.SMTP_FROM || process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER;
-    const secure = process.env.SMTP_SECURE === 'true';
+    const secure = Number(portStr) === 465;
 
     const errors: string[] = [];
     if (!host) errors.push('SMTP_HOST is missing');
@@ -40,6 +43,28 @@ function getEmailConfig() {
   }
 }
 
+// Helper to detect Gmail configuration issues
+function validateGmailConfig(host: string, port: number, secure: boolean, pass: string) {
+  if (host.toLowerCase().includes('gmail')) {
+    if (host !== 'smtp.gmail.com') {
+      console.warn(`[EmailService] WARNING: Gmail SMTP host is configured as "${host}". For Gmail, it should be "smtp.gmail.com".`);
+    }
+    if (port !== 465 && port !== 587) {
+      console.warn(`[EmailService] WARNING: Gmail SMTP usually uses port 465 (SSL) or 587 (TLS/STARTTLS). You are using port ${port}.`);
+    }
+    if (port === 465 && !secure) {
+      console.warn(`[EmailService] WARNING: Gmail SMTP port 465 requires secure (SSL) mode. Please check SMTP_PORT or secure setting.`);
+    }
+    if (port === 587 && secure) {
+      console.warn(`[EmailService] WARNING: Gmail SMTP port 587 requires secure to be false (it upgrades via STARTTLS). Please check SMTP_PORT or secure setting.`);
+    }
+    const cleanPass = pass.replace(/\s/g, '');
+    if (cleanPass.length !== 16) {
+      console.warn(`[EmailService] WARNING: Gmail SMTP_PASS is ${pass.length} characters long. A Google App Password must be exactly 16 characters (excluding spaces). Please generate a valid App Password from Google Account Settings.`);
+    }
+  }
+}
+
 // ─── Transporter Management ──────────────────────────────────────────────────
 
 let transporter: nodemailer.Transporter | null = null;
@@ -47,13 +72,22 @@ let lastVerificationError: string | null = null;
 let isVerified = false;
 
 export function initializeTransporter() {
+  if (transporter) {
+    return transporter; // Singleton pattern: return existing instance
+  }
+
   const config = getEmailConfig();
   if (config.errors.length > 0) {
     transporter = null;
     isVerified = false;
     lastVerificationError = `Configuration errors: ${config.errors.join(', ')}`;
-    console.error(`[EmailService] Configuration validation failed: ${lastVerificationError}`);
+    console.error(`[EmailService] CRITICAL: SMTP configuration is incomplete. Missing: ${config.errors.join(', ')}. Email service will be disabled.`);
     return null;
+  }
+
+  // Detect Gmail config issues and print warnings if found
+  if (config.provider === 'smtp') {
+    validateGmailConfig(config.host || '', config.port, config.secure, config.pass || '');
   }
 
   try {
@@ -66,14 +100,14 @@ export function initializeTransporter() {
           user: 'resend',
           pass: config.apiKey
         },
-        connectionTimeout: 10000, // 10 seconds
-        greetingTimeout: 10000,   // 10 seconds
-        socketTimeout: 15000,     // 15 seconds
+        connectionTimeout: 30000, // 30 seconds
+        greetingTimeout: 30000,   // 30 seconds
+        socketTimeout: 30000,     // 30 seconds
         lookup: (hostname: string, options: any, callback: any) => {
           dns.lookup(hostname, { ...options, family: 4 }, callback);
         }
       } as any);
-      console.log('[EmailService] Transporter initialized for Resend SMTP');
+      console.log('[EmailService] Singleton Resend SMTP Transporter initialized');
     } else {
       transporter = nodemailer.createTransport({
         host: config.host,
@@ -84,14 +118,14 @@ export function initializeTransporter() {
           pass: config.pass
         },
         tls: { rejectUnauthorized: false },
-        connectionTimeout: 10000, // 10 seconds
-        greetingTimeout: 10000,   // 10 seconds
-        socketTimeout: 15000,     // 15 seconds
+        connectionTimeout: 30000, // 30 seconds
+        greetingTimeout: 30000,   // 30 seconds
+        socketTimeout: 30000,     // 30 seconds
         lookup: (hostname: string, options: any, callback: any) => {
           dns.lookup(hostname, { ...options, family: 4 }, callback);
         }
       } as any);
-      console.log('[EmailService] Transporter initialized for SMTP');
+      console.log('[EmailService] Singleton SMTP Transporter initialized successfully');
     }
     return transporter;
   } catch (err: any) {
@@ -105,7 +139,7 @@ export function initializeTransporter() {
 
 export async function verifyTransporter(): Promise<{ success: boolean; error: string | null }> {
   const config = getEmailConfig();
-  if (config.provider === 'resend') {
+  if (config.provider === 'resend' && process.env.RESEND_API_KEY) {
     if (config.errors.length > 0) {
       isVerified = false;
       lastVerificationError = `Configuration errors: ${config.errors.join(', ')}`;
@@ -117,17 +151,29 @@ export async function verifyTransporter(): Promise<{ success: boolean; error: st
     return { success: true, error: null };
   }
 
-  // Re-run initialization to catch latest env settings
+  if (config.errors.length > 0) {
+    isVerified = false;
+    lastVerificationError = `Configuration errors: ${config.errors.join(', ')}`;
+    return { success: false, error: lastVerificationError };
+  }
+
+  // Ensure singleton is initialized
   initializeTransporter();
 
   if (!transporter) {
-    const errorMsg = lastVerificationError || 'Transporter not initialized due to configuration errors';
+    const errorMsg = 'Transporter not initialized due to configuration errors.';
     console.error(`[EmailService] Verification failed: ${errorMsg}`);
     return { success: false, error: errorMsg };
   }
 
+  console.log('[EmailService] SMTP Configuration details:');
+  console.log(`  SMTP Host:   ${config.host}`);
+  console.log(`  SMTP Port:   ${config.port}`);
+  console.log(`  SMTP Secure: ${config.secure}`);
+  console.log(`  SMTP User:   ${config.user}`);
+
+  console.log('[EmailService] Verifying transporter connection...');
   try {
-    console.log('[EmailService] Verifying transporter connection...');
     await transporter.verify();
     isVerified = true;
     lastVerificationError = null;
@@ -135,17 +181,29 @@ export async function verifyTransporter(): Promise<{ success: boolean; error: st
     return { success: true, error: null };
   } catch (err: any) {
     isVerified = false;
-    lastVerificationError = err?.message || String(err);
-    console.error(`[EmailService] Transporter verification failed: ${lastVerificationError}`);
-    return { success: false, error: lastVerificationError };
+
+    // Construct complete error details
+    const fullError = {
+      code: err?.code || 'N/A',
+      name: err?.name || 'Error',
+      message: err?.message || String(err),
+      stack: err?.stack || 'No stack trace available'
+    };
+
+    console.error('[EmailService] Transporter verification failed:');
+    console.error(`  Error Code:    ${fullError.code}`);
+    console.error(`  Error Name:    ${fullError.name}`);
+    console.error(`  Error Message: ${fullError.message}`);
+    console.error(`  Stack Trace:   ${fullError.stack}`);
+
+    lastVerificationError = fullError.message;
+    return { success: false, error: fullError.message };
   }
 }
 
 export function isEmailConfigured(): boolean {
-  const user = process.env.SMTP_USER;
-  const hasSmtp = !!(user && user !== 'your-email@gmail.com');
-  const hasResend = !!process.env.RESEND_API_KEY;
-  return hasSmtp || hasResend;
+  const config = getEmailConfig();
+  return config.errors.length === 0;
 }
 
 export async function getEmailHealthStatus(): Promise<{
@@ -177,6 +235,20 @@ function logEmail(status: 'REQUESTED' | 'QUEUED' | 'SENT' | 'FAILED' | 'PROVIDER
   console.log(`[EmailService Log] ${JSON.stringify(logObj, null, 2)}`);
 }
 
+// Helper to identify authentication errors
+function isAuthError(err: any): boolean {
+  const errMsg = String(err?.message || '').toLowerCase();
+  const errCode = String(err?.code || '').toUpperCase();
+  return (
+    errCode === 'EAUTH' ||
+    errCode === 'AUTH' ||
+    errMsg.includes('auth') ||
+    errMsg.includes('credential') ||
+    errMsg.includes('password') ||
+    errMsg.includes('not accepted')
+  );
+}
+
 // ─── Send Mail Base ──────────────────────────────────────────────────────────
 
 interface MailOptions {
@@ -192,7 +264,7 @@ async function sendMailInternal(options: MailOptions): Promise<{ success: boolea
   logEmail('REQUESTED', options.emailType, options.toEmail, { name: options.toName, subject: options.subject });
 
   if (!isEmailConfigured()) {
-    const errorMsg = 'Email provider is not configured.';
+    const errorMsg = 'Email provider is not configured or setup is incomplete.';
     logEmail('FAILED', options.emailType, options.toEmail, { error: errorMsg });
     return { success: false, error: errorMsg };
   }
@@ -237,9 +309,7 @@ async function sendMailInternal(options: MailOptions): Promise<{ success: boolea
   }
 
   // 2. Otherwise use SMTP (requires Pro plan on Railway or works in local environment)
-  if (!transporter) {
-    initializeTransporter();
-  }
+  initializeTransporter();
 
   if (!transporter) {
     const errorMsg = lastVerificationError || 'Transporter is not initialized.';
@@ -249,24 +319,56 @@ async function sendMailInternal(options: MailOptions): Promise<{ success: boolea
 
   logEmail('QUEUED', options.emailType, options.toEmail);
 
-  try {
-    const info = await transporter.sendMail({
-      from: `"${fromName}" <${fromEmail}>`,
-      to: `"${options.toName}" <${options.toEmail}>`,
-      subject: options.subject,
-      text: options.text,
-      html: options.html
-    });
+  const retryDelays = [2000, 5000, 10000]; // 2s, 5s, 10s
+  let attempts = 0;
+  let lastError: any = null;
 
-    logEmail('SENT', options.emailType, options.toEmail, { messageId: info.messageId });
-    logEmail('PROVIDER_RESPONSE', options.emailType, options.toEmail, { response: info.response, messageId: info.messageId });
+  while (attempts <= 3) {
+    if (attempts > 0) {
+      const waitTime = retryDelays[attempts - 1];
+      console.log(`[EmailService] Retrying send to ${options.toEmail} in ${waitTime / 1000}s (Attempt ${attempts} of 3)...`);
+      await delay(waitTime);
+    }
 
-    return { success: true, messageId: info.messageId };
-  } catch (err: any) {
-    const errorMsg = err?.message || String(err);
-    logEmail('FAILED', options.emailType, options.toEmail, { error: errorMsg, rawError: err });
-    return { success: false, error: errorMsg };
+    try {
+      const info = await transporter.sendMail({
+        from: `"${fromName}" <${fromEmail}>`,
+        to: `"${options.toName}" <${options.toEmail}>`,
+        subject: options.subject,
+        text: options.text,
+        html: options.html
+      });
+
+      logEmail('SENT', options.emailType, options.toEmail, { messageId: info.messageId });
+      logEmail('PROVIDER_RESPONSE', options.emailType, options.toEmail, { response: info.response, messageId: info.messageId });
+
+      return { success: true, messageId: info.messageId };
+    } catch (err: any) {
+      lastError = err;
+      attempts++;
+      console.error(`[EmailService] Attempt ${attempts} failed for ${options.toEmail}: ${err?.message || String(err)}`);
+
+      // Skip retrying authentication failures immediately
+      if (isAuthError(err)) {
+        console.error('[EmailService] Authentication failure detected. Skipping retries.');
+        break;
+      }
+    }
   }
+
+  // Email failed permanently after all retries
+  const errorMsg = lastError?.message || 'Failed to deliver email after 3 retries.';
+  console.error('[EmailService Log] EMAIL DELIVERY FAILED PERMANENTLY:');
+  console.error(`  Recipient:       ${options.toEmail}`);
+  console.error(`  Subject:         ${options.subject}`);
+  console.error(`  Email Type:      ${options.emailType}`);
+  console.error(`  Last Error Code: ${lastError?.code || 'N/A'}`);
+  console.error(`  Error Message:   ${errorMsg}`);
+  console.error(`  Stack Trace:     ${lastError?.stack || 'N/A'}`);
+
+  logEmail('FAILED', options.emailType, options.toEmail, { error: errorMsg, rawError: lastError });
+
+  return { success: false, error: errorMsg };
 }
 
 // ─── Send Reminder Email ──────────────────────────────────────────────────────
