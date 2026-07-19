@@ -374,7 +374,21 @@ class ResendProvider implements EmailProvider {
   async send(payload: EmailPayload): Promise<{ success: boolean; messageId?: string; error?: string }> {
     const key = process.env.RESEND_API_KEY;
     const fromName = process.env.SMTP_FROM_NAME || 'Slack AI Assistant';
-    const fromEmail = process.env.EMAIL_FROM || process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER;
+    let fromEmail = process.env.EMAIL_FROM || process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER || '';
+
+    // Step 7: Automatically fallback to onboarding@resend.dev for public domains on Resend sandbox
+    const emailLower = fromEmail.toLowerCase();
+    if (
+      emailLower.endsWith('gmail.com') ||
+      emailLower.endsWith('yahoo.com') ||
+      emailLower.endsWith('outlook.com') ||
+      emailLower.endsWith('hotmail.com') ||
+      emailLower.endsWith('.ac.in') ||
+      emailLower === ''
+    ) {
+      console.log(`[EmailService] Sender "${fromEmail}" is a public/unverified domain. Falling back to "onboarding@resend.dev" for Resend compatibility.`);
+      fromEmail = 'onboarding@resend.dev';
+    }
 
     try {
       const response = await fetch('https://api.resend.com/emails', {
