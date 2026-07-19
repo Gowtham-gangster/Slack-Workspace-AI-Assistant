@@ -390,6 +390,14 @@ class ResendProvider implements EmailProvider {
       fromEmail = 'onboarding@resend.dev';
     }
 
+    // Step 7: Sandbox restriction redirection to the registered owner address
+    let toEmail = payload.toEmail;
+    const ownerEmail = process.env.SMTP_USER || process.env.EMAIL_FROM || '';
+    if (ownerEmail && toEmail.toLowerCase() !== ownerEmail.toLowerCase()) {
+      console.log(`[EmailService] Resend sandbox restriction: Redirecting email recipient from "${toEmail}" to verified owner account "${ownerEmail}".`);
+      toEmail = ownerEmail;
+    }
+
     try {
       const response = await fetch('https://api.resend.com/emails', {
         method: 'POST',
@@ -399,7 +407,7 @@ class ResendProvider implements EmailProvider {
         },
         body: JSON.stringify({
           from: `"${fromName}" <${fromEmail}>`,
-          to: [payload.toEmail],
+          to: [toEmail],
           subject: payload.subject,
           html: payload.html,
           text: payload.text
