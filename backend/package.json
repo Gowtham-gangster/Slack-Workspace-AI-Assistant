@@ -8,7 +8,8 @@
     "dev": "tsx src/index.ts",
     "build": "tsc",
     "start": "node dist/index.js",
-    "verify": "tsx src/tests/verify.ts"
+    "verify": "tsx src/tests/verify.ts",
+    "test-smtp": "tsx src/tests/test-smtp.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^0.6.0",
