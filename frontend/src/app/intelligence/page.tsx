@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import Sidebar from '../../components/Sidebar';
+import MobileBottomBar from '../../components/MobileBottomBar';
 import { apiFetch } from '../../lib/api';
 import { useTheme } from '../../components/ThemeContext';
 import AIErrorAlert from '../../components/AIErrorAlert';
@@ -295,6 +296,7 @@ export default function IntelligencePage() {
           </div>
         </div>
       </main>
+      <MobileBottomBar />
     </div>
   );
 }

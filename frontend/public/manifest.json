@@ -1,0 +1,29 @@
+{
+  "short_name": "Slack AI",
+  "name": "Slack AI Workspace Assistant",
+  "description": "Turn Workspace Noise Into Actionable Intelligence.",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "type": "image/png",
+      "sizes": "192x192",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/slack-app-icon.png",
+      "type": "image/png",
+      "sizes": "512x512"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#06070d",
+  "theme_color": "#7c6af7",
+  "display": "standalone",
+  "orientation": "any"
+}

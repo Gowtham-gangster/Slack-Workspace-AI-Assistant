@@ -26,11 +26,15 @@ import {
   Sun,
   Moon,
   AlertTriangle,
-  Play
+  Play,
+  Menu,
+  X
 } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import { useAuth } from '../components/AuthContext';
 import { useTheme } from '../components/ThemeContext';
+import MobileBottomBar from '../components/MobileBottomBar';
+import InteractiveDemoShowcase from '../components/InteractiveDemoShowcase';
 
 const ThreeHeroScene = dynamic(() => import('../components/ThreeHeroScene'), {
   ssr: false,
@@ -518,8 +522,11 @@ export default function LandingPage() {
     };
   }, [activeScenario]);
 
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
   // Scroll to element helper
   const scrollTo = (id: string) => {
+    setIsMobileMenuOpen(false);
     const el = document.getElementById(id);
     if (el) el.scrollIntoView({ behavior: 'smooth' });
   };
@@ -541,12 +548,21 @@ export default function LandingPage() {
           : 'border-white/[0.05] bg-[#030408]/65'
       }`}>
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-xl flex items-center justify-center bg-gradient-to-br from-[#7c6af7] to-[#6366f1] shadow-[0_4px_16px_rgba(124,106,247,0.35)]">
-            <Zap className="w-4.5 h-4.5 text-white" fill="white" />
+          <div className="relative shrink-0">
+            <div className="absolute inset-0 rounded-xl bg-gradient-to-br from-[#7c6af7] to-[#4f46e5] blur-md opacity-50 scale-110" />
+            <div className="relative w-8 h-8 rounded-xl bg-gradient-to-br from-[#9d8fff] via-[#7c6af7] to-[#4f46e5] p-[1.5px] shadow-[0_0_14px_rgba(124,106,247,0.5)]">
+              <div className="w-full h-full rounded-[9px] bg-[#1a1730] flex items-center justify-center overflow-hidden">
+                <img
+                  src="/slack-app-icon.png"
+                  alt="Slack AI Workspace Assistant Logo"
+                  className="w-5 h-5 object-contain"
+                />
+              </div>
+            </div>
           </div>
           <div>
             <span className={`font-bold text-[14px] tracking-tight transition-colors duration-300 ${isLightMode ? 'text-slate-800' : 'text-white'}`}>Slack AI</span>
-            <span className="text-[10px] block text-[#7c6af7] font-semibold tracking-wider uppercase leading-none">Intelligence Engine</span>
+            <span className="text-[10px] block text-[#7c6af7] font-semibold tracking-wider uppercase leading-none">WORKSPACE ASSISTANT</span>
           </div>
         </div>
 
@@ -559,7 +575,7 @@ export default function LandingPage() {
           <button onClick={() => scrollTo('security')} className={`hover:text-[#7c6af7] transition-colors cursor-pointer ${isLightMode ? 'hover:text-slate-900' : 'hover:text-white'}`}>Security</button>
         </nav>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3">
           <button
             onClick={toggleTheme}
             className={`inline-flex items-center justify-center p-2 rounded-xl border transition-all duration-300 outline-none ${
@@ -573,7 +589,7 @@ export default function LandingPage() {
           </button>
           <Link
             href="/login"
-            className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-[12px] font-semibold transition-all ${
+            className={`flex items-center gap-1.5 px-3.5 sm:px-4 py-2 rounded-xl text-[12px] font-semibold transition-all ${
               isLightMode
                 ? 'text-slate-700 bg-[#7c6af7]/10 hover:bg-[#7c6af7]/20 border border-[#7c6af7]/20 shadow-sm'
                 : 'text-white bg-white/[0.04] border border-white/[0.08] hover:bg-white/[0.08]'
@@ -582,8 +598,41 @@ export default function LandingPage() {
             Sign In
             <ArrowRight className="w-3.5 h-3.5" />
           </Link>
+          <button
+            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+            className={`md:hidden p-2 rounded-xl border transition-all ${
+              isLightMode ? 'bg-slate-100 border-slate-200 text-slate-700' : 'bg-white/5 border-white/10 text-slate-300'
+            }`}
+            aria-label="Toggle Mobile Menu"
+          >
+            {isMobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+          </button>
         </div>
       </header>
+
+      {/* MOBILE NAV DRAWER */}
+      <AnimatePresence>
+        {isMobileMenuOpen && (
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            className={`fixed top-16 left-0 right-0 z-40 p-6 border-b backdrop-blur-2xl md:hidden shadow-2xl ${
+              isLightMode ? 'bg-white/95 border-slate-200 text-slate-800' : 'bg-[#06070d]/95 border-white/10 text-white'
+            }`}
+          >
+            <div className="flex flex-col gap-4 text-sm font-semibold">
+              <button onClick={() => scrollTo('demo')} className="text-left py-2 border-b border-white/5">Interactive Demo</button>
+              <button onClick={() => scrollTo('features')} className="text-left py-2 border-b border-white/5">Use Cases</button>
+              <button onClick={() => scrollTo('story')} className="text-left py-2 border-b border-white/5">Vacation Story</button>
+              <button onClick={() => scrollTo('security')} className="text-left py-2 border-b border-white/5">Security</button>
+              <Link href="/support" onClick={() => setIsMobileMenuOpen(false)} className="text-left py-2 border-b border-white/5 text-[#7c6af7]">Help & Support</Link>
+              <Link href="/privacy" onClick={() => setIsMobileMenuOpen(false)} className="text-left py-2 border-b border-white/5">Privacy Policy</Link>
+              <Link href="/terms" onClick={() => setIsMobileMenuOpen(false)} className="text-left py-2">Terms & Conditions</Link>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* ────────────────── SECTION 1: HERO ────────────────── */}
       <section className="relative min-h-screen flex flex-col justify-center pt-20 z-10 px-6 lg:px-12">
@@ -618,6 +667,19 @@ export default function LandingPage() {
                 Ask AI Instead.
               </span>
             </motion.h1>
+
+            {/* Official Tagline */}
+            <motion.div
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.25 }}
+              className="inline-flex items-center gap-2 py-1 text-base md:text-lg lg:text-xl font-medium tracking-tight"
+            >
+              <Sparkles className="w-4.5 h-4.5 text-[#a78bfa] shrink-0 animate-pulse" />
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#7c6af7] via-purple-400 to-[#6366f1] font-semibold">
+                Turn Workspace Noise Into Actionable Intelligence.
+              </span>
+            </motion.div>
 
             <motion.p
               initial={{ opacity: 0, y: 15 }}
@@ -657,7 +719,7 @@ export default function LandingPage() {
           </div>
 
           {/* Right Column: Immersive 3D WebGL Scene */}
-          <div className="lg:col-span-6 h-[500px] lg:h-[650px] relative w-full rounded-3xl overflow-hidden">
+          <div className="lg:col-span-6 h-[340px] sm:h-[450px] lg:h-[650px] relative w-full rounded-3xl overflow-hidden">
             {/* Mockup Preview */}
             <motion.div style={{ opacity: opacityScene }} className="w-full h-full">
               <ThreeHeroScene />
@@ -667,109 +729,12 @@ export default function LandingPage() {
       </section>
 
       {/* ────────────────── SECTION 2: INTERACTIVE DEMO ────────────────── */}
-      <section id="demo" className={`relative z-10 py-32 px-6 lg:px-12 transition-colors duration-500 ${
+      <section id="demo" className={`relative z-10 py-24 sm:py-32 transition-colors duration-500 ${
         isLightMode
           ? 'bg-gradient-to-b from-transparent via-slate-100/50 to-slate-100'
           : 'bg-gradient-to-b from-transparent via-[#05060a]/80 to-[#05060a]'
       }`}>
-        <motion.div
-          initial={{ opacity: 0, y: 40, scale: 0.98 }}
-          whileInView={{ opacity: 1, y: 0, scale: 1 }}
-          viewport={{ once: true, margin: "-120px" }}
-          transition={{ duration: 0.8, ease: "easeOut" }}
-          className="max-w-7xl mx-auto w-full"
-        >
-          <div className="text-center max-w-2xl mx-auto mb-20 space-y-3">
-            <span className="text-[11px] font-bold uppercase tracking-widest text-[#7c6af7]">Interactive Assistant Demo</span>
-            <h2 className={`text-3xl md:text-5xl font-extrabold transition-colors duration-300 ${isLightMode ? 'text-slate-900' : 'text-white'} leading-tight`}>Ask your workspace anything</h2>
-            <p className={`text-[14px] md:text-[15px] transition-colors duration-300 ${isLightMode ? 'text-slate-500' : 'text-slate-400'}`}>Select a query below to see how Slack AI parses messages, retrieves answers, and organizes outcomes in seconds.</p>
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-16 items-stretch">
-            {/* Left Side: Interactive Assistant Chat Mockup */}
-            <div className="lg:col-span-7 h-[550px] lg:h-[680px] w-full flex relative order-1 lg:order-1">
-              <PipelineUIVisualizer
-                scenario={scenarios[activeScenario]}
-                isTyping={isTyping}
-                typedText={typedText}
-                showResponse={showResponse}
-              />
-            </div>
-
-            {/* Right Side: Clickable Scenarios Cards */}
-            <div className="lg:col-span-5 flex flex-col gap-4 justify-center order-2 lg:order-2">
-              {scenarios.map((item, idx) => {
-                const isActive = activeScenario === idx;
-                const icons = [Code, Activity, MessageSquare];
-                const Icon = icons[idx];
-                const titles = ["Engineering Updates", "Blockers & Support", "General sync recap"];
-                
-                return (
-                  <div
-                    key={idx}
-                    onClick={() => {
-                      setActiveScenario(idx);
-                    }}
-                    className={`group relative p-5 rounded-2xl border transition-all duration-300 cursor-pointer flex gap-4 text-left items-start select-none ${
-                      isActive
-                        ? `border-[#7c6af7]/40 bg-[#7c6af7]/5 ${isLightMode ? 'border-[#7c6af7]/40 bg-[#7c6af7]/5 shadow-md shadow-[#7c6af7]/10 text-slate-800' : 'border-white/20 bg-[#7c6af7]/5 shadow-[0_0_30px_rgba(124,106,247,0.12)] text-white'}`
-                        : `${
-                            isLightMode
-                              ? 'border-slate-200 bg-white shadow-[0_8px_30px_rgba(0,0,0,0.02)] opacity-80 hover:opacity-100 hover:bg-white hover:shadow-md hover:border-slate-300 text-slate-700'
-                              : 'border-white/[0.04] bg-white/[0.005] opacity-50 hover:opacity-85 hover:bg-white/[0.015]'
-                          }`
-                    }`}
-                  >
-                    {/* Active Accent Bar */}
-                    {isActive && (
-                      <motion.div
-                        layoutId="activeDemoIndicator"
-                        className="absolute left-0 top-3.5 bottom-3.5 w-1 rounded-r-md bg-[#7c6af7]"
-                        transition={{ type: 'spring', stiffness: 350, damping: 30 }}
-                      />
-                    )}
-
-                    {/* Icon container */}
-                    <div
-                      className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border transition-all duration-300 ${
-                        isActive
-                          ? `bg-[#7c6af7]/10 border-[#7c6af7]/20 text-[#a78bfa]`
-                          : `${isLightMode ? 'bg-slate-100 border-slate-200 text-slate-400' : 'bg-white/[0.03] border-white/[0.05] text-slate-500'}`
-                      }`}
-                    >
-                      <Icon className={`w-5 h-5 ${isActive ? 'animate-pulse' : ''}`} />
-                    </div>
-
-                    {/* Text contents */}
-                    <div className="flex-grow space-y-1">
-                      <span className="text-[9.5px] font-mono font-bold uppercase tracking-wider text-slate-500">
-                        {titles[idx]}
-                      </span>
-                      <h3
-                        className={`text-[13.5px] font-bold transition-colors ${
-                          isActive
-                            ? (isLightMode ? "text-slate-900" : "text-white")
-                            : (isLightMode ? "text-slate-700" : "text-slate-300")
-                        }`}
-                      >
-                        {item.query}
-                      </h3>
-                      <p
-                        className={`text-[11.5px] leading-relaxed transition-colors ${
-                          isActive
-                            ? (isLightMode ? "text-slate-600" : "text-slate-300")
-                            : (isLightMode ? "text-slate-500" : "text-slate-500")
-                        }`}
-                      >
-                        See the AI outline general updates, track action items, identify risks, and call out decisions automatically.
-                      </p>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </motion.div>
+        <InteractiveDemoShowcase />
       </section>
 
       {/* ────────────────── SECTION 3: USE CASES GRID ────────────────── */}
@@ -1105,18 +1070,29 @@ export default function LandingPage() {
           }`}
         >
           <div className="flex items-center gap-3">
-            <div className="w-6 h-6 rounded-lg flex items-center justify-center bg-gradient-to-br from-[#7c6af7] to-[#6366f1]">
-              <Zap className="w-3.5 h-3.5 text-white" fill="white" />
+            <div className="relative shrink-0">
+              <div className="absolute inset-0 rounded-lg bg-gradient-to-br from-[#7c6af7] to-[#4f46e5] blur-sm opacity-50 scale-110" />
+              <div className="relative w-6 h-6 rounded-lg bg-gradient-to-br from-[#9d8fff] via-[#7c6af7] to-[#4f46e5] p-[1px] shadow-[0_0_8px_rgba(124,106,247,0.5)]">
+                <div className="w-full h-full rounded-[5px] bg-[#1a1730] flex items-center justify-center overflow-hidden">
+                  <img
+                    src="/slack-app-icon.png"
+                    alt="Slack AI Workspace Assistant Logo"
+                    className="w-3.5 h-3.5 object-contain"
+                  />
+                </div>
+              </div>
             </div>
             <span>© 2026 Slack AI Workspace Assistant. All rights reserved.</span>
           </div>
 
-          <div className="flex items-center gap-6">
+          <div className="flex items-center gap-6 pb-12 md:pb-0">
+            <Link href="/support" className={`transition-colors ${isLightMode ? 'hover:text-slate-800' : 'hover:text-slate-300'}`}>Support</Link>
             <Link href="/privacy" className={`transition-colors ${isLightMode ? 'hover:text-slate-800' : 'hover:text-slate-300'}`}>Privacy Policy</Link>
             <Link href="/terms" className={`transition-colors ${isLightMode ? 'hover:text-slate-800' : 'hover:text-slate-300'}`}>Terms of Service</Link>
           </div>
         </motion.div>
       </footer>
+      <MobileBottomBar />
     </div>
   );
 }

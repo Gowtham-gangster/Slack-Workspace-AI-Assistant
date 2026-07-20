@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Sidebar from '../../components/Sidebar';
+import MobileBottomBar from '../../components/MobileBottomBar';
 import { apiFetch, getAuthToken } from '../../lib/api';
 import { useTheme } from '../../components/ThemeContext';
 import { 
@@ -485,6 +486,7 @@ export default function SettingsPage() {
 
         </div>
       </div>
+      <MobileBottomBar />
     </div>
   );
 }

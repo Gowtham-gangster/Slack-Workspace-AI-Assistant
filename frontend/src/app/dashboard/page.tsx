@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Sidebar from '../../components/Sidebar';
+import MobileBottomBar from '../../components/MobileBottomBar';
 import { apiFetch, getAuthToken } from '../../lib/api';
 import { socketService } from '../../lib/socketService';
 import dynamic from 'next/dynamic';
@@ -3623,6 +3624,8 @@ export default function DashboardPage() {
         </div>
       )}
 
+      {/* Mobile Bottom Navigation Bar */}
+      <MobileBottomBar />
     </div>
   );
 }

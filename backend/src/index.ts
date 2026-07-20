@@ -125,6 +125,7 @@ app.use('/api/chat', chatRoutes);
 app.use('/api/files', filesRoutes);
 app.use('/api/notifications', notificationsRoutes);
 app.use('/api/slack', slackRoutes);
+app.use('/api/support', emailRoutes);
 
 // ─── Direct Slack OAuth Redirect Routes ──────────────────────────────────────
 app.get('/auth/slack', (req, res) => {

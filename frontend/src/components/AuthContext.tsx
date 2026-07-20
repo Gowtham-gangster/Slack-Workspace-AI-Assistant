@@ -97,7 +97,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         pathname === '/login' ||
         pathname === '/' ||
         pathname === '/privacy' ||
-        pathname === '/terms';
+        pathname === '/terms' ||
+        pathname === '/support' ||
+        pathname?.startsWith('/support');
       if (!user && !isPublicPath) {
         router.push('/login');
       } else if (user && pathname === '/login') {

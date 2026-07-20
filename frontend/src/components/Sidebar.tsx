@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from './AuthContext';
@@ -20,20 +20,29 @@ import {
   CheckSquare,
   Network,
   BookOpen,
-  BarChart3,
-  Bookmark,
+  Search,
+  ChevronLeft,
+  ChevronRight,
+  Hash,
   MessageSquare,
+  Sparkles,
+  User,
+  Command,
+  Star,
+  HelpCircle
 } from 'lucide-react';
+import CommandPalette from './CommandPalette';
 
 const menuItems = [
-  { name: 'Dashboard',      path: '/dashboard',    icon: LayoutDashboard, desc: 'Overview & command center' },
-  { name: 'Intelligence',   path: '/intelligence',  icon: Brain,           desc: 'Topics, sentiment, health' },
-  { name: 'Action Center',  path: '/actions',       icon: CheckSquare,     desc: 'Tasks & action items' },
-  { name: 'Timeline',       path: '/timeline',      icon: Clock,           desc: 'Activity timeline' },
-  { name: 'Knowledge',      path: '/knowledge',     icon: Network,         desc: 'AI knowledge graph' },
-  { name: 'Memory',         path: '/memory',        icon: BookOpen,        desc: 'Workspace memory' },
-  { name: 'Reports',        path: '/reports',       icon: FileText,        desc: 'Analytics & exports' },
-  { name: 'Settings',       path: '/settings',      icon: SettingsIcon,    desc: 'Keys & config' },
+  { name: 'Workspace',      path: '/dashboard',    icon: LayoutDashboard, desc: 'Chat & channels' },
+  { name: 'Intelligence',   path: '/intelligence',  icon: Brain,           desc: 'AI Insights' },
+  { name: 'Action Center',  path: '/actions',       icon: CheckSquare,     desc: 'Task manager' },
+  { name: 'Timeline',       path: '/timeline',      icon: Clock,           desc: 'Activity feed' },
+  { name: 'Knowledge',      path: '/knowledge',     icon: Network,         desc: 'Semantic search' },
+  { name: 'Memory',         path: '/memory',        icon: BookOpen,        desc: 'Persistent graph' },
+  { name: 'Reports',        path: '/reports',       icon: FileText,        desc: 'Analytics' },
+  { name: 'Settings',       path: '/settings',      icon: SettingsIcon,    desc: 'Preferences' },
+  { name: 'Support',        path: '/support',       icon: HelpCircle,      desc: 'Contact & help' },
 ];
 
 const Sidebar = React.memo(function Sidebar() {
@@ -44,201 +53,193 @@ const Sidebar = React.memo(function Sidebar() {
   const isLightMode = theme === 'light';
   const queryClient = useQueryClient();
 
-  // Intent-based prefetching for all page routes and data queries (PERF-04)
-  const handlePrefetch = React.useCallback((path: string) => {
-    // 1. Prefetch routing chunks
-    router.prefetch(path);
+  const [isCollapsed, setIsCollapsed] = useState(false);
+  const [isCommandOpen, setIsCommandOpen] = useState(false);
 
-    // 2. Prefetch API endpoints needed for the targeted page
+  // Keyboard shortcut listener for Cmd+K / Ctrl+K
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        setIsCommandOpen((prev) => !prev);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  const handlePrefetch = React.useCallback((path: string) => {
+    router.prefetch(path);
     const prefetchOptions = { staleTime: 5000 };
     if (path === '/dashboard') {
       queryClient.prefetchQuery({ queryKey: ['dashboardStats'], queryFn: () => apiFetch('/api/dashboard/stats'), ...prefetchOptions });
       queryClient.prefetchQuery({ queryKey: ['channelsList'], queryFn: () => apiFetch('/api/channels'), ...prefetchOptions });
-      queryClient.prefetchQuery({ queryKey: ['intelligenceScore'], queryFn: () => apiFetch('/api/dashboard/intelligence-score'), ...prefetchOptions });
-      queryClient.prefetchQuery({ queryKey: ['dashboardInsights'], queryFn: () => apiFetch('/api/dashboard/insights'), ...prefetchOptions });
-      queryClient.prefetchQuery({ queryKey: ['bookmarkedMessages'], queryFn: () => apiFetch('/api/chat/bookmarks'), ...prefetchOptions });
-      queryClient.prefetchQuery({ queryKey: ['myReminders'], queryFn: () => apiFetch('/api/chat/reminders'), ...prefetchOptions });
     } else if (path === '/intelligence') {
-      queryClient.prefetchQuery({ queryKey: ['channelsList'], queryFn: () => apiFetch('/api/channels'), ...prefetchOptions });
       queryClient.prefetchQuery({ queryKey: ['intelligenceTopics'], queryFn: () => apiFetch('/api/intelligence/topics'), ...prefetchOptions });
-      queryClient.prefetchQuery({ queryKey: ['teamActivity'], queryFn: () => apiFetch('/api/intelligence/team-activity'), ...prefetchOptions });
-      queryClient.prefetchQuery({ queryKey: ['channelHealth'], queryFn: () => apiFetch('/api/intelligence/channel-health'), ...prefetchOptions });
-    } else if (path === '/actions') {
-      queryClient.prefetchQuery({ queryKey: ['actionItems'], queryFn: () => apiFetch('/api/actions'), ...prefetchOptions });
-      queryClient.prefetchQuery({ queryKey: ['channelsList'], queryFn: () => apiFetch('/api/channels'), ...prefetchOptions });
-    } else if (path === '/timeline') {
-      queryClient.prefetchQuery({ queryKey: ['channelsList'], queryFn: () => apiFetch('/api/channels'), ...prefetchOptions });
-    } else if (path === '/knowledge') {
-      queryClient.prefetchQuery({ queryKey: ['channelsList'], queryFn: () => apiFetch('/api/channels'), ...prefetchOptions });
     } else if (path === '/reports') {
-      queryClient.prefetchQuery({ queryKey: ['messageVolume'], queryFn: () => apiFetch('/api/analytics/message-volume'), ...prefetchOptions });
-      queryClient.prefetchQuery({ queryKey: ['channelActivity'], queryFn: () => apiFetch('/api/analytics/channel-activity'), ...prefetchOptions });
-      queryClient.prefetchQuery({ queryKey: ['taskCompletionStats'], queryFn: () => apiFetch('/api/analytics/task-completion'), ...prefetchOptions });
       queryClient.prefetchQuery({ queryKey: ['reports'], queryFn: () => apiFetch('/api/reports'), ...prefetchOptions });
-      queryClient.prefetchQuery({ queryKey: ['channels'], queryFn: () => apiFetch('/api/channels'), ...prefetchOptions });
-    } else if (path === '/settings') {
-      queryClient.prefetchQuery({ queryKey: ['settings'], queryFn: () => apiFetch('/api/settings'), ...prefetchOptions });
     }
   }, [router, queryClient]);
-
-  // Prefetch all navigation routes in the background on mount (PERF-04)
-  React.useEffect(() => {
-    menuItems.forEach((item) => {
-      router.prefetch(item.path);
-    });
-  }, [router]);
 
   const initials = (user?.fullName || user?.email || 'US').slice(0, 2).toUpperCase();
 
   return (
-    <aside className="w-[220px] flex flex-col h-full shrink-0 relative z-10 transition-colors duration-300"
-           style={{
-             background: isLightMode ? 'rgba(255,255,255,0.97)' : 'rgba(8,9,16,0.97)',
-             borderRight: isLightMode ? '1px solid rgba(0,0,0,0.08)' : '1px solid rgba(255,255,255,0.07)'
-           }}>
+    <>
+      <CommandPalette isOpen={isCommandOpen} onClose={() => setIsCommandOpen(false)} />
 
-      {/* Ambient top glow */}
-      <div className="absolute top-0 left-0 right-0 h-32 pointer-events-none"
-           style={{ background: 'radial-gradient(ellipse at 50% 0%, rgba(124,106,247,0.15) 0%, transparent 70%)' }} />
-
-      {/* Brand */}
-      <div className="h-14 flex items-center px-4 gap-3 shrink-0 relative">
-        <div className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0"
-             style={{ background: 'linear-gradient(135deg, #7c6af7, #6366f1)', boxShadow: '0 4px 16px rgba(124,106,247,0.4)' }}>
-          <Zap className="w-3.5 h-3.5 text-white" fill="white" />
-        </div>
-        <div className="min-w-0">
-          <h1 className={`font-bold text-[12px] leading-none tracking-tight ${isLightMode ? 'text-slate-800' : 'text-white'}`}>Slack AI</h1>
-          <span className="text-[9px] font-semibold mt-0.5 block" style={{ color: '#7c6af7' }}>Intelligence Platform</span>
-        </div>
-      </div>
-
-      {/* Divider */}
-      <div className="mx-4 border-t" style={{ borderColor: isLightMode ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.06)' }} />
-
-      {/* Navigation */}
-      <nav className="flex-1 px-2 py-4 space-y-0.5 overflow-y-auto">
-        <p className="text-[9px] font-semibold uppercase tracking-widest px-2 mb-2" style={{ color: isLightMode ? '#94a3b8' : '#374151' }}>Navigation</p>
-        {menuItems.map((item) => {
-          const isActive = pathname === item.path || (item.path !== '/' && (item.path === '/chat' ? pathname === '/chat' : pathname.startsWith(item.path)));
-          const Icon = item.icon;
-          return (
-            <Link
-              key={item.path}
-              href={item.path}
-              onMouseEnter={() => handlePrefetch(item.path)}
-              className="flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-[12px] font-medium transition-all duration-200 group relative overflow-hidden"
-              style={isActive ? {
-                background: 'linear-gradient(135deg, rgba(124,106,247,0.18), rgba(99,102,241,0.10))',
-                color: isLightMode ? '#6366f1' : '#a78bfa',
-                border: isLightMode ? '1px solid rgba(124,106,247,0.25)' : '1px solid rgba(124,106,247,0.2)',
-              } : {
-                color: isLightMode ? '#4b5563' : '#6b7280',
-                border: '1px solid transparent',
-              }}
-            >
-              {isActive && (
-                <div className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-4 rounded-r-full"
-                     style={{ background: 'linear-gradient(to bottom, #a78bfa, #7c6af7)' }} />
-              )}
-              <div className="w-6 h-6 rounded-lg flex items-center justify-center shrink-0 transition-all duration-200"
-                   style={isActive
-                     ? { background: 'rgba(124,106,247,0.25)' }
-                     : { background: isLightMode ? 'rgba(0,0,0,0.04)' : 'rgba(255,255,255,0.04)' }}>
-                <Icon className="w-3 h-3" style={isActive ? { color: isLightMode ? '#6366f1' : '#a78bfa' } : { color: isLightMode ? '#64748b' : '#6b7280' }} />
-              </div>
-              <div className="min-w-0 flex-1 flex items-center justify-between">
-                <div>
-                  <div className="leading-none text-[12px]">{item.name}</div>
-                  <div className="text-[9px] mt-0.5 leading-none font-normal" style={{ color: isActive ? (isLightMode ? 'rgba(99,102,241,0.7)' : 'rgba(167,139,250,0.5)') : (isLightMode ? '#94a3b8' : '#374151') }}>
-                    {item.desc}
-                  </div>
-                </div>
-              </div>
-            </Link>
-          );
-        })}
-      </nav>
-
-      {/* Divider */}
-      <div className="mx-4 border-t" style={{ borderColor: isLightMode ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.06)' }} />
-
-      {/* User section */}
-      <div className="p-3">
-        {/* Theme Toggle */}
+      <aside
+        className={`hidden md:flex flex-col h-full shrink-0 relative z-20 transition-all duration-300 ${
+          isCollapsed ? 'w-[72px]' : 'w-[230px]'
+        }`}
+        style={{
+          background: isLightMode ? 'rgba(255,255,255,0.98)' : 'rgba(8,9,16,0.98)',
+          borderRight: isLightMode ? '1px solid rgba(0,0,0,0.08)' : '1px solid rgba(255,255,255,0.07)'
+        }}
+      >
+        {/* Collapse Toggle Button */}
         <button
-          suppressHydrationWarning
-          onClick={toggleTheme}
-          className="w-full flex items-center justify-between px-2.5 py-2 rounded-xl text-[11px] font-medium transition-all duration-200 border mb-2.5 outline-none cursor-pointer"
-          style={{
-            color: isLightMode ? '#4b5563' : '#9ca3af',
-            borderColor: isLightMode ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.06)',
-            background: isLightMode ? 'rgba(0,0,0,0.02)' : 'rgba(255,255,255,0.02)',
-          }}
+          onClick={() => setIsCollapsed(!isCollapsed)}
+          className="absolute -right-3 top-6 z-30 w-6 h-6 rounded-full bg-card border border-border flex items-center justify-center text-muted-foreground hover:text-foreground shadow-md transition-all cursor-pointer"
+          aria-label="Toggle Sidebar"
         >
-          <span className="flex items-center gap-2">
-            {isLightMode ? (
-              <><Sun className="w-3 h-3 text-[#7c6af7]" />Light Mode</>
-            ) : (
-              <><Moon className="w-3 h-3 text-[#7c6af7]" />Dark Mode</>
-            )}
-          </span>
-          <div className={`relative w-7 h-4 rounded-full transition-colors duration-200 shrink-0 ${isLightMode ? 'bg-slate-200' : 'bg-[#7c6af7]'}`}>
-            <div className={`absolute top-0.5 left-0.5 w-3 h-3 rounded-full bg-white shadow-sm transition-transform duration-200 ${isLightMode ? 'translate-x-0' : 'translate-x-3'}`} />
-          </div>
+          {isCollapsed ? <ChevronRight className="w-3.5 h-3.5" /> : <ChevronLeft className="w-3.5 h-3.5" />}
         </button>
 
-        {/* User card */}
-        <Link
-          href="/profile"
-          onMouseEnter={() => router.prefetch('/profile')}
-          className={`flex items-center gap-2.5 p-2.5 rounded-xl mb-2 cursor-pointer border transition-all block ${
-            isLightMode ? 'hover:bg-slate-100/80 border-slate-200/80' : 'hover:bg-white/[0.05] border-white/[0.06]'
-          }`}
-        >
-          <div className="w-7 h-7 rounded-lg flex items-center justify-center text-[10px] font-bold shrink-0"
-               style={{ background: 'linear-gradient(135deg, #7c6af7, #6366f1)', color: '#fff' }}>
-            {initials}
+        {/* Brand Header */}
+        <div className="h-16 flex items-center px-4 gap-3 shrink-0 relative">
+          <div className="relative shrink-0">
+            <div className="absolute inset-0 rounded-xl bg-gradient-to-br from-[#7c6af7] to-[#4f46e5] blur-md opacity-50 scale-110" />
+            <div className="relative w-8 h-8 rounded-xl bg-gradient-to-br from-[#9d8fff] via-[#7c6af7] to-[#4f46e5] p-[1.5px] shadow-[0_0_14px_rgba(124,106,247,0.5)]">
+              <div className="w-full h-full rounded-[9px] bg-[#1a1730] flex items-center justify-center overflow-hidden">
+                <img
+                  src="/slack-app-icon.png"
+                  alt="Slack AI Workspace Assistant Logo"
+                  className="w-5 h-5 object-contain"
+                />
+              </div>
+            </div>
           </div>
-          <div className="min-w-0 flex-1">
-            <p className={`text-[11px] font-bold truncate leading-none ${isLightMode ? 'text-slate-800' : 'text-white'}`}>
-              {user?.fullName || user?.email || 'User'}
+          {!isCollapsed && (
+            <div className="min-w-0">
+              <h1 className={`font-bold text-sm leading-none tracking-tight ${isLightMode ? 'text-slate-900' : 'text-white'}`}>Slack AI</h1>
+              <span className="text-[10px] font-semibold mt-1 block text-primary">Workspace Assistant</span>
+            </div>
+          )}
+        </div>
+
+        {/* Global Search Trigger */}
+        <div className="px-3 mb-2">
+          <button
+            onClick={() => setIsCommandOpen(true)}
+            className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs text-muted-foreground bg-secondary/40 border border-border/60 hover:bg-secondary hover:text-foreground transition-all cursor-pointer ${
+              isCollapsed ? 'justify-center px-2' : ''
+            }`}
+          >
+            <div className="flex items-center gap-2">
+              <Search className="w-3.5 h-3.5 text-primary" />
+              {!isCollapsed && <span>Quick Search...</span>}
+            </div>
+            {!isCollapsed && (
+              <kbd className="hidden lg:inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-mono bg-muted rounded border border-border">
+                <Command className="w-2.5 h-2.5" />K
+              </kbd>
+            )}
+          </button>
+        </div>
+
+        {/* Navigation */}
+        <nav className="flex-1 px-2.5 py-2 space-y-1 overflow-y-auto">
+          {!isCollapsed && (
+            <p className="text-[10px] font-semibold uppercase tracking-wider px-2 mb-1 text-muted-foreground/70">
+              Platform
             </p>
-            {user?.fullName && (
-              <p className={`text-[9px] truncate mt-1 leading-none ${isLightMode ? 'text-slate-400' : 'text-slate-500'}`}>
-                {user.email}
-              </p>
-            )}
-          </div>
-          <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: '#10b981' }} />
-        </Link>
+          )}
 
-        {/* Logout */}
-        <button
-          suppressHydrationWarning
-          onClick={logout}
-          className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-[11px] font-medium transition-all duration-200"
-          style={{
-            color: isLightMode ? '#4b5563' : '#6b7280',
-            border: isLightMode ? '1px solid rgba(0,0,0,0.08)' : '1px solid rgba(255,255,255,0.06)'
-          }}
-          onMouseEnter={e => {
-            (e.currentTarget as HTMLButtonElement).style.color = '#f87171';
-            (e.currentTarget as HTMLButtonElement).style.borderColor = 'rgba(239,68,68,0.25)';
-            (e.currentTarget as HTMLButtonElement).style.background = 'rgba(239,68,68,0.07)';
-          }}
-          onMouseLeave={e => {
-            (e.currentTarget as HTMLButtonElement).style.color = isLightMode ? '#4b5563' : '#6b7280';
-            (e.currentTarget as HTMLButtonElement).style.borderColor = isLightMode ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.06)';
-            (e.currentTarget as HTMLButtonElement).style.background = 'transparent';
-          }}
-        >
-          <LogOut className="w-3 h-3" />
-          Sign Out
-        </button>
-      </div>
-    </aside>
+          {menuItems.map((item) => {
+            const isActive = pathname === item.path || (item.path !== '/' && pathname?.startsWith(item.path));
+            const Icon = item.icon;
+
+            return (
+              <Link
+                key={item.path}
+                href={item.path}
+                onMouseEnter={() => handlePrefetch(item.path)}
+                title={isCollapsed ? item.name : undefined}
+                className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium transition-all group relative ${
+                  isActive
+                    ? 'bg-primary/15 text-primary border border-primary/20 shadow-sm'
+                    : 'text-muted-foreground hover:bg-secondary/50 hover:text-foreground border border-transparent'
+                } ${isCollapsed ? 'justify-center px-0' : ''}`}
+              >
+                {isActive && (
+                  <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-5 bg-primary rounded-r-full" />
+                )}
+                <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-primary' : 'text-muted-foreground group-hover:text-foreground'}`} />
+                {!isCollapsed && (
+                  <div className="min-w-0 flex-1">
+                    <div className="leading-none text-xs font-medium">{item.name}</div>
+                    <div className="text-[10px] mt-1 leading-none text-muted-foreground/80 font-normal truncate">
+                      {item.desc}
+                    </div>
+                  </div>
+                )}
+              </Link>
+            );
+          })}
+        </nav>
+
+        {/* User & Settings Footer */}
+        <div className="p-3 border-t border-border/60 space-y-2">
+          {/* Theme Toggle */}
+          <button
+            onClick={toggleTheme}
+            className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium text-muted-foreground bg-secondary/30 border border-border/60 hover:bg-secondary hover:text-foreground transition-all cursor-pointer ${
+              isCollapsed ? 'justify-center px-0' : ''
+            }`}
+          >
+            <span className="flex items-center gap-2">
+              {isLightMode ? <Sun className="w-3.5 h-3.5 text-amber-500" /> : <Moon className="w-3.5 h-3.5 text-primary" />}
+              {!isCollapsed && (isLightMode ? 'Light Mode' : 'Dark Mode')}
+            </span>
+          </button>
+
+          {/* User Profile Quick Card */}
+          <Link
+            href="/profile"
+            className={`flex items-center gap-2.5 p-2 rounded-xl border border-border/50 bg-secondary/20 hover:bg-secondary/60 transition-all ${
+              isCollapsed ? 'justify-center p-2' : ''
+            }`}
+          >
+            <div className="w-7 h-7 rounded-lg bg-gradient-to-tr from-primary to-accent text-white flex items-center justify-center text-[10px] font-bold shrink-0">
+              {initials}
+            </div>
+            {!isCollapsed && (
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-bold text-foreground truncate leading-none">
+                  {user?.fullName || user?.email || 'User'}
+                </p>
+                <p className="text-[10px] text-muted-foreground truncate mt-0.5 leading-none">
+                  {user?.email}
+                </p>
+              </div>
+            )}
+          </Link>
+
+          {/* Logout */}
+          {!isCollapsed && (
+            <button
+              onClick={logout}
+              className="w-full flex items-center justify-center gap-2 px-3 py-1.5 rounded-xl text-xs text-muted-foreground hover:text-destructive hover:bg-destructive/10 border border-transparent hover:border-destructive/20 transition-all cursor-pointer"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+              <span>Sign Out</span>
+            </button>
+          )}
+        </div>
+      </aside>
+    </>
   );
 });
 
 export default Sidebar;
+

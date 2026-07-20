@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import Sidebar from '../../components/Sidebar';
+import MobileBottomBar from '../../components/MobileBottomBar';
 import { useAuth } from '../../components/AuthContext';
 import { apiFetch } from '../../lib/api';
 import { useTheme } from '../../components/ThemeContext';
@@ -328,6 +329,7 @@ export default function ProfilePage() {
 
         </div>
       </div>
+      <MobileBottomBar />
     </div>
   );
 }

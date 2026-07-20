@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import Sidebar from '../../components/Sidebar';
+import MobileBottomBar from '../../components/MobileBottomBar';
 import { apiFetch } from '../../lib/api';
 import { useTheme } from '../../components/ThemeContext';
 import { useAuth } from '../../components/AuthContext';
@@ -351,6 +352,7 @@ export default function WorkspaceMemoryPage() {
 
         </div>
       </main>
+      <MobileBottomBar />
     </div>
   );
 }

@@ -88,7 +88,7 @@ function ResetPasswordContent() {
   };
 
   return (
-    <main className={`min-h-screen w-full flex items-center justify-center relative px-4 overflow-hidden selection:bg-[#7c6af7]/30 transition-colors duration-500 ${
+    <main className={`fixed inset-0 w-full overflow-hidden selection:bg-[#7c6af7]/30 transition-colors duration-500 ${
       isLightMode ? 'bg-[#f8fafc]' : 'bg-[#030408]'
     }`}>
       
@@ -180,21 +180,37 @@ function ResetPasswordContent() {
         </button>
       </header>
 
+      {/* Inner smooth-scroll layer — sits above background, below header */}
+      <div className="absolute inset-0 overflow-y-auto overflow-x-hidden pt-20 pb-10 flex items-start justify-center px-4" style={{ scrollBehavior: 'smooth' }}>
+
       {/* Reset Card */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.6 }}
-        className={`w-full max-w-md backdrop-blur-xl p-8 rounded-[32px] border relative z-10 transition-all duration-500 ${
+        className={`w-full max-w-md backdrop-blur-xl p-8 rounded-[32px] border relative z-10 transition-all duration-500 mb-4 ${
           isLightMode
             ? 'bg-white/70 border-slate-200/80 shadow-[0_12px_40px_rgba(0,0,0,0.06)]'
             : 'bg-[#080911]/60 border-white/[0.06] shadow-2xl'
         }`}
       >
         <div className="flex flex-col items-center mb-8">
-          <div className="p-3 rounded-2xl bg-gradient-to-br from-[#7c6af7] to-[#6366f1] text-white mb-4 shadow-[0_4px_20px_rgba(124,106,247,0.3)]">
-            <Sparkles className="w-6 h-6" />
+          <div className="relative mb-3">
+            <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-[#7c6af7] to-[#4f46e5] blur-lg opacity-60 scale-110" />
+            <div className="relative w-16 h-16 rounded-2xl bg-gradient-to-br from-[#9d8fff] via-[#7c6af7] to-[#4f46e5] p-0.5 shadow-[0_0_24px_rgba(124,106,247,0.6)]">
+              <div className="w-full h-full rounded-[10px] bg-[#1a1730] flex items-center justify-center overflow-hidden">
+                <img
+                  src="/slack-app-icon.png"
+                  alt="Slack AI Workspace Assistant Logo"
+                  className="w-11 h-11 object-contain"
+                />
+              </div>
+            </div>
           </div>
+          <span className="text-[11px] font-bold text-[#7c6af7] tracking-wider uppercase mb-1">Slack AI</span>
+          <p className="text-xs font-semibold text-center text-transparent bg-clip-text bg-gradient-to-r from-[#7c6af7] via-purple-400 to-[#6366f1] mb-2 px-2">
+            Turn Workspace Noise Into Actionable Intelligence.
+          </p>
           <h1 className={`text-2xl font-extrabold tracking-tight text-center transition-colors duration-500 ${
             isLightMode ? 'text-slate-900' : 'text-white'
           }`}>
@@ -379,6 +395,7 @@ function ResetPasswordContent() {
           </form>
         )}
       </motion.div>
+      </div>{/* end inner scroll layer */}
     </main>
   );
 }

@@ -1,209 +1,579 @@
 'use client';
 
-import React from 'react';
-import { motion } from 'framer-motion';
+import React, { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import Link from 'next/link';
-import { Zap, ArrowLeft, Scale, ShieldCheck, HeartHandshake, EyeOff, AlertTriangle } from 'lucide-react';
+import {
+  Zap,
+  ArrowLeft,
+  Scale,
+  ShieldCheck,
+  HeartHandshake,
+  AlertTriangle,
+  FileText,
+  ChevronUp,
+  Sun,
+  Moon,
+  ArrowUpRight,
+  Sparkles,
+  Server,
+  UserCheck,
+  Mail,
+  Ban,
+  Copyright,
+  Clock,
+  CheckCircle2
+} from 'lucide-react';
+import { useTheme } from '../../components/ThemeContext';
 import { useAuth } from '../../components/AuthContext';
+import MobileBottomBar from '../../components/MobileBottomBar';
+
+const LinkedInIcon = ({ className = "w-5 h-5" }: { className?: string }) => (
+  <svg className={className} fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+    <path d="M19 3a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14m-.5 15.5v-5.3a3.26 3.26 0 0 0-3.26-3.26c-.85 0-1.84.52-2.28 1.3v-1.11h-2.79v8.37h2.79v-4.93c0-.77.62-1.4 1.39-1.4a1.4 1.4 0 0 1 1.4 1.4v4.93h2.75M6.88 8.56a1.68 1.68 0 0 0 1.68-1.68c0-.93-.75-1.69-1.68-1.69a1.69 1.69 0 0 0-1.69 1.69c0 .93.76 1.68 1.69 1.68m1.39 9.94v-8.37H5.5v8.37h2.77z" />
+  </svg>
+);
+
+const sections = [
+  { id: 'acceptance-of-terms', title: '1. Acceptance of Terms' },
+  { id: 'user-accounts', title: '2. User Accounts' },
+  { id: 'acceptable-use', title: '3. Acceptable Use Policy' },
+  { id: 'ai-disclaimer', title: '4. AI Output Disclaimer' },
+  { id: 'slack-integration', title: '5. Slack Integration' },
+  { id: 'intellectual-property', title: '6. Intellectual Property' },
+  { id: 'service-availability', title: '7. Service Availability' },
+  { id: 'limitation-of-liability', title: '8. Limitation of Liability' },
+  { id: 'account-termination', title: '9. Account Termination' },
+  { id: 'changes-to-terms', title: '10. Changes to Terms' },
+  { id: 'contact', title: '11. Contact Information' }
+];
 
 export default function TermsOfServicePage() {
+  const { theme, toggleTheme } = useTheme();
   const { user } = useAuth();
+  const isLightMode = theme === 'light';
+
+  const [activeSection, setActiveSection] = useState('acceptance-of-terms');
+  const [scrollProgress, setScrollProgress] = useState(0);
+  const [showBackToTop, setShowBackToTop] = useState(false);
+
+  const linkedinUrl = process.env.NEXT_PUBLIC_LINKEDIN_URL || 'https://www.linkedin.com/in/pusuloorigowtham7505/';
+  const supportEmail = process.env.NEXT_PUBLIC_SUPPORT_EMAIL || 'support@slackai.app';
+
+  // Track scroll progress and active section
+  useEffect(() => {
+    const handleScroll = () => {
+      const totalHeight = document.documentElement.scrollHeight - window.innerHeight;
+      if (totalHeight > 0) {
+        setScrollProgress((window.scrollY / totalHeight) * 100);
+      }
+      setShowBackToTop(window.scrollY > 300);
+
+      // Section intersection detection
+      const isAtBottom = window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 80;
+      if (isAtBottom) {
+        setActiveSection(sections[sections.length - 1].id);
+        return;
+      }
+
+      const scrollPosition = window.scrollY + 250;
+      for (let i = sections.length - 1; i >= 0; i--) {
+        const element = document.getElementById(sections[i].id);
+        if (element && element.offsetTop <= scrollPosition) {
+          setActiveSection(sections[i].id);
+          break;
+        }
+      }
+    };
+
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  const scrollToSection = (id: string) => {
+    const element = document.getElementById(id);
+    if (element) {
+      const yOffset = -90;
+      const y = element.getBoundingClientRect().top + window.pageYOffset + yOffset;
+      window.scrollTo({ top: y, behavior: 'smooth' });
+    }
+  };
+
+  const scrollToTop = () => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
   return (
-    <div className="relative bg-[#030408] text-[#e8eaf0] selection:bg-[#7c6af7]/35 min-h-screen overflow-x-hidden font-sans">
-      
-      {/* Immersive background glows */}
-      <div className="absolute top-[-10%] right-[5%] w-[50vw] h-[50vw] rounded-full bg-[#8b5cf6]/5 blur-[140px] pointer-events-none z-0" />
-      <div className="absolute bottom-[20%] left-[-10%] w-[60vw] h-[60vw] rounded-full bg-[#7c6af7]/5 blur-[160px] pointer-events-none z-0" />
+    <div className={`min-h-screen w-full flex flex-col font-sans relative overflow-x-hidden selection:bg-primary/30 ${
+      isLightMode ? 'bg-[#f8fafc] text-slate-900' : 'bg-[#06070d] text-slate-100'
+    }`}>
+      {/* Scroll Progress Bar */}
+      <div className="fixed top-0 left-0 right-0 h-1 bg-transparent z-[100]">
+        <div
+          className="h-full bg-gradient-to-r from-primary via-accent to-purple-500 transition-all duration-150"
+          style={{ width: `${scrollProgress}%` }}
+        />
+      </div>
 
-      {/* FIXED NAV BAR */}
-      <header className="fixed top-0 left-0 right-0 h-16 shrink-0 flex items-center justify-between px-6 lg:px-12 backdrop-blur-xl border-b border-white/[0.05] bg-[#030408]/65 z-50">
+      {/* Ambient Top Glow */}
+      <div className="absolute top-0 left-0 right-0 h-96 pointer-events-none z-0"
+           style={{ background: 'radial-gradient(ellipse at 50% 0%, rgba(124,106,247,0.18) 0%, transparent 70%)' }} />
+
+      {/* FIXED PUBLIC HEADER */}
+      <header className={`fixed top-0 left-0 right-0 h-16 shrink-0 flex items-center justify-between px-6 lg:px-12 backdrop-blur-xl border-b z-50 transition-all duration-300 ${
+        isLightMode ? 'border-slate-200/60 bg-white/75 shadow-sm' : 'border-white/[0.08] bg-[#06070d]/70'
+      }`}>
         <Link href="/" className="flex items-center gap-3 hover:opacity-90 transition-opacity">
-          <div className="w-8 h-8 rounded-xl flex items-center justify-center bg-gradient-to-br from-[#7c6af7] to-[#6366f1] shadow-[0_4px_16px_rgba(124,106,247,0.35)]">
-            <Zap className="w-4.5 h-4.5 text-white" fill="white" />
+          <div className="relative shrink-0">
+            <div className="absolute inset-0 rounded-xl bg-gradient-to-br from-[#7c6af7] to-[#4f46e5] blur-md opacity-50 scale-110" />
+            <div className="relative w-8 h-8 rounded-xl bg-gradient-to-br from-[#9d8fff] via-[#7c6af7] to-[#4f46e5] p-[1.5px] shadow-[0_0_14px_rgba(124,106,247,0.5)]">
+              <div className="w-full h-full rounded-[9px] bg-[#1a1730] flex items-center justify-center overflow-hidden">
+                <img
+                  src="/slack-app-icon.png"
+                  alt="Slack AI Workspace Assistant Logo"
+                  className="w-5 h-5 object-contain"
+                />
+              </div>
+            </div>
           </div>
           <div>
-            <span className="font-bold text-[14px] text-white tracking-tight">Slack AI</span>
-            <span className="text-[10px] block text-[#7c6af7] font-semibold tracking-wider uppercase leading-none">Intelligence Engine</span>
+            <span className={`font-bold text-[14px] tracking-tight block ${isLightMode ? 'text-slate-800' : 'text-white'}`}>Slack AI</span>
+            <span className="text-[10px] block text-[#7c6af7] font-semibold tracking-wider uppercase leading-none">WORKSPACE ASSISTANT</span>
           </div>
         </Link>
 
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3">
+          <button
+            onClick={toggleTheme}
+            className={`p-2 rounded-xl border transition-all text-muted-foreground hover:text-foreground ${
+              isLightMode ? 'bg-slate-100 border-slate-200' : 'bg-white/5 border-white/10'
+            }`}
+            aria-label="Toggle Theme"
+          >
+            {isLightMode ? <Sun className="w-4 h-4 text-amber-500" /> : <Moon className="w-4 h-4 text-primary" />}
+          </button>
+
           <Link
             href="/"
-            className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-[12px] font-semibold text-slate-300 bg-white/[0.04] border border-white/[0.08] hover:bg-white/[0.08] transition-all hover:text-white"
+            className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-semibold border transition-all ${
+              isLightMode 
+                ? 'border-slate-200 bg-white hover:bg-slate-50 text-slate-700 shadow-sm' 
+                : 'border-white/10 bg-white/5 hover:bg-white/10 text-slate-300'
+            }`}
           >
             <ArrowLeft className="w-3.5 h-3.5" />
-            Back to Home
+            <span>Home</span>
           </Link>
         </div>
       </header>
 
-      {/* Main Content Area */}
-      <main className="relative z-10 pt-32 pb-24 px-6 max-w-4xl mx-auto w-full">
-        <motion.div
-          initial={{ opacity: 0, y: 15 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6 }}
-          className="space-y-4 text-center mb-16"
-        >
-          <div className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider bg-[#7c6af7]/10 border border-[#7c6af7]/25 text-[#a78bfa]">
-            <Scale className="w-3.5 h-3.5" />
-            Agreement Terms
-          </div>
-          <h1 className="text-4xl md:text-5xl font-extrabold text-white tracking-tight leading-tight">
-            Terms of Service
-          </h1>
-          <p className="text-slate-400 text-[14px] font-mono">
-            Last Updated: June 22, 2026
-          </p>
-        </motion.div>
+      {/* Mobile Sticky Table of Contents Dropdown */}
+      <div className={`lg:hidden sticky top-16 z-30 px-4 py-2.5 border-b backdrop-blur-xl transition-colors ${
+        isLightMode ? 'bg-white/90 border-slate-200' : 'bg-[#06070d]/90 border-white/10'
+      }`}>
+        <div className="flex items-center gap-2 max-w-7xl mx-auto">
+          <FileText className="w-4 h-4 text-[#7c6af7] shrink-0" />
+          <select
+            value={activeSection}
+            onChange={(e) => scrollToSection(e.target.value)}
+            className={`w-full text-xs font-semibold rounded-xl px-3 py-2 border outline-none transition-colors ${
+              isLightMode ? 'bg-slate-50 border-slate-200 text-slate-800' : 'bg-white/5 border-white/10 text-white'
+            }`}
+          >
+            {sections.map((s) => (
+              <option key={s.id} value={s.id} className={isLightMode ? 'bg-white text-slate-800' : 'bg-[#0a0b14] text-white'}>
+                {s.title}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
 
-        {/* Highlight Cards */}
-        <motion.div
-          initial={{ opacity: 0, y: 15 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, delay: 0.15 }}
-          className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-16"
-        >
-          <div className="p-6 rounded-2xl border border-white/[0.06] bg-white/[0.01] flex flex-col items-center text-center space-y-3">
-            <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-[#7c6af7]/10 text-[#a78bfa] border border-[#7c6af7]/20">
-              <ShieldCheck className="w-5 h-5" />
+      {/* Main Page Layout with Constant Fixed Sidebar */}
+      <div className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 pt-24 pb-20 z-10 flex gap-12">
+
+        {/* Desktop Constant Fixed Table of Contents Sidebar */}
+        <aside className="hidden lg:block w-64 shrink-0 relative">
+          <div className="fixed top-24 w-64 space-y-4 max-h-[calc(100vh-140px)] overflow-y-auto pr-2">
+            <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-muted-foreground mb-3 px-2">
+              <Scale className="w-4 h-4 text-primary" />
+              <span>Terms Menu</span>
             </div>
-            <h3 className="font-bold text-white text-[15px]">Responsibility</h3>
-            <p className="text-[12px] text-slate-400 leading-relaxed">
-              You maintain all governance and operational authority over connected API scopes and credentials on your systems.
-            </p>
-          </div>
 
-          <div className="p-6 rounded-2xl border border-white/[0.06] bg-white/[0.01] flex flex-col items-center text-center space-y-3">
-            <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-[#0ea5e9]/10 text-[#38bdf8] border border-[#0ea5e9]/20">
-              <HeartHandshake className="w-5 h-5" />
+            <nav className="space-y-1">
+              {sections.map((section) => {
+                const isActive = activeSection === section.id;
+                return (
+                  <button
+                    key={section.id}
+                    onClick={() => scrollToSection(section.id)}
+                    className={`w-full text-left px-3 py-2 rounded-xl text-xs font-medium transition-all flex items-center justify-between group cursor-pointer ${
+                      isActive
+                        ? 'bg-primary/10 text-primary font-bold border border-primary/20'
+                        : isLightMode
+                        ? 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                        : 'text-slate-400 hover:bg-white/5 hover:text-white'
+                    }`}
+                  >
+                    <span className="truncate">{section.title}</span>
+                    {isActive && (
+                      <motion.span
+                        layoutId="activeDotTerms"
+                        className="w-1.5 h-1.5 rounded-full bg-primary shrink-0"
+                      />
+                    )}
+                  </button>
+                );
+              })}
+            </nav>
+
+            <div className={`p-4 rounded-2xl border text-xs space-y-2 mt-6 ${
+              isLightMode ? 'bg-white border-slate-200 shadow-sm' : 'bg-white/5 border-white/10'
+            }`}>
+              <div className="flex items-center gap-2 font-bold text-foreground">
+                <HeartHandshake className="w-4 h-4 text-primary" />
+                <span>Fair Use Agreement</span>
+              </div>
+              <p className="text-[11px] text-muted-foreground leading-relaxed">
+                By accessing Slack AI Workspace Assistant, you agree to comply with these terms and acceptable use guidelines.
+              </p>
             </div>
-            <h3 className="font-bold text-white text-[15px]">Service Use</h3>
-            <p className="text-[12px] text-slate-400 leading-relaxed">
-              Subject to these terms, we grant a non-exclusive license to operate our local indexing tools and visualization dashboards.
-            </p>
           </div>
+        </aside>
 
-          <div className="p-6 rounded-2xl border border-white/[0.06] bg-white/[0.01] flex flex-col items-center text-center space-y-3">
-            <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-[#f43f5e]/10 text-[#f472b6] border border-[#f43f5e]/20">
-              <AlertTriangle className="w-5 h-5" />
+        {/* Content Body */}
+        <main className="flex-1 max-w-3xl min-w-0">
+          
+          {/* Header Banner */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5 }}
+            className="mb-12 border-b border-border/50 pb-8"
+          >
+            <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full text-xs font-mono mb-4 border"
+                 style={{
+                   background: 'rgba(124,106,247,0.1)',
+                   borderColor: 'rgba(124,106,247,0.2)',
+                   color: '#7c6af7'
+                 }}>
+              <Scale className="w-3.5 h-3.5" />
+              <span>Terms & Conditions Agreement</span>
             </div>
-            <h3 className="font-bold text-white text-[15px]">Disclaimers</h3>
-            <p className="text-[12px] text-slate-400 leading-relaxed">
-              We offer analytics and summaries "as-is". Verify critical items manually before acting on AI decisions.
-            </p>
-          </div>
-        </motion.div>
 
-        {/* Legal Text Content */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, delay: 0.3 }}
-          className="prose prose-invert max-w-none space-y-10 text-[14.5px] text-slate-300 leading-relaxed font-sans"
-        >
-          <section className="space-y-3">
-            <h2 className="text-xl font-bold text-white tracking-tight flex items-center gap-2 border-b border-white/5 pb-2">
-              <span className="text-[#7c6af7] font-mono text-[14px]">01.</span>
-              Acceptance of Terms
-            </h2>
-            <p>
-              By accessing, integrating, or utilizing the <strong>Slack AI Workspace Assistant</strong> software, web console, or MCP plugins (collectively, the "Services"), you agree to compile with and be bound by these Terms of Service ("Terms"). If you represent an enterprise or entity, you represent that you possess authorization to bind such entity to these Terms.
-            </p>
-            <p>
-              If you disagree with any portion of these provisions, you must immediately deactivate all Slack tokens, disconnect connected local databases, and discontinue use of the Services.
-            </p>
-          </section>
+            <h1 className="text-3xl sm:text-4xl md:text-5xl font-extrabold tracking-tight mb-4 text-foreground">
+              Terms & Conditions
+            </h1>
 
-          <section className="space-y-3">
-            <h2 className="text-xl font-bold text-white tracking-tight flex items-center gap-2 border-b border-white/5 pb-2">
-              <span className="text-[#7c6af7] font-mono text-[14px]">02.</span>
-              License and Scope of Use
-            </h2>
-            <p>
-              We grant you a limited, non-transferable, revocable license to deploy our database connector scripts, local Model Context Protocol (MCP) handlers, and frontend reporting UI within your designated workspace. This license is subject to the following strict conditions:
+            <p className={`text-sm md:text-base leading-relaxed mb-4 ${
+              isLightMode ? 'text-slate-600' : 'text-slate-400'
+            }`}>
+              These Terms & Conditions set out the rules and conditions for accessing and using the <strong>Slack AI Workspace Assistant</strong> platform, API services, and Slack integration features.
             </p>
-            <ul className="list-disc pl-5 space-y-2 text-slate-400">
-              <li>You will not copy, modify, reverse engineer, or attempt to extract the source code of private frontend components unless explicitly permitted under open-source exceptions.</li>
-              <li>You will not configure the background polling scheduler to make excessive API requests that intentionally throttle, block, or abuse Slack's developer guidelines.</li>
-              <li>You agree to comply with Slack's developer terms of service when configuring token permissions.</li>
-            </ul>
-          </section>
 
-          <section className="space-y-3">
-            <h2 className="text-xl font-bold text-white tracking-tight flex items-center gap-2 border-b border-white/5 pb-2">
-              <span className="text-[#7c6af7] font-mono text-[14px]">03.</span>
-              Host Sandboxing & Database Security
-            </h2>
-            <p>
-              Because our solution runs database indexes (such as local MySQL tables or local vector directories) inside your own server environment, you acknowledge and agree that:
-            </p>
-            <ul className="list-disc pl-5 space-y-2 text-slate-400">
-              <li><strong>Environment Configuration:</strong> You are solely responsible for securing files containing database secrets, OAuth credentials, and API environment variables.</li>
-              <li><strong>Local Infrastructure Maintenance:</strong> We are not liable for database index corruption, data loss within your local cluster, or unauthorized access to local ports or MCP processes on your network.</li>
-            </ul>
-          </section>
+            <div className="flex items-center gap-4 text-xs text-muted-foreground font-mono">
+              <span>Last Updated: July 20, 2026</span>
+              <span>•</span>
+              <span>Effective Date: Immediate</span>
+            </div>
+          </motion.div>
 
-          <section className="space-y-3">
-            <h2 className="text-xl font-bold text-white tracking-tight flex items-center gap-2 border-b border-white/5 pb-2">
-              <span className="text-[#7c6af7] font-mono text-[14px]">04.</span>
-              AI Summarizations & Accuracy Disclaimer
+          {/* Section 1: Acceptance of Terms */}
+          <section id="acceptance-of-terms" className="mb-14 scroll-mt-24">
+            <h2 className="text-xl font-bold text-foreground flex items-center gap-2 mb-4">
+              <CheckCircle2 className="w-5 h-5 text-primary" />
+              <span>1. Acceptance of Terms</span>
             </h2>
-            <p>
-              The Slack AI Workspace Assistant uses natural language models to compile conversation insights, assign tasks, and categorize sentiment.
-            </p>
-            <div className="p-4 rounded-xl border border-yellow-500/15 bg-yellow-500/5 text-slate-300 flex items-start gap-3">
-              <AlertTriangle className="w-5 h-5 text-yellow-500 shrink-0 mt-0.5" />
-              <p className="text-[12.5px] leading-relaxed">
-                <strong>CRITICAL NOTICE:</strong> Artificial intelligence outputs can occasionally manifest inaccuracies, hallucinations, or misattributions. The automatically generated action items, timeline summaries, and insights represent machine estimations. You must independently audit and verify all critical engineering directions, system plans, and timeline schedules before execution.
+            
+            <div className={`p-6 rounded-3xl border space-y-4 leading-relaxed text-sm ${
+              isLightMode ? 'bg-white border-slate-200/80 shadow-sm text-slate-700' : 'bg-card/70 border-border/70 text-slate-300'
+            }`}>
+              <p>
+                By creating an account, accessing, or using <strong>Slack AI Workspace Assistant</strong>, you acknowledge that you have read, understood, and agree to be bound by these Terms & Conditions and our Privacy Policy.
+              </p>
+              <p>
+                If you do not agree with any part of these terms, you must refrain from accessing or using our application.
               </p>
             </div>
           </section>
 
-          <section className="space-y-3">
-            <h2 className="text-xl font-bold text-white tracking-tight flex items-center gap-2 border-b border-white/5 pb-2">
-              <span className="text-[#7c6af7] font-mono text-[14px]">05.</span>
-              Limitation of Liability
+          {/* Section 2: User Accounts */}
+          <section id="user-accounts" className="mb-14 scroll-mt-24">
+            <h2 className="text-xl font-bold text-foreground flex items-center gap-2 mb-4">
+              <UserCheck className="w-5 h-5 text-primary" />
+              <span>2. User Accounts & Responsibilities</span>
             </h2>
-            <p>
-              TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW, IN NO EVENT SHALL WE OR OUR DEVELOPERS BE LIABLE FOR ANY DIRECT, INDIRECT, PUNITIVE, INCIDENTAL, SPECIAL, OR CONSEQUENTIAL DAMAGES WHATSOEVER (INCLUDING, WITHOUT LIMITATION, DAMAGES FOR LOSS OF BUSINESS PROFITS, DATA LEAKS, SYSTEM INTEGRITY LOSS, OR ANY OTHER PECUNIARY LOSS) ARISING OUT OF THE USE OR INABILITY TO USE THIS PRODUCT.
-            </p>
-          </section>
 
-          <section className="space-y-3">
-            <h2 className="text-xl font-bold text-white tracking-tight flex items-center gap-2 border-b border-white/5 pb-2">
-              <span className="text-[#7c6af7] font-mono text-[14px]">06.</span>
-              Modifications and Contact
-            </h2>
-            <p>
-              We reserve the right to modify these Terms at any time. Updates will be indicated by a revision of the "Last Updated" date at the top of this document. Continued use of the service following modifications constitutes your agreement to the updated Terms.
-            </p>
-            <p>
-              For legal inquiries or technical assistance, contact the developer desk or email legal@slack-ai-assistant.local.
-            </p>
-          </section>
-        </motion.div>
-      </main>
-
-      {/* FOOTER */}
-      <footer className="relative border-t border-white/[0.05] bg-[#04050a] py-12 px-6 lg:px-12 z-10">
-        <div className="max-w-6xl mx-auto w-full flex flex-col md:flex-row justify-between items-center gap-4 text-[12px] text-slate-500 font-medium">
-          <div className="flex items-center gap-3">
-            <div className="w-6 h-6 rounded-lg flex items-center justify-center bg-gradient-to-br from-[#7c6af7] to-[#6366f1]">
-              <Zap className="w-3.5 h-3.5 text-white" fill="white" />
+            <div className={`p-6 rounded-3xl border space-y-4 text-sm ${
+              isLightMode ? 'bg-white border-slate-200/80 shadow-sm text-slate-700' : 'bg-card/70 border-border/70 text-slate-300'
+            }`}>
+              <p>To use our services, you must register an account and maintain accurate credentials:</p>
+              
+              <ul className="space-y-2 text-xs">
+                <li className="flex items-start gap-2.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-primary mt-1.5 shrink-0" />
+                  <span><strong>Account Confidentiality:</strong> You are solely responsible for keeping your password and authentication token confidential.</span>
+                </li>
+                <li className="flex items-start gap-2.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-primary mt-1.5 shrink-0" />
+                  <span><strong>Account Activity:</strong> You are responsible for all activities, requests, and AI queries executed under your user credentials.</span>
+                </li>
+                <li className="flex items-start gap-2.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-primary mt-1.5 shrink-0" />
+                  <span><strong>Accurate Information:</strong> You agree to provide true, accurate, and current registration information.</span>
+                </li>
+              </ul>
             </div>
-            <span>© 2026 Slack AI Workspace Assistant. All rights reserved.</span>
-          </div>
+          </section>
 
+          {/* Section 3: Acceptable Use Policy */}
+          <section id="acceptable-use" className="mb-14 scroll-mt-24">
+            <h2 className="text-xl font-bold text-foreground flex items-center gap-2 mb-4">
+              <Ban className="w-5 h-5 text-primary" />
+              <span>3. Acceptable Use Policy</span>
+            </h2>
+
+            <div className={`p-6 rounded-3xl border space-y-4 text-sm ${
+              isLightMode ? 'bg-white border-slate-200/80 shadow-sm text-slate-700' : 'bg-card/70 border-border/70 text-slate-300'
+            }`}>
+              <p>You agree not to misuse the application or assist others in doing so. You must NOT:</p>
+              
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                {[
+                  { title: 'AI Feature Abuse', desc: 'Executing automated spam scripts or rate-limit circumvention.' },
+                  { title: 'Malicious Content', desc: 'Uploading viruses, malware, or harmful scripts.' },
+                  { title: 'Unauthorized Access', desc: 'Attempting to breach security or access other users\' data.' },
+                  { title: 'Reverse Engineering', desc: 'Decompiling, scraping, or reverse engineering backend APIs.' },
+                  { title: 'Slack Scope Misuse', desc: 'Bypassing authorized Slack permissions or workspace consent.' },
+                  { title: 'Spam & Harassment', desc: 'Using workspace notifications to send unsolicited messages.' }
+                ].map((item, i) => (
+                  <div key={i} className={`p-3.5 rounded-2xl border ${
+                    isLightMode ? 'bg-rose-500/5 border-rose-500/15' : 'bg-rose-500/10 border-rose-500/20'
+                  }`}>
+                    <span className="font-bold text-rose-600 dark:text-rose-400 block mb-0.5">{item.title}</span>
+                    <span className="text-muted-foreground">{item.desc}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </section>
+
+          {/* Section 4: AI Output Disclaimer */}
+          <section id="ai-disclaimer" className="mb-14 scroll-mt-24">
+            <h2 className="text-xl font-bold text-foreground flex items-center gap-2 mb-4">
+              <Sparkles className="w-5 h-5 text-primary" />
+              <span>4. AI Features & Output Disclaimer</span>
+            </h2>
+
+            <div className={`p-6 rounded-3xl border space-y-4 text-sm ${
+              isLightMode ? 'bg-white border-slate-200/80 shadow-sm text-slate-700' : 'bg-card/70 border-border/70 text-slate-300'
+            }`}>
+              <p>
+                Our AI capabilities (summaries, action plans, decision tracking, and grammar checks) generate outputs based on probabilistic machine learning models.
+              </p>
+
+              <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-600 dark:text-amber-400 text-xs font-semibold flex items-start gap-2.5">
+                <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                <span>Disclaimer: AI-generated summaries and task suggestions are provided for informational assistance only. Users should review and verify critical business decisions before relying on them.</span>
+              </div>
+            </div>
+          </section>
+
+          {/* Section 5: Slack Integration */}
+          <section id="slack-integration" className="mb-14 scroll-mt-24">
+            <h2 className="text-xl font-bold text-foreground flex items-center gap-2 mb-4">
+              <Server className="w-5 h-5 text-primary" />
+              <span>5. Slack Integration Permissions</span>
+            </h2>
+
+            <div className={`p-6 rounded-3xl border space-y-3 text-sm leading-relaxed ${
+              isLightMode ? 'bg-white border-slate-200/80 shadow-sm text-slate-700' : 'bg-card/70 border-border/70 text-slate-300'
+            }`}>
+              <p>
+                Slack integration features depend entirely on OAuth 2.0 permissions granted by your workspace administrator. The application cannot access channels, files, or messages outside approved scopes.
+              </p>
+            </div>
+          </section>
+
+          {/* Section 6: Intellectual Property */}
+          <section id="intellectual-property" className="mb-14 scroll-mt-24">
+            <h2 className="text-xl font-bold text-foreground flex items-center gap-2 mb-4">
+              <Copyright className="w-5 h-5 text-primary" />
+              <span>6. Intellectual Property Rights</span>
+            </h2>
+
+            <div className={`p-6 rounded-3xl border space-y-3 text-sm leading-relaxed ${
+              isLightMode ? 'bg-white border-slate-200/80 shadow-sm text-slate-700' : 'bg-card/70 border-border/70 text-slate-300'
+            }`}>
+              <p>
+                All rights, title, and interest in and to <strong>Slack AI Workspace Assistant</strong> (including source code, UI designs, brand logos, graphics, and architectural components) remain the exclusive intellectual property of the developer.
+              </p>
+            </div>
+          </section>
+
+          {/* Section 7: Service Availability */}
+          <section id="service-availability" className="mb-14 scroll-mt-24">
+            <h2 className="text-xl font-bold text-foreground flex items-center gap-2 mb-4">
+              <Clock className="w-5 h-5 text-primary" />
+              <span>7. Service Availability & Maintenance</span>
+            </h2>
+
+            <div className={`p-6 rounded-3xl border space-y-3 text-sm leading-relaxed ${
+              isLightMode ? 'bg-white border-slate-200/80 shadow-sm text-slate-700' : 'bg-card/70 border-border/70 text-slate-300'
+            }`}>
+              <p>
+                We strive to maintain high uptime and system availability. However, the platform may undergo occasional scheduled maintenance, software updates, or feature improvements without prior notice.
+              </p>
+            </div>
+          </section>
+
+          {/* Section 8: Limitation of Liability */}
+          <section id="limitation-of-liability" className="mb-14 scroll-mt-24">
+            <h2 className="text-xl font-bold text-foreground flex items-center gap-2 mb-4">
+              <ShieldCheck className="w-5 h-5 text-primary" />
+              <span>8. Limitation of Liability</span>
+            </h2>
+
+            <div className={`p-6 rounded-3xl border space-y-3 text-sm leading-relaxed ${
+              isLightMode ? 'bg-white border-slate-200/80 shadow-sm text-slate-700' : 'bg-card/70 border-border/70 text-slate-300'
+            }`}>
+              <p>
+                The application is provided on an <strong>"AS IS"</strong> and <strong>"AS AVAILABLE"</strong> basis without warranties of any kind, express or implied. To the maximum extent permitted by law, the developer shall not be liable for indirect, incidental, or consequential damages resulting from platform use.
+              </p>
+            </div>
+          </section>
+
+          {/* Section 9: Account Termination */}
+          <section id="account-termination" className="mb-14 scroll-mt-24">
+            <h2 className="text-xl font-bold text-foreground flex items-center gap-2 mb-4">
+              <Ban className="w-5 h-5 text-primary" />
+              <span>9. Account Termination & Suspension</span>
+            </h2>
+
+            <div className={`p-6 rounded-3xl border space-y-3 text-sm leading-relaxed ${
+              isLightMode ? 'bg-white border-slate-200/80 shadow-sm text-slate-700' : 'bg-card/70 border-border/70 text-slate-300'
+            }`}>
+              <p>
+                We reserve the right to suspend or terminate user accounts that violate our Acceptable Use Policy, engage in abuse, or attempt unauthorized system access.
+              </p>
+            </div>
+          </section>
+
+          {/* Section 10: Changes to Terms */}
+          <section id="changes-to-terms" className="mb-14 scroll-mt-24">
+            <h2 className="text-xl font-bold text-foreground flex items-center gap-2 mb-4">
+              <FileText className="w-5 h-5 text-primary" />
+              <span>10. Changes to Terms</span>
+            </h2>
+
+            <div className={`p-6 rounded-3xl border space-y-3 text-sm leading-relaxed ${
+              isLightMode ? 'bg-white border-slate-200/80 shadow-sm text-slate-700' : 'bg-card/70 border-border/70 text-slate-300'
+            }`}>
+              <p>
+                We may update these Terms & Conditions periodically to reflect feature additions, API updates, or legal compliance. Continued use of the service following updates constitutes acceptance of revised terms.
+              </p>
+            </div>
+          </section>
+
+          {/* Section 11: Contact Information */}
+          <section id="contact" className="mb-14 scroll-mt-24">
+            <h2 className="text-xl font-bold text-foreground flex items-center gap-2 mb-4">
+              <Mail className="w-5 h-5 text-primary" />
+              <span>11. Contact Information</span>
+            </h2>
+
+            <div className={`p-6 md:p-8 rounded-3xl border space-y-6 ${
+              isLightMode ? 'bg-white border-slate-200/80 shadow-sm' : 'bg-card/70 border-border/70'
+            }`}>
+              <p className="text-sm text-muted-foreground">
+                If you have questions or legal inquiries regarding these Terms & Conditions, please contact us:
+              </p>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <Link
+                  href="/support"
+                  className={`p-4 rounded-2xl border flex items-center gap-3 transition-all ${
+                    isLightMode
+                      ? 'bg-slate-50 border-slate-200 hover:bg-slate-100 text-slate-800'
+                      : 'bg-white/5 border-white/10 hover:bg-white/10 text-white'
+                  }`}
+                >
+                  <div className="w-10 h-10 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary shrink-0">
+                    <Mail className="w-5 h-5" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <span className="text-[11px] text-muted-foreground block font-bold">Help & Support</span>
+                    <span className="text-xs font-semibold truncate flex items-center gap-1">
+                      <span>Contact Support Team</span>
+                      <ArrowUpRight className="w-3.5 h-3.5" />
+                    </span>
+                  </div>
+                </Link>
+
+                <a
+                  href={linkedinUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={`p-4 rounded-2xl border flex items-center gap-3 transition-all ${
+                    isLightMode
+                      ? 'bg-slate-50 border-slate-200 hover:bg-slate-100 text-slate-800'
+                      : 'bg-white/5 border-white/10 hover:bg-white/10 text-white'
+                  }`}
+                >
+                  <div className="w-10 h-10 rounded-xl bg-[#0a66c2]/10 border border-[#0a66c2]/20 flex items-center justify-center text-[#0a66c2] shrink-0">
+                    <LinkedInIcon className="w-5 h-5" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <span className="text-[11px] text-muted-foreground block font-bold">LinkedIn Profile</span>
+                    <span className="text-xs font-semibold truncate flex items-center gap-1">
+                      <span>Developer Profile</span>
+                      <ArrowUpRight className="w-3.5 h-3.5" />
+                    </span>
+                  </div>
+                </a>
+              </div>
+            </div>
+          </section>
+
+        </main>
+      </div>
+
+      {/* Back to Top Button */}
+      <AnimatePresence>
+        {showBackToTop && (
+          <motion.button
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.8 }}
+            onClick={scrollToTop}
+            className={`fixed bottom-20 right-6 z-40 p-3 rounded-2xl border shadow-xl backdrop-blur-md transition-all cursor-pointer ${
+              isLightMode
+                ? 'bg-white/90 border-slate-200 text-slate-700 hover:bg-white'
+                : 'bg-[#141624]/90 border-white/10 text-white hover:bg-[#181a2e]'
+            }`}
+            title="Back to top"
+          >
+            <ChevronUp className="w-5 h-5" />
+          </motion.button>
+        )}
+      </AnimatePresence>
+
+      {/* Public Footer */}
+      <footer className={`border-t py-6 px-6 lg:px-12 text-xs transition-colors relative z-10 ${
+        isLightMode ? 'border-slate-200 text-slate-500 bg-white/70' : 'border-white/10 text-slate-500 bg-black/40'
+      }`}>
+        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3">
+          <span>© 2026 Slack AI Workspace Assistant. All rights reserved.</span>
           <div className="flex items-center gap-6">
-            <Link href="/privacy" className="hover:text-slate-300 transition-colors">Privacy Policy</Link>
-            <Link href="/terms" className="hover:text-slate-300 transition-colors">Terms of Service</Link>
+            <Link href="/" className="hover:text-foreground transition-colors">Home</Link>
+            <Link href="/support" className="hover:text-foreground transition-colors">Support</Link>
+            <Link href="/privacy" className="hover:text-foreground transition-colors">Privacy Policy</Link>
           </div>
         </div>
       </footer>
 
+      {/* Mobile Bottom Navigation Bar */}
+      <MobileBottomBar />
     </div>
   );
 }

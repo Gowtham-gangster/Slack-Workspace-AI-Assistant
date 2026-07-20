@@ -35,7 +35,8 @@ function getFrontendUrl() {
 }
 
 function getEmailConfig() {
-  const provider = (process.env.EMAIL_PROVIDER || 'resend').toLowerCase();
+  const defaultProvider = process.env.RESEND_API_KEY ? 'resend' : 'gmail';
+  const provider = (process.env.EMAIL_PROVIDER || defaultProvider).toLowerCase();
   
   if (provider === 'resend') {
     const apiKey = process.env.RESEND_API_KEY;
@@ -567,7 +568,8 @@ let activeProvider: EmailProvider | null = null;
 export function getActiveProvider(): EmailProvider {
   if (activeProvider) return activeProvider;
 
-  const providerType = (process.env.EMAIL_PROVIDER || 'resend').toLowerCase();
+  const defaultProvider = process.env.RESEND_API_KEY ? 'resend' : 'gmail';
+  const providerType = (process.env.EMAIL_PROVIDER || defaultProvider).toLowerCase();
   switch (providerType) {
     case 'resend':
       activeProvider = new ResendProvider();
@@ -1392,5 +1394,47 @@ export async function sendTestEmail(toEmail: string): Promise<{ success: boolean
     text,
     html,
     emailType: 'Test'
+  });
+}
+
+export async function sendSupportContactEmail(data: {
+  name: string;
+  email: string;
+  subject: string;
+  message: string;
+}) {
+  const adminEmail = process.env.SUPPORT_EMAIL || process.env.SMTP_USER || process.env.SMTP_FROM_EMAIL || 'pusuloorigowtham@gmail.com';
+
+  const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>New Support Request</title>
+</head>
+<body style="background: #f8fafc; color: #1e293b; font-family: sans-serif; padding: 24px;">
+  <div style="max-width: 600px; margin: 0 auto; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 16px; padding: 32px; box-shadow: 0 4px 12px rgba(0,0,0,0.05);">
+    <h2 style="color: #7c6af7; margin: 0; font-size: 20px;">📩 New Support Request</h2>
+    <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 16px 0;" />
+    <p style="font-size: 14px; margin: 8px 0;"><strong>Sender Name:</strong> ${data.name}</p>
+    <p style="font-size: 14px; margin: 8px 0;"><strong>Sender Email:</strong> <a href="mailto:${data.email}" style="color: #7c6af7; text-decoration: none;">${data.email}</a></p>
+    <p style="font-size: 14px; margin: 8px 0;"><strong>Subject:</strong> ${data.subject}</p>
+    <div style="margin-top: 20px; padding: 20px; background-color: #f1f5f9; border-radius: 12px; font-size: 14px; line-height: 1.6; color: #334155; white-space: pre-wrap;">${data.message}</div>
+    <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 24px 0 16px 0;" />
+    <p style="font-size: 12px; color: #64748b; margin: 0;">Sent automatically from Slack AI Workspace Assistant Support Center</p>
+  </div>
+</body>
+</html>
+  `.trim();
+
+  const text = `New Support Request\n\nName: ${data.name}\nEmail: ${data.email}\nSubject: ${data.subject}\n\nMessage:\n${data.message}`;
+
+  return sendMailInternal({
+    toEmail: adminEmail,
+    toName: 'Platform Support Admin',
+    subject: `[Support Request] ${data.subject}`,
+    text,
+    html,
+    emailType: 'Support Contact'
   });
 }

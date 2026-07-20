@@ -3,6 +3,7 @@
 import React, { useState, useEffect, Suspense } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Sidebar from '../../components/Sidebar';
+import MobileBottomBar from '../../components/MobileBottomBar';
 import { apiFetch } from '../../lib/api';
 import AIErrorAlert from '../../components/AIErrorAlert';
 import { 
@@ -640,6 +641,7 @@ function ReportsPageContent() {
         </div>
       )}
 
+      <MobileBottomBar />
     </div>
   );
 }
