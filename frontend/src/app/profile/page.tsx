@@ -113,7 +113,7 @@ export default function ProfilePage() {
         </header>
 
         {/* Profile Content */}
-        <div className="p-4 sm:p-6 md:p-8 max-w-4xl w-full mx-auto space-y-8">
+        <div className="p-4 sm:p-6 md:p-8 max-w-[1400px] w-full mx-auto space-y-8">
           
           <div className="grid grid-cols-1 md:grid-cols-12 gap-8">
             

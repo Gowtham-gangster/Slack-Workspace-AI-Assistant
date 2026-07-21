@@ -77,23 +77,23 @@ export default function IntelligencePage() {
 
   return (
     <AppLayout>
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
+        <div className="w-full max-w-[1600px] mx-auto px-4 sm:px-6 md:px-8 py-6 md:py-8">
 
           {/* Header */}
-          <div className="mb-8">
+          <div className="mb-6 md:mb-8">
             <div className="flex items-center gap-3 mb-2">
-              <div className="w-9 h-9 rounded-xl flex items-center justify-center"
+              <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
                    style={{ background: 'linear-gradient(135deg, #7c6af7, #6366f1)', boxShadow: '0 4px 16px rgba(124,106,247,0.35)' }}>
                 <Brain className="w-4.5 h-4.5 text-white" />
               </div>
               <div>
-                <h1 className={`text-xl font-bold ${isLightMode ? 'text-slate-900' : 'text-white'}`}>Workspace Intelligence</h1>
-                <p className={`text-sm ${isLightMode ? 'text-slate-500' : 'text-slate-400'}`}>AI-powered insights from your Slack workspace</p>
+                <h1 className={`text-xl md:text-2xl font-bold ${isLightMode ? 'text-slate-900' : 'text-white'}`}>Workspace Intelligence</h1>
+                <p className={`text-xs md:text-sm ${isLightMode ? 'text-slate-500' : 'text-slate-400'}`}>AI-powered insights from your Slack workspace</p>
               </div>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 xl:gap-8">
 
             {/* ── Trending Topics ── */}
             <div className={`${card} p-6`}>

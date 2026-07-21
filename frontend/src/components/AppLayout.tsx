@@ -19,7 +19,7 @@ export default function AppLayout({
     <div className="flex h-full min-h-dvh overflow-hidden bg-background text-foreground">
       <Sidebar />
       <main
-        className={`app-main flex-1 flex flex-col min-h-0 overflow-y-auto relative z-10 ${mainClassName}`}
+        className={`app-main flex-1 flex flex-col min-h-0 overflow-y-auto relative z-10 pt-14 md:pt-0 pb-20 md:pb-0 ${mainClassName}`}
       >
         {children}
       </main>

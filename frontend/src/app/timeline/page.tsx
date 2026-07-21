@@ -70,7 +70,7 @@ export default function TimelinePage() {
 
   return (
     <AppLayout>
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
+        <div className="w-full max-w-[1600px] mx-auto px-4 sm:px-6 md:px-8 py-6 md:py-8">
 
           {/* Header */}
           <div className="mb-8">

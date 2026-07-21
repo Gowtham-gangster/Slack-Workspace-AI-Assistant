@@ -192,7 +192,7 @@ export default function SettingsPage() {
         </header>
 
         {/* Settings Page Content */}
-        <div className="p-4 sm:p-6 md:p-8 max-w-5xl w-full mx-auto space-y-8">
+        <div className="p-4 sm:p-6 md:p-8 max-w-[1400px] w-full mx-auto space-y-8">
           {/* Status Message */}
           {saveStatus && (
             <div className={`p-4 rounded-2xl border text-xs flex items-center gap-2.5 ${
