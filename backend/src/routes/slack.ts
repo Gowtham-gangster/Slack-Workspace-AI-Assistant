@@ -54,15 +54,22 @@ async function verifySlackRequest(req: Request, res: Response, next: any) {
   return res.status(401).json({ error: 'Invalid signature verification' });
 }
 
-// POST /api/slack/events
-router.post('/events', verifySlackRequest, async (req: Request, res: Response) => {
-  const body = req.body;
+// GET /api/slack/events
+router.get('/events', (req: Request, res: Response) => {
+  res.json({ status: 'ok', message: 'Slack events webhook endpoint ready. Accepts POST requests from Slack.' });
+});
 
-  // 1. Handle URL Verification Challenge
-  if (body.type === 'url_verification') {
-    console.log('[SlackWebhook] Responding to url_verification challenge.');
+// POST /api/slack/events
+router.post('/events', async (req: Request, res: Response, next: NextFunction) => {
+  const body = req.body;
+  // Handle URL Verification Challenge directly so Slack can verify the endpoint
+  if (body && body.type === 'url_verification') {
+    console.log('[SlackWebhook] Responding to url_verification challenge:', body.challenge);
     return res.status(200).send(body.challenge);
   }
+  return verifySlackRequest(req, res, next);
+}, async (req: Request, res: Response) => {
+  const body = req.body;
 
   // Immediately respond to Slack to prevent timeout retries
   res.status(200).send('ok');
