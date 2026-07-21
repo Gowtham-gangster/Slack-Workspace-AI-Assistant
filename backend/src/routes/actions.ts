@@ -124,11 +124,25 @@ router.put('/:id', authenticateJWT, async (req: AuthenticatedRequest, res: Respo
     const { id } = req.params;
     const { status, owner, dueDate } = req.body;
 
+    const existing: any = await db.execute(
+      `SELECT * FROM action_items WHERE id = ? AND user_id = ?`,
+      [id, userId]
+    );
+
+    if (!existing || existing.length === 0) {
+      return res.status(404).json({ error: 'Action item not found.' });
+    }
+
+    const current = existing[0];
+    const newStatus = status !== undefined ? status : current.status;
+    const newOwner = owner !== undefined ? owner : current.owner;
+    const newDueDate = dueDate !== undefined ? dueDate : current.due_date;
+
     await db.execute(
       `UPDATE action_items SET status = ?, owner = ?, due_date = ? WHERE id = ? AND user_id = ?`,
-      [status || 'pending', owner || 'Unassigned', dueDate || null, id, userId]
+      [newStatus, newOwner, newDueDate, id, userId]
     );
-    res.json({ success: true });
+    res.json({ success: true, item: { ...current, status: newStatus, owner: newOwner, due_date: newDueDate } });
   } catch (error) {
     console.error('Failed to update action item:', error);
     res.status(500).json({ error: 'Failed to update action item.' });

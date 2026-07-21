@@ -402,35 +402,24 @@ export default function ActionCenterPage() {
         </div>
 
         {/* Action Controls */}
-        <div className="flex items-center justify-between pt-2 border-t" style={{ borderColor: isLightMode ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.06)' }}>
-          <div className="flex items-center gap-1">
-            {item.status !== 'completed' && (
-              <button
-                onClick={() => updateMutation.mutate({ id: item.id, status: 'completed', owner: item.owner, dueDate: item.due_date })}
-                className="p-1 hover:text-emerald-500 text-slate-500 transition-colors"
-                title="Mark Completed"
-              >
-                <CheckCircle2 className="w-4 h-4" />
-              </button>
-            )}
-            {item.status === 'completed' && (
-              <button
-                onClick={() => updateMutation.mutate({ id: item.id, status: 'pending', owner: item.owner, dueDate: item.due_date })}
-                className="p-1 hover:text-amber-500 text-slate-500 transition-colors"
-                title="Reopen Task"
-              >
-                <RefreshCw className="w-4 h-4" />
-              </button>
-            )}
-            {item.status === 'pending' && (
-              <button
-                onClick={() => updateMutation.mutate({ id: item.id, status: 'in_progress', owner: item.owner, dueDate: item.due_date })}
-                className="p-1 hover:text-amber-500 text-slate-500 transition-colors"
-                title="Start Progress"
-              >
-                <Play className="w-4 h-4" />
-              </button>
-            )}
+        <div className="flex items-center justify-between pt-2 border-t gap-2" style={{ borderColor: isLightMode ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.06)' }}>
+          <div className="flex items-center gap-1.5">
+            <select
+              value={item.status}
+              onChange={(e) => updateMutation.mutate({ id: item.id, status: e.target.value, owner: item.owner, dueDate: item.due_date })}
+              className={`text-[10px] font-bold px-2 py-1 rounded-lg border outline-none cursor-pointer ${
+                item.status === 'completed'
+                  ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20'
+                  : item.status === 'in_progress'
+                  ? 'bg-amber-500/10 text-amber-500 border-amber-500/20'
+                  : 'bg-slate-500/10 text-slate-400 border-slate-500/20'
+              }`}
+            >
+              <option value="pending">Pending</option>
+              <option value="in_progress">In Progress</option>
+              <option value="completed">Completed</option>
+            </select>
+
             <button
               onClick={() => deleteMutation.mutate(item.id)}
               className="p-1 hover:text-rose-500 text-slate-500 transition-colors"

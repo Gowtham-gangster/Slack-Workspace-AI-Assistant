@@ -37,7 +37,7 @@ import {
   Brain,
   ChevronDown,
   ChevronUp,
-  Plus, Check, Copy, ThumbsUp, Heart, Smile, Flame, Bookmark, Pin, Trash2, Edit3, MoreVertical, Paperclip, SmilePlus, Bell, Info, Mic, Image, CornerDownLeft, Eye, Award, User, Link as LinkIcon, Compass, Terminal, X, ExternalLink
+  Plus, Check, Copy, ThumbsUp, Heart, Smile, Flame, Bookmark, Pin, Trash2, Edit3, MoreVertical, Paperclip, SmilePlus, Bell, Info, Mic, Image, CornerDownLeft, Eye, EyeOff, CheckSquare, Award, User, Link as LinkIcon, Compass, Terminal, X, ExternalLink
 } from 'lucide-react';
 import Link from 'next/link';
 import { useTheme } from '../../components/ThemeContext';
@@ -535,6 +535,24 @@ export default function DashboardPage() {
   const [activeEmojiPickerMsgId, setActiveEmojiPickerMsgId] = useState<string | null>(null);
   const [hoveredMessageId, setHoveredMessageId] = useState<string | null>(null);
   const [openedMenuMessageId, setOpenedMenuMessageId] = useState<string | null>(null);
+  const [openedMoreMenuMsgId, setOpenedMoreMenuMsgId] = useState<string | null>(null);
+  const [readMessageIds, setReadMessageIds] = useState<Record<string, boolean>>({});
+
+  const toggleReadStatus = useCallback((ts: string) => {
+    setReadMessageIds(prev => ({
+      ...prev,
+      [ts]: !prev[ts]
+    }));
+  }, []);
+
+  const handleDeleteMessage = useCallback((ts: string) => {
+    if (confirm('Are you sure you want to delete this message?')) {
+      queryClient.setQueryData(['liveMessages', selectedChannelId, fetchLimit], (oldData: any[]) => {
+        if (!oldData) return [];
+        return oldData.filter((m: any) => (m.ts || m.id) !== ts);
+      });
+    }
+  }, [queryClient, selectedChannelId, fetchLimit]);
 
   const activeMenuRef = useRef<{ emoji: string | null; ai: string | null }>({ emoji: null, ai: null });
   useEffect(() => { activeMenuRef.current = { emoji: activeEmojiPickerMsgId, ai: openedMenuMessageId }; }, [activeEmojiPickerMsgId, openedMenuMessageId]);
@@ -543,14 +561,16 @@ export default function DashboardPage() {
     const handleOutsideClick = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
       // If click is inside any action toolbar, popup, or trigger, ignore
-      if (target.closest('[data-msg-toolbar]') || target.closest('.ai-actions-dropdown') || target.closest('[data-ai-trigger]')) return;
+      if (target.closest('[data-msg-toolbar]') || target.closest('.ai-actions-dropdown') || target.closest('.more-options-dropdown') || target.closest('[data-ai-trigger]') || target.closest('[data-more-trigger]')) return;
       setOpenedMenuMessageId(null);
+      setOpenedMoreMenuMsgId(null);
       setActiveEmojiPickerMsgId(null);
     };
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         setOpenedMenuMessageId(null);
+        setOpenedMoreMenuMsgId(null);
         setActiveEmojiPickerMsgId(null);
       }
     };
@@ -2067,6 +2087,11 @@ export default function DashboardPage() {
                       setActiveEmojiPickerMsgId={setActiveEmojiPickerMsgId}
                       openedMenuMessageId={openedMenuMessageId}
                       setOpenedMenuMessageId={setOpenedMenuMessageId}
+                      openedMoreMenuMsgId={openedMoreMenuMsgId}
+                      setOpenedMoreMenuMsgId={setOpenedMoreMenuMsgId}
+                      readMessageIds={readMessageIds}
+                      toggleReadStatus={toggleReadStatus}
+                      handleDeleteMessage={handleDeleteMessage}
                       hoveredMessageId={hoveredMessageId}
                       setHoveredMessageId={setHoveredMessageId}
                       setActiveThreadParentId={setActiveThreadParentId}
@@ -3648,6 +3673,11 @@ interface MessageItemProps {
   setActiveEmojiPickerMsgId: (id: string | null) => void;
   openedMenuMessageId: string | null;
   setOpenedMenuMessageId: (id: string | null) => void;
+  openedMoreMenuMsgId: string | null;
+  setOpenedMoreMenuMsgId: (id: string | null) => void;
+  readMessageIds: Record<string, boolean>;
+  toggleReadStatus: (ts: string) => void;
+  handleDeleteMessage: (ts: string) => void;
   hoveredMessageId: string | null;
   setHoveredMessageId: (id: string | null) => void;
   setActiveThreadParentId: (id: string | null) => void;
@@ -3675,6 +3705,11 @@ const MessageItem = React.memo(({
   setActiveEmojiPickerMsgId,
   openedMenuMessageId,
   setOpenedMenuMessageId,
+  openedMoreMenuMsgId,
+  setOpenedMoreMenuMsgId,
+  readMessageIds,
+  toggleReadStatus,
+  handleDeleteMessage,
   hoveredMessageId,
   setHoveredMessageId,
   setActiveThreadParentId,
@@ -3797,9 +3832,9 @@ const MessageItem = React.memo(({
       <div 
         data-msg-toolbar 
         className={`absolute -top-3.5 z-40 flex items-center bg-card border border-border shadow-2xl rounded-2xl p-1 gap-1 transition-opacity duration-150 right-3 ${
-          (activeEmojiPickerMsgId === msg.ts || openedMenuMessageId === msg.ts)
+          (activeEmojiPickerMsgId === msg.ts || openedMenuMessageId === msg.ts || openedMoreMenuMsgId === msg.ts)
             ? 'opacity-100 pointer-events-auto'
-            : (activeEmojiPickerMsgId !== null || openedMenuMessageId !== null)
+            : (activeEmojiPickerMsgId !== null || openedMenuMessageId !== null || openedMoreMenuMsgId !== null)
               ? 'opacity-0 pointer-events-none'
               : (hoveredMessageId === msg.ts)
                 ? 'opacity-100 pointer-events-auto'
@@ -3904,15 +3939,120 @@ const MessageItem = React.memo(({
           )}
         </div>
 
-        {/* More Actions info button */}
-        <button 
-          type="button"
-          onClick={() => setInfoModalMessage({ id: msg.ts, role: isMsgUser ? 'user' : 'assistant', content: msg.text, created_at: new Date(parseFloat(msg.ts) * 1000).toISOString(), isPinned: msg.isPinned, isBookmarked: msg.isBookmarked })}
-          className="p-1.5 rounded-xl hover:bg-secondary/40 text-muted-foreground hover:text-foreground"
-          title="Message Info"
-        >
-          <MoreVertical className="w-3.5 h-3.5" />
-        </button>
+        {/* 3-Dots Options Dropdown */}
+        <div className="relative">
+          <button 
+            type="button"
+            data-more-trigger="true"
+            onClick={(e) => {
+              e.stopPropagation();
+              setOpenedMoreMenuMsgId(openedMoreMenuMsgId === msg.ts ? null : msg.ts);
+              setOpenedMenuMessageId(null);
+              setActiveEmojiPickerMsgId(null);
+            }}
+            className={`p-1.5 rounded-xl hover:bg-secondary/40 flex items-center transition-colors ${
+              openedMoreMenuMsgId === msg.ts ? 'bg-primary/15 text-primary' : 'text-muted-foreground hover:text-foreground'
+            }`}
+            title="More Options"
+          >
+            <MoreVertical className="w-3.5 h-3.5" />
+          </button>
+
+          {openedMoreMenuMsgId === msg.ts && (
+            <div 
+              className={`more-options-dropdown absolute ${idx < 3 ? 'top-full mt-1.5' : 'bottom-full mb-1.5'} w-52 rounded-xl shadow-2xl p-2 z-50 right-0 border ${
+                isLightMode ? 'bg-white border-slate-200 text-slate-800' : 'bg-[#141624] border-border text-slate-100'
+              }`}
+              onClick={e => e.stopPropagation()}
+            >
+              {/* 1. Mark Read / Unread */}
+              <button 
+                type="button" 
+                onClick={() => {
+                  toggleReadStatus(msg.ts);
+                  setOpenedMoreMenuMsgId(null);
+                }} 
+                className="w-full text-left p-2 hover:bg-slate-100 dark:hover:bg-slate-700/60 rounded-lg flex items-center gap-2 text-[11px] font-semibold transition-colors"
+              >
+                {readMessageIds[msg.ts] ? (
+                  <>
+                    <EyeOff className="w-3.5 h-3.5 text-amber-500 shrink-0" /> Mark as Unread
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle className="w-3.5 h-3.5 text-emerald-500 shrink-0" /> Mark as Read
+                  </>
+                )}
+              </button>
+
+              {/* 2. Remind Me Later */}
+              <button 
+                type="button" 
+                onClick={() => {
+                  setReminderMessage(msg);
+                  setOpenedMoreMenuMsgId(null);
+                }} 
+                className="w-full text-left p-2 hover:bg-slate-100 dark:hover:bg-slate-700/60 rounded-lg flex items-center gap-2 text-[11px] font-semibold transition-colors"
+              >
+                <Bell className="w-3.5 h-3.5 text-yellow-500 shrink-0" /> Remind Me Later
+              </button>
+
+              {/* 3. Convert to Task */}
+              <button 
+                type="button" 
+                onClick={() => {
+                  setTaskMessage(msg);
+                  setTaskForm({ task: msg.text ? msg.text.slice(0, 100) : '', owner: 'Unassigned', dueDate: '', priority: 'medium' });
+                  setOpenedMoreMenuMsgId(null);
+                }} 
+                className="w-full text-left p-2 hover:bg-slate-100 dark:hover:bg-slate-700/60 rounded-lg flex items-center gap-2 text-[11px] font-semibold transition-colors"
+              >
+                <CheckSquare className="w-3.5 h-3.5 text-indigo-500 shrink-0" /> Convert to Task
+              </button>
+
+              {/* 4. Copy Message */}
+              <button 
+                type="button" 
+                onClick={() => {
+                  if (msg.text) {
+                    navigator.clipboard.writeText(msg.text);
+                    alert('Message text copied to clipboard!');
+                  }
+                  setOpenedMoreMenuMsgId(null);
+                }} 
+                className="w-full text-left p-2 hover:bg-slate-100 dark:hover:bg-slate-700/60 rounded-lg flex items-center gap-2 text-[11px] font-semibold transition-colors"
+              >
+                <Copy className="w-3.5 h-3.5 text-teal-500 shrink-0" /> Copy Msg
+              </button>
+
+              <div className="border-t border-slate-200 dark:border-slate-700/60 my-1" />
+
+              {/* 5. Message Info */}
+              <button 
+                type="button" 
+                onClick={() => {
+                  setInfoModalMessage({ id: msg.ts, role: isMsgUser ? 'user' : 'assistant', content: msg.text, created_at: new Date(parseFloat(msg.ts) * 1000).toISOString(), isPinned: msg.isPinned, isBookmarked: msg.isBookmarked });
+                  setOpenedMoreMenuMsgId(null);
+                }} 
+                className="w-full text-left p-2 hover:bg-slate-100 dark:hover:bg-slate-700/60 rounded-lg flex items-center gap-2 text-[11px] font-semibold transition-colors"
+              >
+                <Info className="w-3.5 h-3.5 text-sky-500 shrink-0" /> Msg Info
+              </button>
+
+              {/* 6. Delete Message */}
+              <button 
+                type="button" 
+                onClick={() => {
+                  handleDeleteMessage(msg.ts);
+                  setOpenedMoreMenuMsgId(null);
+                }} 
+                className="w-full text-left p-2 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-lg flex items-center gap-2 text-[11px] font-semibold text-rose-500 transition-colors"
+              >
+                <Trash2 className="w-3.5 h-3.5 text-rose-500 shrink-0" /> Delete
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       {avatar ? (
