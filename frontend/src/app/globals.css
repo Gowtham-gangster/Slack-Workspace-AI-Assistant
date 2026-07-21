@@ -3,6 +3,11 @@
 
 
 :root {
+  --mobile-nav-height: 3.75rem;
+  --mobile-header-height: 3.5rem;
+  --mobile-nav-offset: calc(var(--mobile-nav-height) + env(safe-area-inset-bottom, 0px));
+  --mobile-header-offset: calc(var(--mobile-header-height) + env(safe-area-inset-top, 0px));
+
   --background: #06070d;
   --foreground: #e8eaf0;
   --card: #0d0f1a;
@@ -93,6 +98,31 @@ body {
   overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+/* ───────────────────────── Mobile layout helpers ───────────────────────── */
+.pt-safe {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+.app-main {
+  padding-top: var(--mobile-header-offset);
+  padding-bottom: var(--mobile-nav-offset);
+}
+
+@media (min-width: 768px) {
+  .app-main {
+    padding-top: 0;
+    padding-bottom: 0;
+  }
+}
+
+.touch-manipulation {
+  touch-action: manipulation;
 }
 
 /* ───────────────────────── Scrollbars ───────────────────────── */

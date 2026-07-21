@@ -4,8 +4,7 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { Mail, ArrowUpRight, HelpCircle, ArrowLeft, Zap, Sun, Moon, Send, CheckCircle2, AlertCircle, User, MessageSquare, FileText } from 'lucide-react';
-import Sidebar from '../../components/Sidebar';
-import MobileBottomBar from '../../components/MobileBottomBar';
+import AppLayout from '../../components/AppLayout';
 import { useTheme } from '../../components/ThemeContext';
 import { useAuth } from '../../components/AuthContext';
 import { apiFetch } from '../../lib/api';
@@ -20,7 +19,7 @@ const LinkedInIcon = ({ className = "w-6 h-6" }: { className?: string }) => (
 function SupportContent({ isLightMode, isGuest }: { isLightMode: boolean; isGuest: boolean }) {
   const { user } = useAuth();
   const linkedinUrl = process.env.NEXT_PUBLIC_LINKEDIN_URL || 'https://www.linkedin.com';
-  const supportEmail = process.env.NEXT_PUBLIC_SUPPORT_EMAIL || 'support@slackai.app';
+  const supportEmail = process.env.NEXT_PUBLIC_SUPPORT_EMAIL || 'pusuloorigowtham@outlook.com';
 
   const [formData, setFormData] = useState({
     name: '',
@@ -81,7 +80,7 @@ function SupportContent({ isLightMode, isGuest }: { isLightMode: boolean; isGues
   };
 
   return (
-    <div className="flex-1 max-w-4xl w-full mx-auto px-6 py-8 md:py-14 flex flex-col justify-center">
+    <div className="flex-1 max-w-4xl w-full mx-auto px-4 sm:px-6 py-6 sm:py-8 md:py-14 flex flex-col justify-center">
       
       {/* Header Section */}
       <motion.div
@@ -342,17 +341,11 @@ export default function SupportPage() {
   // If user is authenticated, render inside the authenticated workspace layout
   if (user) {
     return (
-      <div className={`flex h-screen w-full overflow-hidden font-sans ${
-        isLightMode ? 'bg-[#f8fafc] text-slate-900' : 'bg-[#06070d] text-slate-100'
-      }`}>
-        <Sidebar />
-        <main className="flex-1 flex flex-col h-full overflow-y-auto relative z-10 selection:bg-primary/30">
+      <AppLayout mainClassName="selection:bg-primary/30">
           <div className="absolute top-0 left-0 right-0 h-64 pointer-events-none"
                style={{ background: 'radial-gradient(ellipse at 50% 0%, rgba(124,106,247,0.15) 0%, transparent 70%)' }} />
           <SupportContent isLightMode={isLightMode} isGuest={false} />
-        </main>
-        <MobileBottomBar />
-      </div>
+      </AppLayout>
     );
   }
 

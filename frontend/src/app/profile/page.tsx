@@ -2,8 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useMutation } from '@tanstack/react-query';
-import Sidebar from '../../components/Sidebar';
-import MobileBottomBar from '../../components/MobileBottomBar';
+import AppLayout from '../../components/AppLayout';
 import { useAuth } from '../../components/AuthContext';
 import { apiFetch } from '../../lib/api';
 import { useTheme } from '../../components/ThemeContext';
@@ -103,14 +102,10 @@ export default function ProfilePage() {
   };
 
   return (
-    <div className="flex h-full bg-background text-foreground overflow-hidden">
-      {/* Sidebar Nav */}
-      <Sidebar />
-
-      {/* Main Panel */}
-      <div className="flex-1 flex flex-col h-full overflow-y-auto">
+    <AppLayout>
+      <div className="flex-1 flex flex-col h-full min-h-0">
         {/* Top Header */}
-        <header className="h-16 border-b border-border flex items-center justify-between px-8 shrink-0 bg-card/30">
+        <header className="h-14 md:h-16 border-b border-border flex items-center justify-between px-4 sm:px-6 md:px-8 shrink-0 bg-card/30">
           <div className="flex items-center gap-2">
             <User className="w-5 h-5 text-primary" />
             <h2 className={`text-sm font-semibold ${isLightMode ? 'text-slate-800' : 'text-white'}`}>My User Profile</h2>
@@ -118,7 +113,7 @@ export default function ProfilePage() {
         </header>
 
         {/* Profile Content */}
-        <div className="p-8 max-w-4xl w-full mx-auto space-y-8">
+        <div className="p-4 sm:p-6 md:p-8 max-w-4xl w-full mx-auto space-y-8">
           
           <div className="grid grid-cols-1 md:grid-cols-12 gap-8">
             
@@ -329,7 +324,6 @@ export default function ProfilePage() {
 
         </div>
       </div>
-      <MobileBottomBar />
-    </div>
+    </AppLayout>
   );
 }

@@ -2,8 +2,7 @@
 
 import React, { useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
-import Sidebar from '../../components/Sidebar';
-import MobileBottomBar from '../../components/MobileBottomBar';
+import AppLayout from '../../components/AppLayout';
 import { apiFetch } from '../../lib/api';
 import { useTheme } from '../../components/ThemeContext';
 import { useAuth } from '../../components/AuthContext';
@@ -82,10 +81,8 @@ export default function WorkspaceMemoryPage() {
   };
 
   return (
-    <div className="flex h-screen overflow-hidden" style={{ background: isLightMode ? '#f8fafc' : '#06070d' }}>
-      <Sidebar />
-      <main className="flex-1 overflow-y-auto">
-        <div className="max-w-4xl mx-auto px-6 py-8">
+    <AppLayout>
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
 
           {/* Header */}
           <div className="mb-8">
@@ -351,8 +348,6 @@ export default function WorkspaceMemoryPage() {
           )}
 
         </div>
-      </main>
-      <MobileBottomBar />
-    </div>
+    </AppLayout>
   );
 }

@@ -2,8 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import Sidebar from '../../components/Sidebar';
-import MobileBottomBar from '../../components/MobileBottomBar';
+import AppLayout from '../../components/AppLayout';
 import { apiFetch, getAuthToken } from '../../lib/api';
 import { useTheme } from '../../components/ThemeContext';
 import { 
@@ -182,14 +181,10 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="flex h-full bg-background text-foreground overflow-hidden">
-      {/* Sidebar Nav */}
-      <Sidebar />
-
-      {/* Main Panel */}
-      <div ref={containerRef} className="flex-1 flex flex-col h-full overflow-y-auto">
+    <AppLayout>
+      <div ref={containerRef} className="flex-1 flex flex-col h-full min-h-0">
         {/* Top Header */}
-        <header className="h-16 border-b border-border flex items-center justify-between px-8 shrink-0 bg-card/30">
+        <header className="h-14 md:h-16 border-b border-border flex items-center justify-between px-4 sm:px-6 md:px-8 shrink-0 bg-card/30">
           <div className="flex items-center gap-2">
             <SettingsIcon className="w-5 h-5 text-primary" />
             <h2 className={`text-sm font-semibold ${isLightMode ? 'text-slate-800' : 'text-white'}`}>System Settings</h2>
@@ -197,7 +192,7 @@ export default function SettingsPage() {
         </header>
 
         {/* Settings Page Content */}
-        <div className="p-8 max-w-5xl w-full mx-auto space-y-8">
+        <div className="p-4 sm:p-6 md:p-8 max-w-5xl w-full mx-auto space-y-8">
           {/* Status Message */}
           {saveStatus && (
             <div className={`p-4 rounded-2xl border text-xs flex items-center gap-2.5 ${
@@ -486,7 +481,6 @@ export default function SettingsPage() {
 
         </div>
       </div>
-      <MobileBottomBar />
-    </div>
+    </AppLayout>
   );
 }

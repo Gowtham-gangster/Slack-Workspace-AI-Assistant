@@ -2,8 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import Sidebar from '../../components/Sidebar';
-import MobileBottomBar from '../../components/MobileBottomBar';
+import AppLayout from '../../components/AppLayout';
 import { apiFetch } from '../../lib/api';
 import { useTheme } from '../../components/ThemeContext';
 import { useAuth } from '../../components/AuthContext';
@@ -176,10 +175,8 @@ export default function KnowledgeGraphPage() {
   }`;
 
   return (
-    <div className="flex h-screen overflow-hidden" style={{ background: isLightMode ? '#f8fafc' : '#06070d' }}>
-      <Sidebar />
-      <main className="flex-1 overflow-hidden flex flex-col">
-        <div className="flex-1 overflow-y-auto px-6 py-8 flex flex-col h-full">
+    <AppLayout mainClassName="overflow-hidden">
+        <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-6 sm:py-8 flex flex-col h-full min-h-0">
 
           {/* Header */}
           <div className="mb-6 shrink-0">
@@ -357,8 +354,6 @@ export default function KnowledgeGraphPage() {
 
           </div>
         </div>
-      </main>
-      <MobileBottomBar />
-    </div>
+    </AppLayout>
   );
 }

@@ -55,7 +55,7 @@ export default function PrivacyPolicyPage() {
   const [showBackToTop, setShowBackToTop] = useState(false);
 
   const linkedinUrl = process.env.NEXT_PUBLIC_LINKEDIN_URL || 'https://www.linkedin.com/in/pusuloorigowtham7505/';
-  const supportEmail = process.env.NEXT_PUBLIC_SUPPORT_EMAIL || 'support@slackai.app';
+  const supportEmail = process.env.NEXT_PUBLIC_SUPPORT_EMAIL || 'pusuloorigowtham@outlook.com';
 
   // Track scroll progress and active section
   useEffect(() => {

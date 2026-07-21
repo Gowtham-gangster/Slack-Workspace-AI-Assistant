@@ -2,8 +2,7 @@
 
 import React, { useState, useEffect, Suspense } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import Sidebar from '../../components/Sidebar';
-import MobileBottomBar from '../../components/MobileBottomBar';
+import AppLayout from '../../components/AppLayout';
 import { apiFetch } from '../../lib/api';
 import AIErrorAlert from '../../components/AIErrorAlert';
 import { 
@@ -248,15 +247,11 @@ function ReportsPageContent() {
   }, [selectedReportId]);
 
   return (
-    <div className="flex h-full bg-background text-foreground overflow-hidden">
-      {/* Sidebar Nav */}
-      <Sidebar />
-
-      {/* Main Panel - Split screen layout */}
-      <div className="flex-1 flex h-full overflow-hidden">
+    <AppLayout mainClassName="overflow-hidden">
+      <div className="flex-1 flex flex-col md:flex-row h-full min-h-0 overflow-hidden">
         
-        {/* Left Side: Reports List (1/3 width) */}
-        <div className="w-80 border-r border-border flex flex-col h-full bg-card/10 shrink-0">
+        {/* Left Side: Reports List */}
+        <div className="w-full md:w-80 border-b md:border-b-0 md:border-r border-border flex flex-col h-[42vh] md:h-full bg-card/10 shrink-0">
           <div className="p-4 border-b border-border flex items-center justify-between shrink-0">
             <div className="flex items-center gap-2">
               <FileText className="w-4 h-4 text-primary" />
@@ -345,7 +340,7 @@ function ReportsPageContent() {
           {selectedReport && viewMode === 'report' ? (
             <div className="flex-1 flex flex-col h-full overflow-hidden animate-fadeIn">
               {/* Toolbar */}
-              <header className="h-16 border-b border-border flex items-center justify-between px-8 shrink-0 bg-card/20">
+              <header className="h-14 md:h-16 border-b border-border flex items-center justify-between px-4 sm:px-6 md:px-8 shrink-0 bg-card/20">
                 <div className="min-w-0 pr-4">
                   <h2 className={`text-sm font-bold truncate ${isLightMode ? 'text-slate-800' : 'text-white'}`}>{selectedReport.title}</h2>
                   <p className="text-[10px] text-muted-foreground mt-0.5 flex items-center gap-1.5">
@@ -410,7 +405,7 @@ function ReportsPageContent() {
               </div>
             </div>
           ) : (
-            <div className="flex-1 flex flex-col h-full overflow-y-auto p-8 max-w-5xl w-full mx-auto animate-fadeIn">
+            <div className="flex-1 flex flex-col h-full overflow-y-auto p-4 sm:p-6 md:p-8 max-w-5xl w-full mx-auto animate-fadeIn">
               <div className="mb-6">
                 <h2 className={`text-base font-bold flex items-center gap-2 ${isLightMode ? 'text-slate-800' : 'text-white'}`}>
                   <BarChart3 className="w-5 h-5 text-[#7c6af7]" />
@@ -641,8 +636,7 @@ function ReportsPageContent() {
         </div>
       )}
 
-      <MobileBottomBar />
-    </div>
+    </AppLayout>
   );
 }
 

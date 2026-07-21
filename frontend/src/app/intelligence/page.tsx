@@ -2,8 +2,7 @@
 
 import React, { useState } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
-import Sidebar from '../../components/Sidebar';
-import MobileBottomBar from '../../components/MobileBottomBar';
+import AppLayout from '../../components/AppLayout';
 import { apiFetch } from '../../lib/api';
 import { useTheme } from '../../components/ThemeContext';
 import AIErrorAlert from '../../components/AIErrorAlert';
@@ -77,10 +76,8 @@ export default function IntelligencePage() {
     h === 'active' ? '#10b981' : h === 'moderate' ? '#f59e0b' : '#6b7280';
 
   return (
-    <div className="flex h-screen overflow-hidden" style={{ background: isLightMode ? '#f8fafc' : '#06070d' }}>
-      <Sidebar />
-      <main className="flex-1 overflow-y-auto">
-        <div className="max-w-7xl mx-auto px-6 py-8">
+    <AppLayout>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
 
           {/* Header */}
           <div className="mb-8">
@@ -295,8 +292,6 @@ export default function IntelligencePage() {
 
           </div>
         </div>
-      </main>
-      <MobileBottomBar />
-    </div>
+    </AppLayout>
   );
 }

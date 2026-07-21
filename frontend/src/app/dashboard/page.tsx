@@ -2,8 +2,7 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import Sidebar from '../../components/Sidebar';
-import MobileBottomBar from '../../components/MobileBottomBar';
+import AppLayout from '../../components/AppLayout';
 import { apiFetch, getAuthToken } from '../../lib/api';
 import { socketService } from '../../lib/socketService';
 import dynamic from 'next/dynamic';
@@ -1691,30 +1690,24 @@ export default function DashboardPage() {
   ];
 
   return (
-    <div className="flex h-full overflow-hidden" style={{ background: 'var(--background)' }}>
-
+    <AppLayout>
       {/* Ambient orbs */}
       <div className="bg-orb w-[600px] h-[600px] opacity-[0.06]"
            style={{ background: '#7c6af7', top: '-200px', left: '180px' }} />
       <div className="bg-orb w-[400px] h-[400px] opacity-[0.04]"
            style={{ background: '#0ea5e9', bottom: '-100px', right: '100px' }} />
 
-      <Sidebar />
-
-      {/* Main scroll area */}
-      <main className="flex-1 flex flex-col h-full overflow-y-auto relative z-10">
-
         {/* ── Top bar ── */}
-        <header className="h-14 shrink-0 flex items-center justify-between px-8 sticky top-0 z-20"
+        <header className="h-14 shrink-0 flex items-center justify-between px-4 sm:px-6 md:px-8 sticky top-0 z-20 gap-3"
                 style={{
                   background: isLightMode ? 'rgba(255, 255, 255, 0.85)' : 'rgba(6,7,13,0.85)',
                   backdropFilter: 'blur(16px)',
                   borderBottom: isLightMode ? '1px solid rgba(0,0,0,0.08)' : '1px solid rgba(255,255,255,0.06)'
                 }}>
-          <div className="flex items-center gap-2.5">
-            <TrendingUp className="w-4 h-4" style={{ color: '#7c6af7' }} />
-            <span className={`text-[13px] font-semibold ${isLightMode ? 'text-slate-800' : 'text-white'}`}>Assistant Overview</span>
-            <div className="ml-2 flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-medium"
+          <div className="flex items-center gap-2 sm:gap-2.5 min-w-0">
+            <TrendingUp className="w-4 h-4 shrink-0" style={{ color: '#7c6af7' }} />
+            <span className={`text-[13px] font-semibold truncate ${isLightMode ? 'text-slate-800' : 'text-white'}`}>Assistant Overview</span>
+            <div className="hidden sm:flex ml-2 items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-medium shrink-0"
                  style={{ background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.2)', color: '#34d399' }}>
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 pulse-dot" />
               Live
@@ -1724,7 +1717,7 @@ export default function DashboardPage() {
           <button
             onClick={() => syncMutation.mutate()}
             disabled={syncing}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl text-[12px] font-semibold text-white transition-all duration-200 disabled:opacity-50"
+            className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 rounded-xl text-[11px] sm:text-[12px] font-semibold text-white transition-all duration-200 disabled:opacity-50 shrink-0 touch-manipulation"
             style={{
               background: syncing ? 'rgba(124,106,247,0.2)' : 'linear-gradient(135deg, #7c6af7, #6366f1)',
               border: '1px solid rgba(124,106,247,0.4)',
@@ -1732,12 +1725,13 @@ export default function DashboardPage() {
             }}
           >
             <RefreshCw className={`w-3.5 h-3.5 ${syncing ? 'animate-spin' : ''}`} />
-            {syncing ? 'Syncing…' : 'Sync Workspace'}
+            <span className="hidden sm:inline">{syncing ? 'Syncing…' : 'Sync Workspace'}</span>
+            <span className="sm:hidden">{syncing ? '…' : 'Sync'}</span>
           </button>
         </header>
 
         {/* ── Content ── */}
-        <div className="p-7 space-y-7 max-w-6xl w-full mx-auto pb-16">
+        <div className="p-4 sm:p-6 md:p-7 space-y-5 sm:space-y-7 max-w-6xl w-full mx-auto">
 
           {/* Notifications */}
           {isSocketReconnecting && (
@@ -1837,7 +1831,7 @@ export default function DashboardPage() {
           <section className="glass-elevated rounded-3xl overflow-hidden" style={{ border: isLightMode ? '1px solid rgba(0,0,0,0.06)' : '1px solid rgba(255,255,255,0.08)' }}>
 
             {/* Panel header */}
-            <div className="flex items-center justify-between px-6 py-4"
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-4 sm:px-6 py-4"
                  style={{
                    borderBottom: isLightMode ? '1px solid rgba(0,0,0,0.06)' : '1px solid rgba(255,255,255,0.06)',
                    background: isLightMode ? 'rgba(0,0,0,0.01)' : 'rgba(255,255,255,0.02)'
@@ -1849,11 +1843,11 @@ export default function DashboardPage() {
               />
 
               {/* Controls */}
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
                 <select
                   value={fetchLimit}
                   onChange={e => setFetchLimit(Number(e.target.value))}
-                  className={`glass-input px-3 py-2 rounded-xl text-[12px] cursor-pointer ${isLightMode ? 'text-slate-800 bg-white border-slate-200' : 'text-white'}`}
+                  className={`glass-input px-3 py-2 rounded-xl text-[12px] cursor-pointer flex-1 min-w-[110px] sm:flex-none ${isLightMode ? 'text-slate-800 bg-white border-slate-200' : 'text-white'}`}
                   style={{ fontFamily: 'Inter, sans-serif', minWidth: 120 }}
                 >
                   <option value={5}>Latest 5</option>
@@ -1867,7 +1861,7 @@ export default function DashboardPage() {
                 <select
                   value={selectedChannelId}
                   onChange={e => setSelectedChannelId(e.target.value)}
-                  className={`glass-input px-3 py-2 rounded-xl text-[12px] cursor-pointer ${isLightMode ? 'text-slate-800 bg-white border-slate-200' : 'text-white'}`}
+                  className={`glass-input px-3 py-2 rounded-xl text-[12px] cursor-pointer flex-1 min-w-[110px] sm:flex-none ${isLightMode ? 'text-slate-800 bg-white border-slate-200' : 'text-white'}`}
                   style={{ fontFamily: 'Inter, sans-serif', minWidth: 130 }}
                 >
                   {channels?.map(ch => (
@@ -2020,7 +2014,7 @@ export default function DashboardPage() {
             </div>
 
             {/* Filter bar */}
-            <div className="px-6 pt-4 pb-2">
+            <div className="px-4 sm:px-6 pt-4 pb-2">
               <div className="flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl"
                    style={{
                      background: isLightMode ? 'rgba(0, 0, 0, 0.02)' : 'rgba(255,255,255,0.03)',
@@ -2042,7 +2036,7 @@ export default function DashboardPage() {
             </div>
 
             {/* Messages */}
-            <div className="px-6 pb-4 h-[340px] overflow-y-auto space-y-2.5 pt-2">
+            <div className="px-4 sm:px-6 pb-4 h-[280px] sm:h-[340px] overflow-y-auto space-y-2.5 pt-2">
               {isFetchingMessages && !liveMessages ? (
                 <div className="space-y-3 pt-4">
                   {[1,2,3].map(i => (
@@ -3016,11 +3010,10 @@ export default function DashboardPage() {
           </section>
 
         </div>
-      </main>
 
       {/* Thread Drawer side drawer panel */}
       {activeThreadParentId && (
-        <div className="w-[380px] border-l flex flex-col h-full bg-card shrink-0 z-40 transition-all shadow-2xl relative"
+        <div className="fixed md:relative inset-0 md:inset-auto md:w-[380px] border-l flex flex-col h-full bg-card shrink-0 z-40 transition-all shadow-2xl"
              style={{
                borderLeft: isLightMode ? '1px solid rgba(0,0,0,0.08)' : '1px solid rgba(255,255,255,0.08)',
                background: isLightMode ? 'rgba(255,255,255,0.98)' : 'rgba(15,16,27,0.98)'
@@ -3624,9 +3617,7 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* Mobile Bottom Navigation Bar */}
-      <MobileBottomBar />
-    </div>
+    </AppLayout>
   );
 }
 
