@@ -11,7 +11,7 @@ import Script from 'next/script';
 import { motion } from 'framer-motion';
 
 export default function LoginPage() {
-  const { login } = useAuth();
+  const { login, user, loading: authLoading } = useAuth();
   const [isRegistering, setIsRegistering] = useState(false);
   const [isForgotPassword, setIsForgotPassword] = useState(false);
   const [forgotPasswordSuccess, setForgotPasswordSuccess] = useState<string | null>(null);
@@ -30,6 +30,12 @@ export default function LoginPage() {
 
   const [mounted, setMounted] = useState(false);
   const router = useRouter();
+
+  useEffect(() => {
+    if (!authLoading && user) {
+      router.replace('/dashboard');
+    }
+  }, [user, authLoading, router]);
 
   useEffect(() => {
     setMounted(true);
@@ -64,6 +70,29 @@ export default function LoginPage() {
   };
 
   useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const gToken = params.get('g_token');
+      const gUser = params.get('g_user');
+      const gRefresh = params.get('g_refresh');
+      const err = params.get('error');
+
+      if (err) {
+        setError(decodeURIComponent(err));
+        window.history.replaceState({}, '', window.location.pathname);
+      } else if (gToken && gUser) {
+        try {
+          const parsedUser = JSON.parse(gUser);
+          login(gToken, parsedUser, '/dashboard', gRefresh || undefined);
+          window.history.replaceState({}, '', window.location.pathname);
+        } catch {
+          setError('Failed to process Google sign-in payload.');
+        }
+      }
+    }
+  }, [login]);
+
+  useEffect(() => {
     const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || '';
     const isConfigured = clientId && !clientId.includes('your-google-client-id');
     setGoogleClientConfigured(!!isConfigured);
@@ -77,16 +106,25 @@ export default function LoginPage() {
       if (win.google?.accounts?.id) {
         win.google.accounts.id.initialize({
           client_id: clientId,
-          callback: handleGoogleSignIn,
+          ux_mode: 'redirect',
+          login_uri: `${window.location.origin}/api/auth/google/callback`,
+          auto_select: false,
+          cancel_on_tap_outside: true,
         });
+        try {
+          win.google.accounts.id.cancel();
+        } catch {
+          // Ignore if prompt wasn't active
+        }
 
         const btn = document.getElementById('google-signin-button');
         if (btn) {
           btn.innerHTML = '';
           win.google.accounts.id.renderButton(btn, {
+            type: 'standard',
             theme: isLightMode ? 'outline' : 'filled_dark',
             size: 'large',
-            text: 'continue_with',
+            text: isRegistering ? 'signup_with' : 'continue_with',
             shape: 'rectangular',
             width: 382, // matches container width
             logo_alignment: 'center',
@@ -109,6 +147,17 @@ export default function LoginPage() {
     };
   }, [isRegistering, isLightMode]);
 
+  if (authLoading || user) {
+    return (
+      <div className={`fixed inset-0 w-full h-full flex flex-col items-center justify-center font-mono text-xs z-50 transition-colors duration-500 ${
+        isLightMode ? 'bg-white text-slate-700' : 'bg-[#030408] text-slate-300'
+      }`}>
+        <div className="w-8 h-8 border-2 border-[#7c6af7]/30 border-t-[#7c6af7] rounded-full animate-spin mb-3" />
+        <span className="text-[11px] font-semibold text-[#7c6af7] animate-pulse">Redirecting to Dashboard...</span>
+      </div>
+    );
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -125,7 +174,7 @@ export default function LoginPage() {
           method: 'POST',
           body: { email }
         });
-        setForgotPasswordSuccess(data.message || 'If a user with that email address exists, a password reset link has been sent.');
+        setForgotPasswordSuccess(data.message || 'A password reset link has been sent to your email address.');
       } catch (err: any) {
         setError(err?.message || 'Failed to request password reset. Please try again.');
       } finally {
@@ -409,15 +458,13 @@ export default function LoginPage() {
           }`}>
             {isForgotPassword ? 'Reset Your Password' : isRegistering ? 'Create Your Account' : 'Welcome Back'}
           </h1>
-          <p className={`text-xs mt-2 text-center max-w-[320px] leading-relaxed transition-colors duration-500 ${
-            isLightMode ? 'text-slate-500' : 'text-slate-400'
-          }`}>
-            {isForgotPassword
-              ? "Enter the email associated with your account and we'll send you a link to reset your password."
-              : isRegistering
-              ? 'Join our workspace to collaborate, analyze threads, and synthesize actions with AI.'
-              : 'Sign in to collaborate, search workspace records, and summarize channels with AI.'}
-          </p>
+          {isForgotPassword && (
+            <p className={`text-xs mt-2 text-center max-w-[320px] leading-relaxed transition-colors duration-500 ${
+              isLightMode ? 'text-slate-500' : 'text-slate-400'
+            }`}>
+              Enter the email associated with your account and we'll send you a link to reset your password.
+            </p>
+          )}
         </div>
 
         {/* Success banner */}
@@ -445,7 +492,7 @@ export default function LoginPage() {
         )}
 
         {/* Auth form */}
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4" autoComplete="off">
           {!isForgotPassword && isRegistering && (
             <motion.div
               initial={{ opacity: 0, height: 0 }}
@@ -462,6 +509,9 @@ export default function LoginPage() {
                 }`} />
                 <input
                   type="text"
+                  name="user_fullname"
+                  autoComplete="off"
+                  aria-autocomplete="none"
                   placeholder="Enter full name"
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
@@ -485,6 +535,9 @@ export default function LoginPage() {
               }`} />
               <input
                 type="text"
+                name="user_email_address"
+                autoComplete="off"
+                aria-autocomplete="none"
                 placeholder="Enter email address"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -523,6 +576,8 @@ export default function LoginPage() {
                 }`} />
                 <input
                   type={showPassword ? 'text' : 'password'}
+                  name="user_password"
+                  autoComplete="new-password"
                   placeholder="••••••••"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
@@ -630,6 +685,8 @@ export default function LoginPage() {
                 }`} />
                 <input
                   type={showConfirmPassword ? 'text' : 'password'}
+                  name="user_confirm_password"
+                  autoComplete="new-password"
                   placeholder="Confirm password"
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}

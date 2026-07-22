@@ -93,17 +93,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Route protection
   useEffect(() => {
     if (!loading) {
-      const isPublicPath =
-        pathname === '/login' ||
-        pathname === '/' ||
-        pathname === '/privacy' ||
-        pathname === '/terms' ||
-        pathname === '/support' ||
-        pathname?.startsWith('/support');
-      if (!user && !isPublicPath) {
-        router.push('/login');
-      } else if (user && pathname === '/login') {
-        router.push('/dashboard');
+      const explicitProtectedRoutes = [
+        '/dashboard',
+        '/reports',
+        '/knowledge',
+        '/memory',
+        '/intelligence',
+        '/actions',
+        '/timeline',
+        '/settings',
+        '/profile',
+      ];
+      const isExplicitProtectedRoute = explicitProtectedRoutes.some(
+        (route) => pathname === route || (pathname && pathname.startsWith(route))
+      );
+
+      const guestOnlyPublicRoutes = ['/', '/login', '/reset-password'];
+      const isGuestOnlyPublicRoute = guestOnlyPublicRoutes.some(
+        (route) => pathname === route || (route !== '/' && pathname && pathname.startsWith(route))
+      );
+
+      if (!user && isExplicitProtectedRoute) {
+        router.replace('/login');
+      } else if (user && isGuestOnlyPublicRoute) {
+        router.replace('/dashboard');
       }
     }
   }, [user, loading, pathname, router]);
@@ -121,7 +134,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setRefreshToken(refreshToken);
     }
     if (redirectPath) {
-      router.push(redirectPath);
+      router.replace(redirectPath);
     }
   };
 
@@ -141,7 +154,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setRefreshToken(null);
     setToken(null);
     setUser(null);
-    router.push('/login');
+    setSlackUsers({});
+    router.replace('/');
   };
 
   return (

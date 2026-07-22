@@ -470,9 +470,15 @@ const useCases = [
 
 export default function LandingPage() {
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const isLightMode = theme === 'light';
+
+  useEffect(() => {
+    if (!loading && user) {
+      router.replace('/dashboard');
+    }
+  }, [user, loading, router]);
 
   // Scroll bindings for animations
   const targetRef = useRef<HTMLDivElement>(null);
@@ -530,6 +536,17 @@ export default function LandingPage() {
     const el = document.getElementById(id);
     if (el) el.scrollIntoView({ behavior: 'smooth' });
   };
+
+  if (loading || user) {
+    return (
+      <div ref={targetRef} className={`fixed inset-0 w-full h-full flex flex-col items-center justify-center font-mono text-xs z-50 transition-colors duration-500 ${
+        isLightMode ? 'bg-white text-slate-700' : 'bg-[#030408] text-slate-300'
+      }`}>
+        <div className="w-8 h-8 border-2 border-[#7c6af7]/30 border-t-[#7c6af7] rounded-full animate-spin mb-3" />
+        <span className="text-[11px] font-semibold text-[#7c6af7] animate-pulse">Redirecting to Dashboard...</span>
+      </div>
+    );
+  }
 
   return (
     <div ref={targetRef} className={`relative min-h-screen overflow-x-hidden selection:bg-[#7c6af7]/35 transition-colors duration-500 ${
@@ -651,7 +668,7 @@ export default function LandingPage() {
               }`}
             >
               <Sparkles className="w-3.5 h-3.5 animate-pulse" />
-              Intelligent Workspace Assistant
+              Turn Workspace Noise Into Actionable Intelligence.
             </motion.div>
 
             <motion.h1
@@ -667,19 +684,6 @@ export default function LandingPage() {
                 Ask AI Instead.
               </span>
             </motion.h1>
-
-            {/* Official Tagline */}
-            <motion.div
-              initial={{ opacity: 0, y: 15 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, delay: 0.25 }}
-              className="inline-flex items-center gap-2 py-1 text-base md:text-lg lg:text-xl font-medium tracking-tight"
-            >
-              <Sparkles className="w-4.5 h-4.5 text-[#a78bfa] shrink-0 animate-pulse" />
-              <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#7c6af7] via-purple-400 to-[#6366f1] font-semibold">
-                Turn Workspace Noise Into Actionable Intelligence.
-              </span>
-            </motion.div>
 
             <motion.p
               initial={{ opacity: 0, y: 15 }}
@@ -704,17 +708,6 @@ export default function LandingPage() {
               >
                 Start Analyzing
               </Link>
-              <button
-                onClick={() => scrollTo('demo')}
-                className={`px-6 py-3.5 rounded-xl text-[13px] font-bold border transition-all flex items-center gap-2 ${
-                  isLightMode
-                    ? 'border-slate-300 hover:bg-slate-100 text-slate-700'
-                    : 'border-white/10 hover:bg-white/5 text-slate-300'
-                }`}
-              >
-                <Play className="w-3.5 h-3.5 fill-current" />
-                Watch Demo
-              </button>
             </motion.div>
           </div>
 

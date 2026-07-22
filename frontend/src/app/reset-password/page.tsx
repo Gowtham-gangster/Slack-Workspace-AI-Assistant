@@ -4,6 +4,7 @@ import React, { useState, useEffect, useMemo, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { apiFetch } from '../../lib/api';
 import { useTheme } from '../../components/ThemeContext';
+import { useAuth } from '../../components/AuthContext';
 import { Sparkles, Lock, AlertCircle, Check, Sun, Moon, Eye, EyeOff, ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
@@ -11,6 +12,7 @@ import { motion } from 'framer-motion';
 function ResetPasswordContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
+  const { user, loading: authLoading } = useAuth();
   const token = searchParams.get('token');
 
   const [password, setPassword] = useState('');
@@ -24,6 +26,12 @@ function ResetPasswordContent() {
   const { theme, toggleTheme } = useTheme();
   const isLightMode = theme === 'light';
   const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    if (!authLoading && user) {
+      router.replace('/dashboard');
+    }
+  }, [user, authLoading, router]);
 
   useEffect(() => {
     setMounted(true);
@@ -42,6 +50,17 @@ function ResetPasswordContent() {
       duration: Math.random() * 12 + 18,
     }));
   }, []);
+
+  if (authLoading || user) {
+    return (
+      <div className={`fixed inset-0 w-full h-full flex flex-col items-center justify-center font-mono text-xs z-50 transition-colors duration-500 ${
+        isLightMode ? 'bg-white text-slate-700' : 'bg-[#030408] text-slate-300'
+      }`}>
+        <div className="w-8 h-8 border-2 border-[#7c6af7]/30 border-t-[#7c6af7] rounded-full animate-spin mb-3" />
+        <span className="text-[11px] font-semibold text-[#7c6af7] animate-pulse">Redirecting to Dashboard...</span>
+      </div>
+    );
+  }
 
   const hasUppercase = /[A-Z]/.test(password);
   const hasLowercase = /[a-z]/.test(password);
@@ -249,7 +268,7 @@ function ResetPasswordContent() {
             </Link>
           </div>
         ) : (
-          <form onSubmit={handleSubmit} className="space-y-4" noValidate>
+          <form onSubmit={handleSubmit} className="space-y-4" autoComplete="off" noValidate>
             <div>
               <label className={`block text-[11px] font-bold uppercase tracking-wider mb-2 ml-1 transition-colors duration-500 ${
                 isLightMode ? 'text-slate-600' : 'text-slate-400'
@@ -260,6 +279,8 @@ function ResetPasswordContent() {
                 }`} />
                 <input
                   type={showPassword ? 'text' : 'password'}
+                  name="new_password_reset"
+                  autoComplete="new-password"
                   placeholder="••••••••"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
@@ -290,6 +311,8 @@ function ResetPasswordContent() {
                 }`} />
                 <input
                   type={showConfirmPassword ? 'text' : 'password'}
+                  name="confirm_new_password_reset"
+                  autoComplete="new-password"
                   placeholder="••••••••"
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}

@@ -1,320 +1,539 @@
 'use client';
 
-import React, { useRef, useState, useMemo, useEffect } from 'react';
-import { Canvas, useFrame, useThree } from '@react-three/fiber';
-import { Html, MeshDistortMaterial } from '@react-three/drei';
+import React, { useRef, useState, useEffect, useMemo, Component, ErrorInfo, ReactNode } from 'react';
+import { Canvas, useFrame } from '@react-three/fiber';
+import { Html } from '@react-three/drei';
 import * as THREE from 'three';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useTheme } from './ThemeContext';
-import { Sparkles, MessageSquare, Zap, CheckCircle2, AlertCircle } from 'lucide-react';
+import {
+  Sparkles,
+  MessageSquare,
+  Zap,
+  CheckCircle2,
+  Search,
+  Check,
+  TrendingUp,
+  ArrowRight,
+  Shield,
+  User,
+  ListTodo,
+  FileCode,
+  Activity,
+  Hash
+} from 'lucide-react';
 
-// Single message node traveling into the core
-interface MessageNode {
-  id: string;
-  text: string;
-  category: 'dev' | 'review' | 'bug' | 'meeting' | 'design';
-  position: [number, number, number];
-  target: [number, number, number];
-  progress: number; // 0 to 1
-  speed: number;
-  curveOffset: [number, number, number];
+// Workflows Data
+const WORKFLOWS = [
+  {
+    id: 'search',
+    name: 'SEARCH EVERYTHING',
+    category: 'WORKSPACE SEARCH',
+    color: '#38bdf8',
+    badgeIcon: Search,
+    queryText: 'Find discussions about Q2 Launch',
+    inputChannel: 'Global Workspace',
+    inputAuthor: '@Gowtham',
+    outputTitle: 'Workspace Search Results',
+    outputBadge: '23 MATCHES',
+    outputItems: [
+      { label: '23 Messages found across 4 Channels', detail: '#engineering, #product', icon: MessageSquare, color: '#38bdf8' },
+      { label: 'Key Decision Identified', detail: 'Q2 Launch approved for Thursday 2 PM', icon: CheckCircle2, color: '#34d399' },
+      { label: 'Related Files Attached', detail: 'q2_launch_architecture.pdf, load_test.json', icon: FileCode, color: '#a78bfa' }
+    ],
+    metricLabel: 'Search Latency',
+    metricValue: '18ms'
+  },
+  {
+    id: 'chat',
+    name: 'AI WORKSPACE CHAT',
+    category: 'INTELLIGENT SUMMARY',
+    color: '#7c6af7',
+    badgeIcon: Sparkles,
+    queryText: 'Summarize today’s engineering discussion.',
+    inputChannel: '#db-migration',
+    inputAuthor: '@Priya',
+    outputTitle: 'AI Copilot Summary Response',
+    outputBadge: 'STREAMING AI',
+    outputItems: [
+      { label: 'MySQL 8.0 production migration complete', detail: 'All 10k records verified', icon: Check, color: '#34d399' },
+      { label: 'DB replica load-test passed at 12ms', detail: 'Zero query bottlenecks', icon: Zap, color: '#38bdf8' },
+      { label: 'Next Step: Audit OAuth rate limit intervals', detail: 'Assigned to @David', icon: ListTodo, color: '#fbbf24' }
+    ],
+    metricLabel: 'Channels Synced',
+    metricValue: '100%'
+  },
+  {
+    id: 'decisions',
+    name: 'DECISION DETECTION',
+    category: 'AUTOMATED DECISION LOG',
+    color: '#34d399',
+    badgeIcon: Shield,
+    queryText: '“Engineering consensus reached: Proceed with Q2 production launch.”',
+    inputChannel: '#eng-architecture',
+    inputAuthor: '@Priya & Team',
+    outputTitle: 'Decision Extracted & Audited',
+    outputBadge: 'CONSENSUS 100%',
+    outputItems: [
+      { label: '🟢 Q2 Production Launch Approved', detail: 'Target: Thursday 2:00 PM EST', icon: CheckCircle2, color: '#34d399' },
+      { label: 'Owner & Lead', detail: '@Engineering Operations', icon: User, color: '#a78bfa' },
+      { label: 'Consensus Verification', detail: '8 Team Approvals Recorded', icon: Shield, color: '#fbbf24' }
+    ],
+    metricLabel: 'Audit Status',
+    metricValue: 'Verified'
+  },
+  {
+    id: 'actions',
+    name: 'ACTION ITEM EXTRACTION',
+    category: 'TASK MANAGEMENT',
+    color: '#fbbf24',
+    badgeIcon: ListTodo,
+    queryText: '“Priya will test DB replica; Gowtham to update API docs; David to audit tokens.”',
+    inputChannel: '#standup-notes',
+    inputAuthor: '@David',
+    outputTitle: 'Action Items Extracted',
+    outputBadge: '3 TASKS CREATED',
+    outputItems: [
+      { label: 'Load-test DB replica with 10k dataset', detail: 'Owner: @Priya | Due Today', icon: ListTodo, color: '#38bdf8' },
+      { label: 'Document Slack MCP credentials guide', detail: 'Owner: @Gowtham | In Progress', icon: ListTodo, color: '#fbbf24' },
+      { label: 'Audit OAuth token refresh expiration', detail: 'Owner: @David | Completed', icon: CheckCircle2, color: '#34d399' }
+    ],
+    metricLabel: 'Tasks Assigned',
+    metricValue: '3 Items'
+  },
+  {
+    id: 'analytics',
+    name: 'WORKSPACE ANALYTICS',
+    category: 'HEALTH & METRICS',
+    color: '#f43f5e',
+    badgeIcon: Activity,
+    queryText: 'Analyze workspace activity & team engagement.',
+    inputChannel: 'All 18 Channels',
+    inputAuthor: 'Telemetry Engine',
+    outputTitle: 'Workspace Velocity Metrics',
+    outputBadge: 'HEALTH: 92%',
+    outputItems: [
+      { label: 'Team Collaboration Score', detail: '92% Healthy Engagement', icon: TrendingUp, color: '#34d399' },
+      { label: 'Top Active Channel', detail: '#engineering (142 messages/day)', icon: Hash, color: '#7c6af7' },
+      { label: 'Trending Topics', detail: 'MySQL Migration, OAuth Refresh', icon: Activity, color: '#0ea5e9' }
+    ],
+    metricLabel: 'Team Velocity',
+    metricValue: '+34%'
+  }
+];
+
+// Pre-allocated static buffers for instant WebGL performance
+const PARTICLE_COUNT = 25;
+const STATIC_PARTICLES = new Float32Array(PARTICLE_COUNT * 3);
+for (let i = 0; i < PARTICLE_COUNT; i++) {
+  STATIC_PARTICLES[i * 3] = (Math.random() - 0.5) * 5.0;
+  STATIC_PARTICLES[i * 3 + 1] = (Math.random() - 0.5) * 2.8;
+  STATIC_PARTICLES[i * 3 + 2] = (Math.random() - 0.5) * 1.2;
 }
 
-const FloatingNode = ({ node, onReachCore }: { node: MessageNode; onReachCore: (id: string) => void }) => {
-  const ref = useRef<THREE.Group>(null);
-  const { theme } = useTheme();
-  const isLight = theme === 'light';
+// Error Boundary for WebGL Context Loss
+interface ErrorBoundaryProps {
+  children: ReactNode;
+  fallback: ReactNode;
+}
 
-  useFrame((state, delta) => {
-    if (ref.current) {
-      // Increment progress
-      node.progress += delta * node.speed;
-      if (node.progress >= 1) {
-        onReachCore(node.id);
-        return;
-      }
+interface ErrorBoundaryState {
+  hasError: boolean;
+}
 
-      // Calculate path with a slight Bezier-like curve offset
-      const start = node.position;
-      const target = node.target;
-      const p = node.progress;
+class WebGLErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  public state: ErrorBoundaryState = { hasError: false };
 
-      // Linear interpolation + curve arch
-      const x = THREE.MathUtils.lerp(start[0], target[0], p) + Math.sin(p * Math.PI) * node.curveOffset[0];
-      const y = THREE.MathUtils.lerp(start[1], target[1], p) + Math.sin(p * Math.PI) * node.curveOffset[1];
-      const z = THREE.MathUtils.lerp(start[2], target[2], p) + Math.cos(p * Math.PI) * node.curveOffset[2];
+  public static getDerivedStateFromError(_: Error): ErrorBoundaryState {
+    return { hasError: true };
+  }
 
-      ref.current.position.set(x, y, z);
-      
-      // Face-towards camera rotation
-      ref.current.quaternion.copy(state.camera.quaternion);
+  public componentDidCatch(error: Error) {
+    console.warn('WebGL Error caught by boundary.', error);
+  }
+
+  public render() {
+    if (this.state.hasError) {
+      return this.props.fallback;
     }
-  });
+    return this.props.children;
+  }
+}
 
-  const iconAndColor = useMemo(() => {
-    switch (node.category) {
-      case 'dev':
-        return { icon: <CheckCircle2 className="w-3.5 h-3.5" />, bg: isLight ? 'bg-[#10b981]/15 text-[#047857] border-[#10b981]/30 shadow-[#10b981]/10' : 'bg-[#10b981]/15 text-[#34d399] border-[#10b981]/25 shadow-[0_0_15px_rgba(16,185,129,0.15)]' };
-      case 'review':
-        return { icon: <MessageSquare className="w-3.5 h-3.5" />, bg: isLight ? 'bg-[#7c6af7]/15 text-[#5b21b6] border-[#7c6af7]/30 shadow-[#7c6af7]/10' : 'bg-[#7c6af7]/15 text-[#a78bfa] border-[#7c6af7]/25 shadow-[0_0_15px_rgba(124,106,247,0.15)]' };
-      case 'bug':
-        return { icon: <AlertCircle className="w-3.5 h-3.5" />, bg: isLight ? 'bg-[#f43f5e]/15 text-[#9f1239] border-[#f43f5e]/30 shadow-[#f43f5e]/10' : 'bg-[#f43f5e]/15 text-[#f43f5e] border-[#f43f5e]/25 shadow-[0_0_15px_rgba(244,63,94,0.15)]' };
-      case 'meeting':
-        return { icon: <Sparkles className="w-3.5 h-3.5" />, bg: isLight ? 'bg-[#fbbf24]/15 text-[#78350f] border-[#fbbf24]/30 shadow-[#fbbf24]/10' : 'bg-[#fbbf24]/15 text-[#fbbf24] border-[#fbbf24]/25 shadow-[0_0_15px_rgba(251,191,36,0.15)]' };
-      default:
-        return { icon: <Zap className="w-3.5 h-3.5" />, bg: isLight ? 'bg-[#0ea5e9]/15 text-[#0369a1] border-[#0ea5e9]/30 shadow-[#0ea5e9]/10' : 'bg-[#0ea5e9]/15 text-[#38bdf8] border-[#0ea5e9]/25 shadow-[0_0_15px_rgba(14,165,233,0.15)]' };
-    }
-  }, [node.category, isLight]);
+// Fully Animated 3D Scene Component
+const FastHeroScene = ({
+  workflowIndex,
+  onEmblemClick,
+  setWorkflowIndex
+}: {
+  workflowIndex: number;
+  onEmblemClick: () => void;
+  setWorkflowIndex: (idx: number) => void;
+}) => {
+  const workflow = WORKFLOWS[workflowIndex % WORKFLOWS.length] || WORKFLOWS[0];
+  const BadgeIcon = workflow.badgeIcon;
 
   return (
-    <group ref={ref}>
-      <Html distanceFactor={5} center>
-        <div className={`flex items-center gap-2.5 px-3 py-1.5 rounded-full border backdrop-blur-md whitespace-nowrap text-[10.5px] font-bold transition-all duration-300 select-none shadow-md ${iconAndColor.bg}`}>
-          {iconAndColor.icon}
-          <span>{node.text}</span>
+    <div className="w-full h-full relative flex items-center justify-center p-4 overflow-hidden select-none">
+      {/* Dynamic Background Ambient Glow Layer */}
+      <motion.div
+        animate={{
+          scale: [1, 1.15, 1],
+          opacity: [0.2, 0.35, 0.2]
+        }}
+        transition={{
+          duration: 5,
+          repeat: Infinity,
+          ease: 'easeInOut'
+        }}
+        className="absolute inset-0 m-auto w-96 h-96 rounded-full bg-[#7c6af7]/30 blur-[130px] pointer-events-none"
+      />
+
+      {/* Floating Background Sparkle Dots */}
+      <div className="absolute inset-0 pointer-events-none overflow-hidden z-0">
+        {[...Array(12)].map((_, i) => (
+          <motion.div
+            key={i}
+            initial={{
+              x: `${(i * 8.5) % 100}%`,
+              y: '100%',
+              opacity: 0.1
+            }}
+            animate={{
+              y: ['100%', '-10%'],
+              opacity: [0.1, 0.6, 0.1],
+              scale: [0.8, 1.4, 0.8]
+            }}
+            transition={{
+              duration: 6 + (i % 5) * 2,
+              repeat: Infinity,
+              delay: i * 0.5,
+              ease: 'linear'
+            }}
+            className="absolute w-1.5 h-1.5 rounded-full bg-[#38bdf8] shadow-[0_0_8px_#38bdf8]"
+          />
+        ))}
+      </div>
+
+      {/* Active Workflow Header Badge */}
+      <div className="absolute top-4 left-4 z-20 flex items-center gap-2.5 px-3.5 py-1.5 rounded-full bg-[#090a14]/90 backdrop-blur-xl border border-white/10 text-[11px] font-mono font-bold text-slate-200 shadow-2xl">
+        <span className="w-2.5 h-2.5 rounded-full bg-[#38bdf8] animate-ping" />
+        <span style={{ color: workflow.color }}>{workflow.name}</span>
+        <span className="text-slate-600">|</span>
+        <span className="text-slate-400 font-normal">
+          Workflow {workflowIndex + 1}/{WORKFLOWS.length}
+        </span>
+      </div>
+
+      {/* Neural Stream Energy SVG Lines */}
+      <svg className="absolute inset-0 w-full h-full pointer-events-none z-0 hidden lg:block opacity-60">
+        <defs>
+          <linearGradient id="neuralGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stopColor="#38bdf8" stopOpacity="0.8" />
+            <stop offset="50%" stopColor="#7c6af7" stopOpacity="1" />
+            <stop offset="100%" stopColor="#34d399" stopOpacity="0.8" />
+          </linearGradient>
+        </defs>
+
+        <path d="M 220 240 Q 380 200 500 240" fill="none" stroke="url(#neuralGrad)" strokeWidth="2" strokeDasharray="6 6" />
+        <path d="M 500 240 Q 620 280 780 240" fill="none" stroke="url(#neuralGrad)" strokeWidth="2" strokeDasharray="6 6" />
+
+        <motion.circle
+          cx="220"
+          cy="240"
+          r="4"
+          fill="#38bdf8"
+          animate={{
+            cx: [220, 500],
+            cy: [240, 240],
+            opacity: [0, 1, 0]
+          }}
+          transition={{
+            duration: 2.2,
+            repeat: Infinity,
+            ease: 'easeInOut'
+          }}
+        />
+        <motion.circle
+          cx="500"
+          cy="240"
+          r="4"
+          fill="#34d399"
+          animate={{
+            cx: [500, 780],
+            cy: [240, 240],
+            opacity: [0, 1, 0]
+          }}
+          transition={{
+            duration: 2.2,
+            repeat: Infinity,
+            delay: 1.1,
+            ease: 'easeInOut'
+          }}
+        />
+      </svg>
+
+      {/* Main 3D Composition Grid */}
+      <div className="w-full max-w-5xl grid grid-cols-1 lg:grid-cols-12 gap-6 items-center z-10">
+        {/* Left Input Card */}
+        <motion.div
+          key={`input-${workflow.id}`}
+          initial={{ opacity: 0, x: -25, scale: 0.95 }}
+          animate={{
+            opacity: 1,
+            x: 0,
+            scale: 1,
+            y: [0, -6, 0]
+          }}
+          transition={{
+            opacity: { duration: 0.4 },
+            scale: { duration: 0.4 },
+            x: { duration: 0.4 },
+            y: { duration: 4, repeat: Infinity, ease: 'easeInOut' }
+          }}
+          className="lg:col-span-4 bg-[#090a14]/95 backdrop-blur-2xl border border-white/10 rounded-2xl p-4 shadow-2xl relative group hover:border-[#38bdf8]/40 transition-colors"
+        >
+          <div className="flex items-center justify-between border-b border-white/10 pb-2 mb-3">
+            <div className="flex items-center gap-1.5">
+              <BadgeIcon className="w-3.5 h-3.5" style={{ color: workflow.color }} />
+              <span className="text-[10px] font-mono font-bold text-white uppercase tracking-wider">
+                {workflow.category}
+              </span>
+            </div>
+            <span className="text-[9px] font-mono text-[#38bdf8] bg-[#0ea5e9]/10 px-2 py-0.5 rounded border border-[#0ea5e9]/20 font-bold">
+              {workflow.inputChannel}
+            </span>
+          </div>
+
+          <div className="bg-white/[0.02] border border-white/5 rounded-xl p-3 mb-3">
+            <p className="text-[11.5px] text-slate-100 font-medium leading-relaxed italic">
+              {workflow.queryText}
+            </p>
+          </div>
+
+          <div className="flex items-center justify-between text-[9.5px] font-mono text-slate-400 border-t border-white/5 pt-2">
+            <span className="text-slate-400 font-bold">{workflow.inputAuthor}</span>
+            <span className="flex items-center gap-1 text-[#38bdf8] font-bold">
+              <span>Streaming to AI</span>
+              <ArrowRight className="w-3 h-3 animate-pulse" />
+            </span>
+          </div>
+        </motion.div>
+        <div className="lg:col-span-4 flex flex-col items-center justify-center my-4 lg:my-0 relative">
+          <motion.div
+            animate={{
+              y: [0, -10, 0],
+              rotateZ: [0, 1, -1, 0]
+            }}
+            transition={{
+              duration: 4,
+              repeat: Infinity,
+              ease: 'easeInOut'
+            }}
+            whileHover={{ scale: 1.08 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={onEmblemClick}
+            className="relative cursor-pointer group"
+          >
+            {/* Pulsing Aura Rings */}
+            <motion.div
+              animate={{
+                scale: [1, 1.25, 1],
+                opacity: [0.3, 0.7, 0.3]
+              }}
+              transition={{
+                duration: 3,
+                repeat: Infinity,
+                ease: 'easeInOut'
+              }}
+              className="absolute -inset-4 rounded-full border border-[#0ea5e9]/40 pointer-events-none"
+            />
+            <div className="absolute -inset-2 rounded-3xl bg-gradient-to-r from-[#7c6af7] via-[#0ea5e9] to-[#34d399] blur-xl opacity-75 group-hover:opacity-100 transition duration-500 animate-pulse" />
+
+            <div className="relative w-32 h-32 rounded-[24px] bg-[#0c0d19]/90 backdrop-blur-2xl border border-white/20 flex flex-col items-center justify-center p-4 shadow-2xl overflow-hidden">
+              <img
+                src="/slack-app-icon.png"
+                alt="Slack AI Brain Logo"
+                className="w-18 h-18 object-contain filter drop-shadow-[0_0_15px_rgba(124,106,247,0.7)] group-hover:scale-110 transition-transform duration-300"
+              />
+              <div className="mt-1 flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-[#7c6af7]/20 border border-[#7c6af7]/40 text-[#a78bfa] text-[9.5px] font-mono font-bold tracking-widest uppercase">
+                <Sparkles className="w-2.5 h-2.5 text-[#0ea5e9] animate-pulse" />
+                <span>AI BRAIN</span>
+              </div>
+            </div>
+          </motion.div>
         </div>
-      </Html>
-    </group>
+
+        {/* Right Output Card */}
+        <motion.div
+          key={`output-${workflow.id}`}
+          initial={{ opacity: 0, x: 25, scale: 0.95 }}
+          animate={{
+            opacity: 1,
+            x: 0,
+            scale: 1,
+            y: [0, 6, 0]
+          }}
+          transition={{
+            opacity: { duration: 0.4 },
+            scale: { duration: 0.4 },
+            x: { duration: 0.4 },
+            y: { duration: 4.5, repeat: Infinity, ease: 'easeInOut' }
+          }}
+          className="lg:col-span-4 bg-[#0c0d19]/95 backdrop-blur-2xl border border-[#7c6af7]/40 rounded-2xl p-4 shadow-2xl relative group hover:border-[#7c6af7]/70 transition-colors"
+        >
+          <div className="flex items-center justify-between border-b border-white/10 pb-2.5 mb-3">
+            <div className="flex items-center gap-1.5">
+              <Zap className="w-4 h-4 text-[#0ea5e9] animate-pulse" />
+              <span className="text-[11px] font-bold text-white tracking-wide">
+                {workflow.outputTitle}
+              </span>
+            </div>
+            <span
+              className="text-[9px] font-mono font-bold px-2 py-0.5 rounded border"
+              style={{
+                backgroundColor: `${workflow.color}15`,
+                color: workflow.color,
+                borderColor: `${workflow.color}30`
+              }}
+            >
+              {workflow.outputBadge}
+            </span>
+          </div>
+
+          <div className="space-y-2 mb-3">
+            {workflow.outputItems.map((item, idx) => {
+              const ItemIcon = item.icon;
+              return (
+                <motion.div
+                  key={idx}
+                  initial={{ opacity: 0, x: 10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: idx * 0.1 + 0.15 }}
+                  className="flex items-start gap-2.5 p-2.5 rounded-xl bg-white/[0.03] border border-white/5 text-[11px] text-slate-200"
+                >
+                  <ItemIcon className="w-3.5 h-3.5 shrink-0 mt-0.5" style={{ color: item.color }} />
+                  <div className="flex flex-col gap-0.5">
+                    <span className="font-semibold text-slate-100 leading-snug">{item.label}</span>
+                    <span className="text-[9.5px] font-mono text-slate-400">{item.detail}</span>
+                  </div>
+                </motion.div>
+              );
+            })}
+          </div>
+
+          <div className="flex items-center justify-between text-[9.5px] font-mono border-t border-white/5 pt-2">
+            <span className="flex items-center gap-1 text-[#34d399] font-bold">
+              <Check className="w-3 h-3" /> Live Intelligence
+            </span>
+            <span className="text-[#a78bfa] font-bold">
+              {workflow.metricLabel}: {workflow.metricValue}
+            </span>
+          </div>
+        </motion.div>
+      </div>
+
+      {/* Scenario Progress Selector Pills */}
+      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#080913]/85 backdrop-blur-xl border border-white/10 shadow-2xl">
+        {WORKFLOWS.map((wf, idx) => (
+          <button
+            key={wf.id}
+            onClick={() => setWorkflowIndex(idx)}
+            className={`w-2 h-2 rounded-full transition-all duration-300 ${
+              idx === workflowIndex % WORKFLOWS.length
+                ? 'w-6 bg-[#38bdf8] shadow-[0_0_10px_#38bdf8]'
+                : 'bg-white/20 hover:bg-white/40'
+            }`}
+            title={wf.name}
+          />
+        ))}
+      </div>
+    </div>
   );
 };
 
-// Swirling Particle field surrounding the core
-const SwirlingParticles = ({ theme }: { theme: string }) => {
+// Optional WebGL Layer for High-End Devices
+const SimpleParticles = () => {
   const pointsRef = useRef<THREE.Points>(null);
-  const count = 350;
 
-  const [positions, speeds, phases] = useMemo(() => {
-    const pos = new Float32Array(count * 3);
-    const sp = new Float32Array(count);
-    const ph = new Float32Array(count);
-
-    for (let i = 0; i < count; i++) {
-      // Random radius from core
-      const r = THREE.MathUtils.randFloat(0.8, 3.2);
-      const theta = THREE.MathUtils.randFloat(0, Math.PI * 2);
-      const phi = THREE.MathUtils.randFloat(-Math.PI / 2, Math.PI / 2);
-
-      pos[i * 3] = r * Math.cos(theta) * Math.cos(phi);
-      pos[i * 3 + 1] = r * Math.sin(phi);
-      pos[i * 3 + 2] = r * Math.sin(theta) * Math.cos(phi);
-
-      sp[i] = THREE.MathUtils.randFloat(0.12, 0.45);
-      ph[i] = THREE.MathUtils.randFloat(0, Math.PI * 2);
-    }
-
-    return [pos, sp, ph];
-  }, []);
-
-  useFrame((state) => {
+  useFrame((_, delta) => {
     if (pointsRef.current) {
-      const time = state.clock.getElapsedTime();
-      const posArray = pointsRef.current.geometry.attributes.position.array as Float32Array;
-
-      for (let i = 0; i < count; i++) {
-        // Simple rotation around Y axis
+      const posArr = pointsRef.current.geometry.attributes.position.array as Float32Array;
+      for (let i = 0; i < PARTICLE_COUNT; i++) {
         const xIdx = i * 3;
-        const zIdx = i * 3 + 2;
-        const x = posArray[xIdx];
-        const z = posArray[zIdx];
-
-        // Orbit speed
-        const speed = speeds[i] * 0.15;
-        const cos = Math.cos(speed);
-        const sin = Math.sin(speed);
-
-        // Rotate
-        posArray[xIdx] = x * cos - z * sin;
-        posArray[zIdx] = x * sin + z * cos;
-
-        // Subtle up-down wave
-        posArray[i * 3 + 1] += Math.sin(time * 0.8 + phases[i]) * 0.0015;
+        posArr[xIdx] += delta * 1.2;
+        if (posArr[xIdx] > 2.8) {
+          posArr[xIdx] = -2.8;
+        }
       }
       pointsRef.current.geometry.attributes.position.needsUpdate = true;
     }
   });
 
-  const particleColor = useMemo(() => {
-    return theme === 'light' ? '#6366f1' : '#a78bfa';
-  }, [theme]);
-
   return (
     <points ref={pointsRef}>
       <bufferGeometry>
-        <bufferAttribute
-          attach="attributes-position"
-          args={[positions, 3]}
-        />
+        <bufferAttribute attach="attributes-position" args={[STATIC_PARTICLES, 3]} />
       </bufferGeometry>
-      <pointsMaterial
-        color={particleColor}
-        size={0.035}
-        transparent
-        opacity={0.45}
-        sizeAttenuation
-        depthWrite={false}
-      />
+      <pointsMaterial color="#38bdf8" size={0.05} transparent opacity={0.7} depthWrite={false} />
     </points>
   );
 };
 
-// Scene lighting, parallax, and core sphere controller
-const SceneContent = () => {
-  const { theme } = useTheme();
-  const isLight = theme === 'light';
-  const groupRef = useRef<THREE.Group>(null);
-  const coreRef = useRef<THREE.Mesh>(null);
-  
-  // Scenarios database
-  const scenariosList = useMemo(() => [
-    { text: 'Deployment Complete', category: 'dev' },
-    { text: 'Need API Review', category: 'review' },
-    { text: 'Bug Fixed', category: 'bug' },
-    { text: 'Meeting Scheduled', category: 'meeting' },
-    { text: 'Architecture Discussion', category: 'design' },
-    { text: 'New OAuth scopes approved', category: 'dev' },
-    { text: 'Database latency spike', category: 'bug' },
-    { text: 'Client demo ready', category: 'review' }
-  ], []);
+export default function ThreeHeroScene() {
+  const [workflowIndex, setWorkflowIndex] = useState(0);
+  const [useWebGL, setUseWebGL] = useState(false);
 
-  const [nodes, setNodes] = useState<MessageNode[]>([]);
-  const [coreScale, setCoreScale] = useState(1);
-  const [coreColor, setCoreColor] = useState(isLight ? '#7c6af7' : '#a78bfa');
-
-  // Spawn new nodes periodically
+  // Lazy enable light WebGL after initial fast render
   useEffect(() => {
-    const interval = setInterval(() => {
-      setNodes((prev) => {
-        if (prev.length >= 6) return prev; // Limit concurrent nodes
-        
-        // Random start point in 3D outer radius
-        const radius = 4.5;
-        const angle = Math.random() * Math.PI * 2;
-        const y = (Math.random() - 0.5) * 2.5;
-        
-        // Choose random scenario
-        const scenario = scenariosList[Math.floor(Math.random() * scenariosList.length)];
-        
-        const newNode: MessageNode = {
-          id: Math.random().toString(),
-          text: scenario.text,
-          category: scenario.category as any,
-          position: [Math.cos(angle) * radius, y, Math.sin(angle) * radius],
-          target: [0, 0, 0],
-          progress: 0,
-          speed: 0.18 + Math.random() * 0.15,
-          curveOffset: [
-            (Math.random() - 0.5) * 1.5,
-            (Math.random() - 0.5) * 1.5,
-            (Math.random() - 0.5) * 1.5
-          ]
-        };
-
-        return [...prev, newNode];
-      });
-    }, 1400);
-
-    return () => clearInterval(interval);
-  }, [scenariosList]);
-
-  const handleReachCore = (id: string) => {
-    // Remove the node
-    setNodes((prev) => prev.filter((n) => n.id !== id));
-    
-    // Animate core scaling / pulsing impact
-    setCoreScale(1.32);
-    setCoreColor(isLight ? '#3b82f6' : '#60a5fa');
-    setTimeout(() => {
-      setCoreScale(1);
-      setCoreColor(isLight ? '#7c6af7' : '#a78bfa');
-    }, 200);
-  };
-
-  // Mouse Parallax movement
-  useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => {
-      if (groupRef.current) {
-        const x = (e.clientX / window.innerWidth - 0.5) * 0.45;
-        const y = (e.clientY / window.innerHeight - 0.5) * 0.45;
-        
-        // Smoothly lerp towards position
-        groupRef.current.rotation.y = THREE.MathUtils.lerp(groupRef.current.rotation.y, x, 0.08);
-        groupRef.current.rotation.x = THREE.MathUtils.lerp(groupRef.current.rotation.x, y, 0.08);
+    const timer = setTimeout(() => {
+      try {
+        const canvas = document.createElement('canvas');
+        const gl = canvas.getContext('webgl');
+        if (gl) setUseWebGL(true);
+      } catch (e) {
+        setUseWebGL(false);
       }
-    };
+    }, 400);
 
-    window.addEventListener('mousemove', handleMouseMove);
-    return () => {
-      window.removeEventListener('mousemove', handleMouseMove);
-    };
+    return () => clearTimeout(timer);
   }, []);
 
-  useFrame((state) => {
-    if (coreRef.current) {
-      const time = state.clock.getElapsedTime();
-      // Spin the core
-      coreRef.current.rotation.y = time * 0.25;
-      coreRef.current.rotation.x = time * 0.15;
-      
-      // Pulse scale softly
-      const targetScale = coreScale + Math.sin(time * 2) * 0.025;
-      coreRef.current.scale.set(targetScale, targetScale, targetScale);
-    }
-  });
+  // Continuous 6-second workflow loop
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setWorkflowIndex((prev) => (prev + 1) % WORKFLOWS.length);
+    }, 6000);
 
-  return (
-    <group ref={groupRef}>
-      {/* Lights */}
-      <ambientLight intensity={isLight ? 0.9 : 0.4} />
-      <directionalLight position={[5, 5, 5]} intensity={isLight ? 1.5 : 0.8} />
-      <pointLight position={[-5, -5, -5]} intensity={isLight ? 0.6 : 0.3} color="#6366f1" />
+    return () => clearInterval(interval);
+  }, []);
 
-      {/* Swirling particle stream background */}
-      <SwirlingParticles theme={theme} />
+  const handleEmblemClick = () => {
+    setWorkflowIndex((prev) => (prev + 1) % WORKFLOWS.length);
+  };
 
-      {/* Central Crystal/Glass core sphere */}
-      <mesh ref={coreRef}>
-        <sphereGeometry args={[0.5, 64, 64]} />
-        <MeshDistortMaterial
-          color={coreColor}
-          distort={0.42}
-          speed={2.2}
-          roughness={isLight ? 0.1 : 0.2}
-          metalness={isLight ? 0.2 : 0.5}
-          clearcoat={1}
-          clearcoatRoughness={0.1}
-          transmission={0.88}
-          thickness={0.8}
-        />
-      </mesh>
-
-      {/* Spawns message nodes floating towards core */}
-      {nodes.map((node) => (
-        <FloatingNode
-          key={node.id}
-          node={node}
-          onReachCore={handleReachCore}
-        />
-      ))}
-    </group>
+  const fastScene = (
+    <FastHeroScene
+      workflowIndex={workflowIndex}
+      onEmblemClick={handleEmblemClick}
+      setWorkflowIndex={setWorkflowIndex}
+    />
   );
-};
 
-export default function ThreeHeroScene() {
-  const { theme } = useTheme();
+  if (!useWebGL) {
+    return fastScene;
+  }
 
   return (
-    <div className="w-full h-full relative cursor-grab active:cursor-grabbing select-none">
-      {/* Background glow shadow matching theme */}
-      <div className={`absolute inset-0 m-auto w-64 h-64 rounded-full blur-[120px] pointer-events-none transition-colors duration-500 ${
-        theme === 'light' ? 'bg-[#7c6af7]/15' : 'bg-[#7c6af7]/20'
-      }`} />
-      
-      <Canvas
-        camera={{ position: [0, 0, 4.8], fov: 60 }}
-        style={{ width: '100%', height: '100%', pointerEvents: 'auto' }}
-        gl={{ antialias: true }}
-      >
-        <SceneContent />
-      </Canvas>
-    </div>
+    <WebGLErrorBoundary fallback={fastScene}>
+      <div className="w-full h-full relative">
+        {fastScene}
+        <div className="absolute inset-0 pointer-events-none z-0 opacity-40">
+          <Canvas camera={{ position: [0, 0, 5], fov: 50 }} gl={{ powerPreference: 'high-performance', antialias: false }}>
+            <SimpleParticles />
+          </Canvas>
+        </div>
+      </div>
+    </WebGLErrorBoundary>
   );
 }

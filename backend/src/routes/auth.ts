@@ -698,9 +698,8 @@ router.post('/forgot-password', async (req: Request, res: Response) => {
   try {
     const user = await db.queryOne<any>('SELECT * FROM users WHERE email = ?', [email]);
     if (!user) {
-      // Return a generic success message to prevent user enumeration
-      return res.json({
-        message: 'If a user with that email address exists, a password reset link has been sent.'
+      return res.status(404).json({
+        error: 'No account found with that email address.'
       });
     }
 
@@ -723,7 +722,7 @@ router.post('/forgot-password', async (req: Request, res: Response) => {
     });
 
     res.json({
-      message: 'If a user with that email address exists, a password reset link has been sent.'
+      message: 'A password reset link has been sent to your email address.'
     });
   } catch (err: any) {
     console.error('Forgot password error:', err);
