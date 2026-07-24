@@ -28,7 +28,7 @@ import {
 } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import { useAuth } from '../components/AuthContext';
-import MobileBottomBar from '../components/MobileBottomBar';
+
 const ThreeHeroScene = dynamic(() => import('../components/ThreeHeroScene'), {
   ssr: false,
   loading: () => (
@@ -697,7 +697,7 @@ export default function LandingPage() {
           </div>
         </motion.div>
       </footer>
-      <MobileBottomBar />
+
     </div>
   );
 }

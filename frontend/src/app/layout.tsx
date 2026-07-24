@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import Providers from "../components/Providers";
 import { AuthProvider } from "../components/AuthContext";
+import SplashController from "../components/SplashController";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -77,10 +78,13 @@ export default function RootLayout({
       <body className="h-full bg-background text-foreground antialiased selection:bg-primary/35" suppressHydrationWarning>
         <Providers>
           <AuthProvider>
-            {children}
+            <SplashController>
+              {children}
+            </SplashController>
           </AuthProvider>
         </Providers>
       </body>
     </html>
   );
 }
+
