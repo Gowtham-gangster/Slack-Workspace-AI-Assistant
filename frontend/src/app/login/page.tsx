@@ -106,8 +106,8 @@ export default function LoginPage() {
       if (win.google?.accounts?.id) {
         win.google.accounts.id.initialize({
           client_id: clientId,
-          ux_mode: 'redirect',
-          login_uri: `${window.location.origin}/api/auth/google/callback`,
+          callback: handleGoogleSignIn,
+          ux_mode: 'popup',
           auto_select: false,
           cancel_on_tap_outside: true,
         });
