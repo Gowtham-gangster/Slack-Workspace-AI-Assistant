@@ -37,35 +37,7 @@
   --glow-success: 0 0 30px rgba(16, 185, 129, 0.15);
 }
 
-html.light {
-  --background: #f8fafc;
-  --foreground: #0f172a;
-  --card: #ffffff;
-  --card-foreground: #0f172a;
-  --popover: #ffffff;
-  --popover-foreground: #0f172a;
-  --primary: #7c6af7;
-  --primary-light: #6366f1;
-  --primary-foreground: #ffffff;
-  --secondary: #f1f5f9;
-  --secondary-foreground: #0f172a;
-  --muted: #f1f5f9;
-  --muted-foreground: #64748b;
-  --accent: #8b5cf6;
-  --accent-foreground: #ffffff;
-  --destructive: #ef4444;
-  --destructive-foreground: #ffffff;
-  --border: rgba(0, 0, 0, 0.08);
-  --border-light: rgba(0, 0, 0, 0.12);
-  --input: rgba(0, 0, 0, 0.03);
-  --ring: #7c6af7;
-  --success: #10b981;
-  --warning: #f59e0b;
 
-  /* Glow tokens in light mode */
-  --glow-primary: 0 0 40px rgba(124, 106, 247, 0.08);
-  --glow-success: 0 0 30px rgba(16, 185, 129, 0.06);
-}
 
 @theme inline {
   --color-background: var(--background);
