@@ -61,7 +61,11 @@ export async function POST(request: Request) {
 
 async function processGoogleCredential(credential: string, requestUrl: string) {
   try {
-    const backendUrl = process.env.NEXT_PUBLIC_API_URL ? process.env.NEXT_PUBLIC_API_URL.replace(/\/api\/?$/, '') : 'http://localhost:3001';
+    const rawBackendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+    const backendUrl = rawBackendUrl.replace(/\/api\/?$/, '');
+    
+    console.log(`[GoogleCallback] Forwarding credential to backend: ${backendUrl}/api/auth/google`);
+
     const res = await fetch(`${backendUrl}/api/auth/google`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -70,7 +74,8 @@ async function processGoogleCredential(credential: string, requestUrl: string) {
 
     if (!res.ok) {
       const errData = await res.json().catch(() => ({}));
-      const errorMsg = errData.error || 'Google authentication failed';
+      const errorMsg = errData.error || `Google auth backend error (HTTP ${res.status})`;
+      console.warn(`[GoogleCallback] Backend returned error: ${errorMsg}`);
       return NextResponse.redirect(new URL(`/login?error=${encodeURIComponent(errorMsg)}`, requestUrl), 303);
     }
 
@@ -84,7 +89,8 @@ async function processGoogleCredential(credential: string, requestUrl: string) {
 
     return NextResponse.redirect(new URL(`/login?${params.toString()}`, requestUrl), 303);
   } catch (err: any) {
-    console.error('Google OAuth processing error:', err);
-    return NextResponse.redirect(new URL('/login?error=Authentication server error', requestUrl), 303);
+    console.error('[GoogleCallback] OAuth processing exception:', err);
+    const detailMsg = err?.message || 'Unable to connect to authentication server';
+    return NextResponse.redirect(new URL(`/login?error=${encodeURIComponent(`Authentication server error: ${detailMsg}`)}`, requestUrl), 303);
   }
 }
