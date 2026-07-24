@@ -87,25 +87,36 @@ export function broadcastReactionUpdate(messageId: string, channelId: string, re
   };
 
   console.log(`[WebSocket] WebSocket emitted - reaction_update for message ${messageId} in room ${channelId}`);
-  // Emit to all clients (server-wide broadcast) or targeted to room
+  if (channelId) {
+    io.to(channelId).emit('reaction_update', payload);
+  }
   io.emit('reaction_update', payload);
 }
 
 export function broadcastNewMessage(channelId: string, message: any) {
   if (!io) return;
   console.log(`[WebSocket] WebSocket emitted - message for room ${channelId}`);
+  if (channelId) {
+    io.to(channelId).emit('message', { channelId, message });
+  }
   io.emit('message', { channelId, message });
 }
 
 export function broadcastMessageChanged(channelId: string, message: any) {
   if (!io) return;
   console.log(`[WebSocket] WebSocket emitted - message_changed for room ${channelId}`);
+  if (channelId) {
+    io.to(channelId).emit('message_changed', { channelId, message });
+  }
   io.emit('message_changed', { channelId, message });
 }
 
 export function broadcastMessageDeleted(channelId: string, deletedTs: string) {
   if (!io) return;
   console.log(`[WebSocket] WebSocket emitted - message_deleted for room ${channelId}`);
+  if (channelId) {
+    io.to(channelId).emit('message_deleted', { channelId, deletedTs });
+  }
   io.emit('message_deleted', { channelId, deletedTs });
 }
 

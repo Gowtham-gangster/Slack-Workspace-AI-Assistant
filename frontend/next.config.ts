@@ -42,6 +42,13 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  reactStrictMode: true,
+  experimental: {
+    optimizePackageImports: ['lucide-react', '@tanstack/react-query', 'framer-motion'],
+  },
+  images: {
+    formats: ['image/avif', 'image/webp'],
+  },
   async headers() {
     return [
       {

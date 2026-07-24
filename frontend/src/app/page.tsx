@@ -34,8 +34,6 @@ import dynamic from 'next/dynamic';
 import { useAuth } from '../components/AuthContext';
 import { useTheme } from '../components/ThemeContext';
 import MobileBottomBar from '../components/MobileBottomBar';
-import InteractiveDemoShowcase from '../components/InteractiveDemoShowcase';
-
 const ThreeHeroScene = dynamic(() => import('../components/ThreeHeroScene'), {
   ssr: false,
   loading: () => (
@@ -43,6 +41,10 @@ const ThreeHeroScene = dynamic(() => import('../components/ThreeHeroScene'), {
       Initializing WebGL Context...
     </div>
   )
+});
+
+const InteractiveDemoShowcase = dynamic(() => import('../components/InteractiveDemoShowcase'), {
+  ssr: false,
 });
 
 // Helper for count-up animations on scroll

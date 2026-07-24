@@ -27,7 +27,7 @@ const moreNav = menuItems.filter(
   (item) => !primaryNav.some((nav) => nav.href === item.path) && item.path !== '/profile'
 );
 
-export default function MobileBottomBar() {
+const MobileBottomBar = React.memo(function MobileBottomBar() {
   const pathname = usePathname();
   const [showMore, setShowMore] = useState(false);
 
@@ -148,4 +148,6 @@ export default function MobileBottomBar() {
       </nav>
     </>
   );
-}
+});
+
+export default MobileBottomBar;

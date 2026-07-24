@@ -125,7 +125,6 @@ app.use('/api/chat', chatRoutes);
 app.use('/api/files', filesRoutes);
 app.use('/api/notifications', notificationsRoutes);
 app.use('/api/slack', slackRoutes);
-app.use('/api/support', emailRoutes);
 
 // ─── Direct Slack OAuth Redirect Routes ──────────────────────────────────────
 app.get('/auth/slack', (req, res) => {
@@ -265,8 +264,8 @@ async function startServer() {
       isProcessingReminders = false;
     }
 
-    // SEC-05 + SEC-06: Hourly cleanup of unbounded audit tables (every 3600 ticks ≈ 60 minutes)
-    if (reminderJobTick % 3600 === 0) {
+    // SEC-05 + SEC-06: Hourly cleanup of unbounded audit tables (every 240 ticks ≈ 60 minutes)
+    if (reminderJobTick % 240 === 0) {
       try {
         await db.execute("DELETE FROM login_attempts WHERE attempted_at < NOW() - INTERVAL 24 HOUR");
         await db.execute("DELETE FROM refresh_tokens WHERE (revoked = 1 OR expires_at < NOW()) AND created_at < NOW() - INTERVAL 7 DAY");
@@ -275,7 +274,7 @@ async function startServer() {
         console.error('[Cleanup] Failed to prune stale rows:', cleanupErr);
       }
     }
-  }, 1000); // run every 1 second (1000ms) for millisecond-level responsiveness
+  }, 15000); // run every 15 seconds (15000ms) for background polling efficiency
 
 
   const shutdown = async () => {

@@ -537,7 +537,10 @@ export async function initializeDatabase() {
     { table: 'chat_messages', index: 'idx_msg_slack_chan_ts', definition: '(slack_channel_id, slack_message_ts)' },
     { table: 'chat_reactions', index: 'idx_reactions_msg_user', definition: '(message_id, user_id)' },
     { table: 'tool_executions', index: 'idx_tools_message', definition: '(message_id)' },
-    { table: 'refresh_tokens', index: 'idx_tokens_token_user', definition: '(token, user_id)' }
+    { table: 'refresh_tokens', index: 'idx_tokens_token_user', definition: '(token, user_id)' },
+    { table: 'chat_sessions', index: 'idx_sessions_user_updated', definition: '(user_id, updated_at)' },
+    { table: 'audit_logs', index: 'idx_audit_user_created', definition: '(user_id, created_at)' },
+    { table: 'slack_channels', index: 'idx_chan_user_name', definition: '(db_user_id, name)' }
   ];
 
   for (const idx of performanceIndexes) {
