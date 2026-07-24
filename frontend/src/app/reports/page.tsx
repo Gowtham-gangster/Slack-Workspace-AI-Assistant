@@ -24,7 +24,6 @@ import {
   HelpCircle
 } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
-import { useTheme } from '../../components/ThemeContext';
 import {
   ResponsiveContainer,
   LineChart,
@@ -99,8 +98,7 @@ function renderMarkdown(md: string, isLightMode: boolean) {
 }
 
 function ReportsPageContent() {
-  const { theme } = useTheme();
-  const isLightMode = theme === 'light';
+  const isLightMode = false;
   const queryClient = useQueryClient();
   const searchParams = useSearchParams();
   const reportUrlId = searchParams.get('id');

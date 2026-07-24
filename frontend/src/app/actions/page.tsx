@@ -30,8 +30,7 @@ interface ActionItem {
 }
 
 export default function ActionCenterPage() {
-  const { theme } = useTheme();
-  const isLightMode = theme === 'light';
+  const isLightMode = false;
   const queryClient = useQueryClient();
   const { slackUsers } = useAuth();
 

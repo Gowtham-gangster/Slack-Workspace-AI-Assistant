@@ -5,7 +5,6 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from './AuthContext';
-import { useTheme } from './ThemeContext';
 import { useQueryClient } from '@tanstack/react-query';
 import { apiFetch } from '../lib/api';
 import { menuItems } from '../lib/navigation';

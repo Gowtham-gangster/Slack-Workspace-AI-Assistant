@@ -5,7 +5,6 @@ import { Canvas, useFrame } from '@react-three/fiber';
 import { Html } from '@react-three/drei';
 import * as THREE from 'three';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useTheme } from './ThemeContext';
 import {
   Sparkles,
   MessageSquare,

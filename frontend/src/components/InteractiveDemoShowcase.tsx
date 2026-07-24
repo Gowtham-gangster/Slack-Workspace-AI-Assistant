@@ -25,7 +25,6 @@ import {
   FileText,
   AlertCircle
 } from 'lucide-react';
-import { useTheme } from './ThemeContext';
 import Link from 'next/link';
 
 interface CardItem {
@@ -182,8 +181,7 @@ const showcaseCards: CardItem[] = [
 ];
 
 export default function InteractiveDemoShowcase() {
-  const { theme } = useTheme();
-  const isLightMode = theme === 'light';
+  const isLightMode = false;
 
   const [activeCardIndex, setActiveCardIndex] = useState(0);
   const [typedQuery, setTypedQuery] = useState('');

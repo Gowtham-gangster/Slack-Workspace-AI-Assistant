@@ -4,7 +4,6 @@ import React, { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import AppLayout from '../../components/AppLayout';
 import { apiFetch } from '../../lib/api';
-import { useTheme } from '../../components/ThemeContext';
 import { useAuth } from '../../components/AuthContext';
 import { Network, Hash, AlertCircle, Info, Zap } from 'lucide-react';
 import AIErrorAlert from '../../components/AIErrorAlert';
@@ -39,8 +38,7 @@ interface GraphEdge {
 }
 
 export default function KnowledgeGraphPage() {
-  const { theme } = useTheme();
-  const isLightMode = theme === 'light';
+  const isLightMode = false;
   const { slackUsers } = useAuth();
 
   const [selectedChannel, setSelectedChannel] = useState('');

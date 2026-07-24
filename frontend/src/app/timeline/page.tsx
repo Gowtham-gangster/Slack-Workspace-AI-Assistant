@@ -29,8 +29,7 @@ const avatarColor = (id: string) => {
 };
 
 export default function TimelinePage() {
-  const { theme } = useTheme();
-  const isLightMode = theme === 'light';
+  const isLightMode = false;
   const { slackUsers } = useAuth();
 
   const getUserDisplayName = (userId: string) => {

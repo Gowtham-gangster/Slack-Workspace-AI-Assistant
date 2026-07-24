@@ -4,7 +4,6 @@ import React, { useState } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import AppLayout from '../../components/AppLayout';
 import { apiFetch } from '../../lib/api';
-import { useTheme } from '../../components/ThemeContext';
 import AIErrorAlert from '../../components/AIErrorAlert';
 import {
   Brain, TrendingUp, TrendingDown, Users, BarChart3,
@@ -23,8 +22,7 @@ const categoryColors: Record<string, string> = {
 };
 
 export default function IntelligencePage() {
-  const { theme } = useTheme();
-  const isLightMode = theme === 'light';
+  const isLightMode = false;
   const [selectedChannel, setSelectedChannel] = useState('');
   const [analyzingSentiment, setAnalyzingSentiment] = useState(false);
   const [sentimentData, setSentimentData] = useState<any>(null);

@@ -29,8 +29,7 @@ const EXAMPLE_PROMPTS = [
 ];
 
 export default function WorkspaceMemoryPage() {
-  const { theme } = useTheme();
-  const isLightMode = theme === 'light';
+  const isLightMode = false;
   const { slackUsers } = useAuth();
 
   const getUserDisplayName = (userId: string) => {
