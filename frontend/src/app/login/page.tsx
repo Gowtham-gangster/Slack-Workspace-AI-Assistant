@@ -124,10 +124,10 @@ export default function LoginPage() {
             type: 'standard',
             theme: isLightMode ? 'outline' : 'filled_dark',
             size: 'large',
-            text: isRegistering ? 'signup_with' : 'continue_with',
+            text: isRegistering ? 'signup_with' : 'signin_with',
             shape: 'rectangular',
             width: 382, // matches container width
-            logo_alignment: 'center',
+            logo_alignment: 'left',
           });
         }
       }
