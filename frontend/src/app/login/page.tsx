@@ -762,6 +762,7 @@ export default function LoginPage() {
                               client_id: clientId,
                               redirect_uri: `${window.location.origin}/api/auth/google/callback`,
                               response_type: 'id_token',
+                              response_mode: 'form_post',
                               scope: 'openid email profile',
                               prompt: 'select_account',
                               nonce: Math.random().toString(36).substring(2),
