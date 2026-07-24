@@ -3,9 +3,8 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
-import { Mail, ArrowUpRight, HelpCircle, ArrowLeft, Zap, Sun, Moon, Send, CheckCircle2, AlertCircle, User, MessageSquare, FileText } from 'lucide-react';
+import { Mail, ArrowUpRight, HelpCircle, ArrowLeft, Zap, Send, CheckCircle2, AlertCircle, User, MessageSquare, FileText } from 'lucide-react';
 import AppLayout from '../../components/AppLayout';
-import { useTheme } from '../../components/ThemeContext';
 import { useAuth } from '../../components/AuthContext';
 import { apiFetch } from '../../lib/api';
 
@@ -334,9 +333,8 @@ function SupportContent({ isLightMode, isGuest }: { isLightMode: boolean; isGues
 }
 
 export default function SupportPage() {
-  const { theme, toggleTheme } = useTheme();
   const { user } = useAuth();
-  const isLightMode = theme === 'light';
+  const isLightMode = false;
 
   // If user is authenticated, render inside the authenticated workspace layout
   if (user) {
@@ -382,15 +380,6 @@ export default function SupportPage() {
         </Link>
 
         <div className="flex items-center gap-3">
-          <button
-            onClick={toggleTheme}
-            className={`p-2 rounded-xl border transition-all text-muted-foreground hover:text-foreground ${
-              isLightMode ? 'bg-slate-100 border-slate-200' : 'bg-white/5 border-white/10'
-            }`}
-            aria-label="Toggle Theme"
-          >
-            {isLightMode ? <Sun className="w-4 h-4 text-amber-500" /> : <Moon className="w-4 h-4 text-primary" />}
-          </button>
 
           <Link
             href="/"

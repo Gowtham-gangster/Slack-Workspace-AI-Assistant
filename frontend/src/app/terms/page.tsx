@@ -12,8 +12,6 @@ import {
   AlertTriangle,
   FileText,
   ChevronUp,
-  Sun,
-  Moon,
   ArrowUpRight,
   Sparkles,
   Server,
@@ -24,7 +22,6 @@ import {
   Clock,
   CheckCircle2
 } from 'lucide-react';
-import { useTheme } from '../../components/ThemeContext';
 import { useAuth } from '../../components/AuthContext';
 import MobileBottomBar from '../../components/MobileBottomBar';
 
@@ -49,9 +46,8 @@ const sections = [
 ];
 
 export default function TermsOfServicePage() {
-  const { theme, toggleTheme } = useTheme();
   const { user } = useAuth();
-  const isLightMode = theme === 'light';
+  const isLightMode = false;
 
   const [activeSection, setActiveSection] = useState('acceptance-of-terms');
   const [scrollProgress, setScrollProgress] = useState(0);
@@ -143,15 +139,6 @@ export default function TermsOfServicePage() {
         </Link>
 
         <div className="flex items-center gap-3">
-          <button
-            onClick={toggleTheme}
-            className={`p-2 rounded-xl border transition-all text-muted-foreground hover:text-foreground ${
-              isLightMode ? 'bg-slate-100 border-slate-200' : 'bg-white/5 border-white/10'
-            }`}
-            aria-label="Toggle Theme"
-          >
-            {isLightMode ? <Sun className="w-4 h-4 text-amber-500" /> : <Moon className="w-4 h-4 text-primary" />}
-          </button>
 
           <Link
             href="/"

@@ -11,8 +11,6 @@ import { apiFetch } from '../lib/api';
 import { menuItems } from '../lib/navigation';
 import {
   LogOut,
-  Sun,
-  Moon,
   ChevronLeft,
   ChevronRight,
   Menu,
@@ -23,8 +21,7 @@ const Sidebar = React.memo(function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const { user, logout } = useAuth();
-  const { theme, toggleTheme } = useTheme();
-  const isLightMode = theme === 'light';
+  const isLightMode = false;
   const queryClient = useQueryClient();
 
   const [isCollapsed, setIsCollapsed] = useState(false);
@@ -101,7 +98,7 @@ const Sidebar = React.memo(function Sidebar() {
       <header
         className="md:hidden fixed top-0 left-0 right-0 z-50 h-14 flex items-center justify-between px-4 pt-safe border-b border-border/60 backdrop-blur-xl"
         style={{
-          background: isLightMode ? 'rgba(255,255,255,0.92)' : 'rgba(8,9,16,0.92)',
+          background: 'rgba(8,9,16,0.92)',
         }}
       >
         <div className="flex items-center gap-2.5 min-w-0">
@@ -113,7 +110,7 @@ const Sidebar = React.memo(function Sidebar() {
             </div>
           </div>
           <div className="min-w-0">
-            <p className={`text-sm font-bold leading-none truncate ${isLightMode ? 'text-slate-900' : 'text-white'}`}>
+            <p className="text-sm font-bold leading-none truncate text-white">
               Slack AI
             </p>
             <p className="text-[10px] font-semibold text-primary truncate">Workspace Assistant</p>
@@ -121,13 +118,6 @@ const Sidebar = React.memo(function Sidebar() {
         </div>
 
         <div className="flex items-center gap-1.5 shrink-0">
-          <button
-            onClick={toggleTheme}
-            className="w-10 h-10 rounded-xl flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-secondary/60 transition-colors touch-manipulation"
-            aria-label="Toggle theme"
-          >
-            {isLightMode ? <Sun className="w-4 h-4 text-amber-500" /> : <Moon className="w-4 h-4 text-primary" />}
-          </button>
           <button
             onClick={() => setIsMobileMenuOpen(true)}
             className="w-10 h-10 rounded-xl flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-secondary/60 transition-colors touch-manipulation"
@@ -265,17 +255,6 @@ const Sidebar = React.memo(function Sidebar() {
         </nav>
 
         <div className="p-3 border-t border-border/60 space-y-2">
-          <button
-            onClick={toggleTheme}
-            className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium text-muted-foreground bg-secondary/30 border border-border/60 hover:bg-secondary hover:text-foreground transition-all cursor-pointer ${
-              isCollapsed ? 'justify-center px-0' : ''
-            }`}
-          >
-            <span className="flex items-center gap-2">
-              {isLightMode ? <Sun className="w-3.5 h-3.5 text-amber-500" /> : <Moon className="w-3.5 h-3.5 text-primary" />}
-              {!isCollapsed && (isLightMode ? 'Light Mode' : 'Dark Mode')}
-            </span>
-          </button>
 
           <Link
             href="/profile"

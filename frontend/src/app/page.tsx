@@ -473,8 +473,7 @@ const useCases = [
 export default function LandingPage() {
   const router = useRouter();
   const { user, loading } = useAuth();
-  const { theme, toggleTheme } = useTheme();
-  const isLightMode = theme === 'light';
+  const isLightMode = false;
 
   useEffect(() => {
     if (!loading && user) {
@@ -595,17 +594,6 @@ export default function LandingPage() {
         </nav>
 
         <div className="flex items-center gap-2 sm:gap-3">
-          <button
-            onClick={toggleTheme}
-            className={`inline-flex items-center justify-center p-2 rounded-xl border transition-all duration-300 outline-none ${
-              isLightMode
-                ? 'bg-slate-100/60 border-slate-200 text-slate-700 shadow-sm hover:bg-slate-200/80 hover:text-slate-900'
-                : 'bg-white/[0.02] border-white/[0.06] text-slate-400 hover:bg-white/[0.08] hover:text-white'
-            }`}
-            aria-label="Toggle Theme"
-          >
-            {isLightMode ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4" />}
-          </button>
           <Link
             href="/login"
             className={`flex items-center gap-1.5 px-3.5 sm:px-4 py-2 rounded-xl text-[12px] font-semibold transition-all ${

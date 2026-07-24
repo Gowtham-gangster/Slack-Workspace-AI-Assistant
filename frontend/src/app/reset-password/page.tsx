@@ -3,9 +3,8 @@
 import React, { useState, useEffect, useMemo, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { apiFetch } from '../../lib/api';
-import { useTheme } from '../../components/ThemeContext';
 import { useAuth } from '../../components/AuthContext';
-import { Sparkles, Lock, AlertCircle, Check, Sun, Moon, Eye, EyeOff, ArrowLeft } from 'lucide-react';
+import { Sparkles, Lock, AlertCircle, Check, Eye, EyeOff, ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 
@@ -22,10 +21,8 @@ function ResetPasswordContent() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [loading, setLoading] = useState(false);
-  
-  const { theme, toggleTheme } = useTheme();
-  const isLightMode = theme === 'light';
   const [mounted, setMounted] = useState(false);
+  const isLightMode = false;
 
   useEffect(() => {
     if (!authLoading && user) {
@@ -185,18 +182,6 @@ function ResetPasswordContent() {
           <ArrowLeft className="w-3.5 h-3.5" />
           Back to Login
         </Link>
-
-        <button
-          onClick={toggleTheme}
-          className={`inline-flex items-center justify-center p-2 rounded-xl border transition-all duration-300 ${
-            isLightMode
-              ? 'bg-white border-slate-200 text-slate-700 shadow-sm hover:bg-slate-50 hover:text-slate-900'
-              : 'bg-white/[0.02] border-white/[0.06] text-slate-400 hover:bg-white/[0.08] hover:text-white'
-          }`}
-          aria-label="Toggle Theme"
-        >
-          {isLightMode ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4" />}
-        </button>
       </header>
 
       {/* Inner smooth-scroll layer — sits above background, below header */}

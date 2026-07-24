@@ -5,7 +5,6 @@ import { useMutation } from '@tanstack/react-query';
 import AppLayout from '../../components/AppLayout';
 import { useAuth } from '../../components/AuthContext';
 import { apiFetch } from '../../lib/api';
-import { useTheme } from '../../components/ThemeContext';
 import { 
   User, 
   Mail, 
@@ -15,16 +14,12 @@ import {
   XCircle, 
   Trash2, 
   LogOut, 
-  AlertTriangle,
-  Sun,
-  Moon,
-  Palette
+  AlertTriangle
 } from 'lucide-react';
 
 export default function ProfilePage() {
   const { user, login, logout } = useAuth();
-  const { theme, toggleTheme } = useTheme();
-  const isLightMode = theme === 'light';
+  const isLightMode = false;
   
   // Profile form states
   const [fullName, setFullName] = useState('');
@@ -232,49 +227,6 @@ export default function ProfilePage() {
 
             {/* Right column: Theme Settings and Danger Zone Cards (col-span-5) */}
             <div className="md:col-span-5 space-y-6 flex flex-col">
-              {/* Theme Settings Card */}
-              <div className="glass rounded-3xl p-6 space-y-4">
-                <div className="flex items-center gap-2.5 border-b border-border pb-3 mb-2">
-                  <Palette className="w-5 h-5 text-primary" />
-                  <h3 className={`text-sm font-bold ${isLightMode ? 'text-slate-800' : 'text-white'}`}>App Theme Settings</h3>
-                </div>
-                <p className="text-[11.5px] text-slate-400 leading-relaxed">
-                  Customize the look and feel of your application workspace.
-                </p>
-                <div className="flex gap-3 pt-2">
-                  <button
-                    suppressHydrationWarning
-                    type="button"
-                    onClick={() => { if (theme !== 'light') toggleTheme(); }}
-                    className={`flex-1 py-3 px-4 rounded-xl text-xs font-semibold border flex items-center justify-center gap-2 transition-all duration-300 ${
-                      theme === 'light'
-                        ? 'bg-primary/10 border-primary text-primary shadow-sm shadow-primary/5 font-bold'
-                        : isLightMode
-                        ? 'bg-slate-100/50 border-slate-200 text-slate-500 hover:text-slate-800 hover:bg-slate-200/80'
-                        : 'bg-white/[0.02] border-white/[0.06] text-slate-400 hover:text-white hover:bg-white/[0.05]'
-                    }`}
-                  >
-                    <Sun className="w-4 h-4" />
-                    Light Theme
-                  </button>
-                  <button
-                    suppressHydrationWarning
-                    type="button"
-                    onClick={() => { if (theme !== 'dark') toggleTheme(); }}
-                    className={`flex-1 py-3 px-4 rounded-xl text-xs font-semibold border flex items-center justify-center gap-2 transition-all duration-300 ${
-                      theme === 'dark'
-                        ? 'bg-primary/10 border-primary text-primary shadow-sm shadow-primary/5 font-bold'
-                        : isLightMode
-                        ? 'bg-slate-100/50 border-slate-200 text-slate-500 hover:text-slate-800 hover:bg-slate-200/80'
-                        : 'bg-white/[0.02] border-white/[0.06] text-slate-400 hover:text-white hover:bg-white/[0.05]'
-                    }`}
-                  >
-                    <Moon className="w-4 h-4" />
-                    Dark Theme
-                  </button>
-                </div>
-              </div>
-
               {/* Account Safety Card */}
               <div className="glass rounded-3xl p-6 border-red-500/10 bg-red-500/[0.01] flex flex-col justify-between flex-1 min-h-[220px]">
                 <div>

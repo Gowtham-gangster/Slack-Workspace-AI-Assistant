@@ -12,15 +12,12 @@ import {
   Settings, 
   User, 
   BarChart3, 
-  Sun, 
-  Moon, 
   Sparkles,
   Command,
   X,
   ArrowRight,
   HelpCircle
 } from 'lucide-react';
-import { useTheme } from './ThemeContext';
 
 interface CommandPaletteProps {
   isOpen: boolean;
@@ -31,7 +28,6 @@ export default function CommandPalette({ isOpen, onClose }: CommandPaletteProps)
   const [query, setQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
   const router = useRouter();
-  const { theme, toggleTheme } = useTheme();
   const inputRef = useRef<HTMLInputElement>(null);
 
   const actions = [
@@ -42,7 +38,6 @@ export default function CommandPalette({ isOpen, onClose }: CommandPaletteProps)
     { id: 'settings', title: 'Configure App Settings', category: 'System', icon: Settings, href: '/settings' },
     { id: 'profile', title: 'View User Profile & Bio', category: 'System', icon: User, href: '/profile' },
     { id: 'support', title: 'Open Developer Support & Contact', category: 'Help', icon: HelpCircle, href: '/support' },
-    { id: 'theme', title: `Toggle Theme (Current: ${theme})`, category: 'Preference', icon: theme === 'dark' ? Sun : Moon, action: toggleTheme },
   ];
 
   const filteredActions = actions.filter((a) =>
@@ -62,8 +57,6 @@ export default function CommandPalette({ isOpen, onClose }: CommandPaletteProps)
     onClose();
     if (item.href) {
       router.push(item.href);
-    } else if (item.action) {
-      item.action();
     }
   }, [onClose, router]);
 

@@ -3,8 +3,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../../components/AuthContext';
 import { apiFetch } from '../../lib/api';
-import { useTheme } from '../../components/ThemeContext';
-import { Sparkles, Lock, Mail, AlertCircle, ArrowLeft, User, Check, Sun, Moon, Eye, EyeOff } from 'lucide-react';
+import { Sparkles, Lock, Mail, AlertCircle, ArrowLeft, User, Check, Eye, EyeOff } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import Script from 'next/script';
@@ -23,10 +22,9 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [googleClientConfigured, setGoogleClientConfigured] = useState(false);
-  const { theme, toggleTheme } = useTheme();
-  const isLightMode = theme === 'light';
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const isLightMode = false;
 
   const [mounted, setMounted] = useState(false);
   const router = useRouter();
@@ -404,17 +402,6 @@ export default function LoginPage() {
           <ArrowLeft className="w-3.5 h-3.5" />
           Back to Home
         </Link>
-
-        <button
-          onClick={toggleTheme}
-          className={`inline-flex items-center justify-center p-2 rounded-xl border transition-all duration-300 ${isLightMode
-              ? 'bg-white border-slate-200 text-slate-700 shadow-sm hover:bg-slate-50 hover:text-slate-900'
-              : 'bg-white/[0.02] border-white/[0.06] text-slate-400 hover:bg-white/[0.08] hover:text-white'
-            }`}
-          aria-label="Toggle Theme"
-        >
-          {isLightMode ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4" />}
-        </button>
       </header>
 
       {/* Inner smooth-scroll layer — sits above background, below header */}
