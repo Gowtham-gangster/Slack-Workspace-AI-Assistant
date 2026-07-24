@@ -106,15 +106,15 @@ export default function LoginPage() {
       if (win.google?.accounts?.id) {
         win.google.accounts.id.initialize({
           client_id: clientId,
-          callback: handleGoogleSignIn,
-          ux_mode: 'popup',
+          ux_mode: 'redirect',
+          login_uri: `${window.location.origin}/api/auth/google/callback`,
           auto_select: false,
           cancel_on_tap_outside: true,
         });
         try {
           win.google.accounts.id.cancel();
         } catch {
-          // Ignore if prompt wasn't active
+          // Ignore
         }
 
         const btn = document.getElementById('google-signin-button');
@@ -752,13 +752,21 @@ export default function LoginPage() {
                     <button
                       type="button"
                       onClick={() => {
-                        const win = window as any;
-                        if (win.google?.accounts?.id) {
-                          const hiddenBtn = document.querySelector('#google-signin-button div[role="button"]') as HTMLElement;
-                          if (hiddenBtn) {
-                            hiddenBtn.click();
-                          } else {
-                            win.google.accounts.id.prompt();
+                        const hiddenBtn = document.querySelector('#google-signin-button div[role="button"]') as HTMLElement;
+                        if (hiddenBtn) {
+                          hiddenBtn.click();
+                        } else {
+                          const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || '';
+                          if (clientId) {
+                            const googleAuthUrl = `https://accounts.google.com/o/oauth2/v2/auth?` + new URLSearchParams({
+                              client_id: clientId,
+                              redirect_uri: `${window.location.origin}/api/auth/google/callback`,
+                              response_type: 'id_token',
+                              scope: 'openid email profile',
+                              prompt: 'select_account',
+                              nonce: Math.random().toString(36).substring(2),
+                            }).toString();
+                            window.location.href = googleAuthUrl;
                           }
                         }
                       }}
