@@ -4,7 +4,6 @@ import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import AppLayout from '../../components/AppLayout';
 import { apiFetch } from '../../lib/api';
-import { useTheme } from '../../components/ThemeContext';
 import { useAuth } from '../../components/AuthContext';
 import {
   CheckSquare, Search, Trash2, Calendar, User, Hash, Plus,
@@ -30,7 +29,6 @@ interface ActionItem {
 }
 
 export default function ActionCenterPage() {
-  const isLightMode = false;
   const queryClient = useQueryClient();
   const { slackUsers } = useAuth();
 
@@ -145,21 +143,11 @@ export default function ActionCenterPage() {
   const inProgressItems = filteredItems.filter(item => item.status === 'in_progress');
   const completedItems = filteredItems.filter(item => item.status === 'completed');
 
-  const cardStyle = `p-4 rounded-2xl border transition-all duration-200 ${
-    isLightMode
-      ? 'bg-white border-slate-200 hover:shadow-md'
-      : 'bg-white/[0.03] border-white/[0.07] hover:bg-white/[0.05]'
-  }`;
+  const cardStyle = "p-4 rounded-2xl border transition-all duration-200 bg-white/[0.03] border-white/[0.07] hover:bg-white/[0.05]";
 
-  const colHeaderStyle = `flex items-center justify-between mb-4 font-bold text-sm ${
-    isLightMode ? 'text-slate-800' : 'text-white'
-  }`;
+  const colHeaderStyle = "flex items-center justify-between mb-4 font-bold text-sm text-white";
 
-  const inputStyle = `px-3 py-2 rounded-xl text-xs border outline-none ${
-    isLightMode
-      ? 'bg-slate-50 border-slate-200 text-slate-700 focus:bg-white'
-      : 'bg-white/[0.05] border-white/[0.1] text-slate-200 focus:bg-black/40'
-  }`;
+  const inputStyle = "px-3 py-2 rounded-xl text-xs border outline-none bg-white/[0.05] border-white/[0.1] text-slate-200 focus:bg-black/40";
 
   return (
     <AppLayout>
@@ -173,24 +161,20 @@ export default function ActionCenterPage() {
                 <CheckSquare className="w-4.5 h-4.5 text-white" />
               </div>
               <div>
-                <h1 className={`text-xl font-bold ${isLightMode ? 'text-slate-900' : 'text-white'}`}>Action Center</h1>
-                <p className={`text-sm ${isLightMode ? 'text-slate-500' : 'text-slate-400'}`}>
+                <h1 className="text-xl font-bold text-white">Action Center</h1>
+                <p className="text-sm text-slate-400">
                   AI-extracted action items and workspace tasks
                 </p>
               </div>
             </div>
 
             {/* AI Scan Trigger */}
-            <div className={`flex items-center gap-2 p-3 rounded-2xl border ${
-              isLightMode ? 'bg-white border-slate-200 shadow-sm' : 'bg-white/[0.03] border-white/[0.07]'
-            }`}>
-              <span className={`text-xs font-semibold ${isLightMode ? 'text-slate-600' : 'text-slate-400'}`}>Scan Channel:</span>
+            <div className="flex items-center gap-2 p-3 rounded-2xl border bg-white/[0.03] border-white/[0.07]">
+              <span className="text-xs font-semibold text-slate-400">Scan Channel:</span>
               <select
                 value={selectedChannel}
                 onChange={e => setSelectedChannel(e.target.value)}
-                className={`px-3 py-1.5 rounded-xl text-xs border outline-none ${
-                  isLightMode ? 'bg-slate-100 border-slate-200 text-slate-700' : 'bg-white/[0.05] border-white/[0.1] text-slate-200'
-                }`}
+                className="px-3 py-1.5 rounded-xl text-xs border outline-none bg-white/[0.05] border-white/[0.1] text-slate-200"
               >
                 <option value="">Choose channel...</option>
                 {channels?.map((c: any) => (
@@ -222,23 +206,15 @@ export default function ActionCenterPage() {
                 placeholder="Search task details, owner, or channel..."
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
-                className={`w-full pl-10 pr-4 py-2.5 rounded-xl text-sm border outline-none ${
-                  isLightMode
-                    ? 'bg-white border-slate-200 text-slate-700 shadow-sm focus:border-slate-300'
-                    : 'bg-white/[0.03] border-white/[0.07] text-slate-200 focus:bg-white/[0.05]'
-                }`}
+                className="w-full pl-10 pr-4 py-2.5 rounded-xl text-sm border outline-none bg-white/[0.03] border-white/[0.07] text-slate-200 focus:bg-white/[0.05]"
               />
             </div>
           </div>
 
           {error && (
-            <div className="flex items-center gap-3 p-4 rounded-2xl mb-6" 
-                 style={{ 
-                   background: isLightMode ? 'rgba(239,68,68,0.05)' : 'rgba(239,68,68,0.08)', 
-                   border: isLightMode ? '1px solid rgba(239,68,68,0.15)' : '1px solid rgba(239,68,68,0.2)' 
-                 }}>
-              <AlertCircle className={`w-4 h-4 shrink-0 ${isLightMode ? 'text-red-650' : 'text-red-400'}`} style={isLightMode ? { color: '#dc2626' } : {}} />
-              <p className={`text-sm font-medium ${isLightMode ? 'text-red-800' : 'text-red-400'}`}>{(error as any)?.message || 'Failed to fetch tasks.'}</p>
+            <div className="flex items-center gap-3 p-4 rounded-2xl mb-6 bg-red-500/10 border border-red-500/20">
+              <AlertCircle className="w-4 h-4 shrink-0 text-red-400" />
+              <p className="text-sm font-medium text-red-400">{(error as any)?.message || 'Failed to fetch tasks.'}</p>
             </div>
           )}
 
@@ -246,9 +222,9 @@ export default function ActionCenterPage() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               {[...Array(3)].map((_, i) => (
                 <div key={i} className="space-y-4 animate-pulse">
-                  <div className="h-6 w-32 rounded" style={{ background: isLightMode ? '#e2e8f0' : 'rgba(255,255,255,0.08)' }} />
-                  <div className="h-40 rounded-2xl" style={{ background: isLightMode ? '#f1f5f9' : 'rgba(255,255,255,0.04)' }} />
-                  <div className="h-40 rounded-2xl" style={{ background: isLightMode ? '#f1f5f9' : 'rgba(255,255,255,0.04)' }} />
+                  <div className="h-6 w-32 rounded bg-white/[0.08]" />
+                  <div className="h-40 rounded-2xl bg-white/[0.04]" />
+                  <div className="h-40 rounded-2xl bg-white/[0.04]" />
                 </div>
               ))}
             </div>
@@ -342,7 +318,7 @@ export default function ActionCenterPage() {
     return (
       <div className="space-y-3">
         {/* Title */}
-        <p className={`text-sm font-semibold leading-snug ${isLightMode ? 'text-slate-800' : 'text-slate-100'}`}>
+        <p className="text-sm font-semibold leading-snug text-slate-100">
           {item.task}
         </p>
 
@@ -388,7 +364,7 @@ export default function ActionCenterPage() {
                 ) : (
                   <User className="w-3.5 h-3.5 shrink-0" />
                 )}
-                <span>Assignee: <strong className={isLightMode ? 'text-slate-700' : 'text-slate-200'}>{getUserDisplayName(item.owner)}</strong></span>
+                <span>Assignee: <strong className="text-slate-200">{getUserDisplayName(item.owner)}</strong></span>
               </div>
               {item.due_date && (
                 <div className="flex items-center gap-1.5 text-xs" style={{ color: '#9ca3af' }}>
@@ -401,7 +377,7 @@ export default function ActionCenterPage() {
         </div>
 
         {/* Action Controls */}
-        <div className="flex items-center justify-between pt-2 border-t gap-2" style={{ borderColor: isLightMode ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.06)' }}>
+        <div className="flex items-center justify-between pt-2 border-t gap-2 border-white/[0.06]">
           <div className="flex items-center gap-1.5">
             <select
               value={item.status}
@@ -439,9 +415,7 @@ export default function ActionCenterPage() {
                 </button>
                 <button
                   onClick={() => setEditingItemId(null)}
-                  className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                    isLightMode ? 'bg-slate-200 text-slate-700' : 'bg-white/10 text-white'
-                  }`}
+                  className="px-2 py-0.5 rounded text-[10px] font-bold bg-white/10 text-white"
                 >
                   Cancel
                 </button>
@@ -449,11 +423,7 @@ export default function ActionCenterPage() {
             ) : (
               <button
                 onClick={() => startEditing(item)}
-                className={`text-[10px] font-semibold px-2.5 py-1 rounded-lg border transition-all ${
-                  isLightMode
-                    ? 'hover:bg-slate-100 border-slate-200 text-slate-600'
-                    : 'hover:bg-white/5 border-white/[0.06] text-slate-400'
-                }`}
+                className="text-[10px] font-semibold px-2.5 py-1 rounded-lg border transition-all hover:bg-white/5 border-white/[0.06] text-slate-400"
               >
                 Edit
               </button>

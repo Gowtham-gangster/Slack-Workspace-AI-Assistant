@@ -2,7 +2,6 @@
 
 import React, { useRef, useState, useEffect, useMemo, Component, ErrorInfo, ReactNode } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
-import { Html } from '@react-three/drei';
 import * as THREE from 'three';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -19,7 +18,9 @@ import {
   ListTodo,
   FileCode,
   Activity,
-  Hash
+  Hash,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 
 // Workflows Data
@@ -49,7 +50,7 @@ const WORKFLOWS = [
     category: 'INTELLIGENT SUMMARY',
     color: '#7c6af7',
     badgeIcon: Sparkles,
-    queryText: 'Summarize today’s engineering discussion.',
+    queryText: 'Summarize today\'s engineering discussion.',
     inputChannel: '#db-migration',
     inputAuthor: '@Priya',
     outputTitle: 'AI Copilot Summary Response',
@@ -68,7 +69,7 @@ const WORKFLOWS = [
     category: 'AUTOMATED DECISION LOG',
     color: '#34d399',
     badgeIcon: Shield,
-    queryText: '“Engineering consensus reached: Proceed with Q2 production launch.”',
+    queryText: '"Engineering consensus reached: Proceed with Q2 production launch."',
     inputChannel: '#eng-architecture',
     inputAuthor: '@Priya & Team',
     outputTitle: 'Decision Extracted & Audited',
@@ -87,7 +88,7 @@ const WORKFLOWS = [
     category: 'TASK MANAGEMENT',
     color: '#fbbf24',
     badgeIcon: ListTodo,
-    queryText: '“Priya will test DB replica; Gowtham to update API docs; David to audit tokens.”',
+    queryText: '"Priya will test DB replica; Gowtham to update API docs; David to audit tokens."',
     inputChannel: '#standup-notes',
     inputAuthor: '@David',
     outputTitle: 'Action Items Extracted',
@@ -135,32 +136,232 @@ interface ErrorBoundaryProps {
   children: ReactNode;
   fallback: ReactNode;
 }
-
 interface ErrorBoundaryState {
   hasError: boolean;
 }
 
 class WebGLErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   public state: ErrorBoundaryState = { hasError: false };
-
-  public static getDerivedStateFromError(_: Error): ErrorBoundaryState {
-    return { hasError: true };
-  }
-
-  public componentDidCatch(error: Error) {
-    console.warn('WebGL Error caught by boundary.', error);
-  }
-
+  public static getDerivedStateFromError(_: Error): ErrorBoundaryState { return { hasError: true }; }
+  public componentDidCatch(error: Error) { console.warn('WebGL Error caught by boundary.', error); }
   public render() {
-    if (this.state.hasError) {
-      return this.props.fallback;
-    }
+    if (this.state.hasError) return this.props.fallback;
     return this.props.children;
   }
 }
 
-// Fully Animated 3D Scene Component
-const FastHeroScene = ({
+// ─── MOBILE HERO SCENE ────────────────────────────────────────────────────────
+const MobileHeroScene = ({
+  workflowIndex,
+  onNext,
+  onPrev,
+  setWorkflowIndex
+}: {
+  workflowIndex: number;
+  onNext: () => void;
+  onPrev: () => void;
+  setWorkflowIndex: (idx: number) => void;
+}) => {
+  const workflow = WORKFLOWS[workflowIndex % WORKFLOWS.length];
+  const BadgeIcon = workflow.badgeIcon;
+
+  return (
+    <div className="w-full h-full flex flex-col items-center justify-start pt-2 pb-4 px-2 relative overflow-hidden select-none">
+      {/* Ambient glow */}
+      <motion.div
+        animate={{ scale: [1, 1.12, 1], opacity: [0.15, 0.28, 0.15] }}
+        transition={{ duration: 5, repeat: Infinity, ease: 'easeInOut' }}
+        className="absolute inset-0 m-auto w-64 h-64 rounded-full pointer-events-none"
+        style={{ background: `${workflow.color}40`, filter: 'blur(80px)' }}
+      />
+
+      {/* Floating sparkle dots */}
+      <div className="absolute inset-0 pointer-events-none overflow-hidden z-0">
+        {[...Array(8)].map((_, i) => (
+          <motion.div
+            key={i}
+            initial={{ x: `${(i * 13) % 100}%`, y: '100%', opacity: 0.1 }}
+            animate={{ y: ['100%', '-10%'], opacity: [0.1, 0.5, 0.1], scale: [0.8, 1.3, 0.8] }}
+            transition={{ duration: 5 + (i % 4) * 1.5, repeat: Infinity, delay: i * 0.6, ease: 'linear' }}
+            className="absolute w-1 h-1 rounded-full"
+            style={{ backgroundColor: workflow.color, boxShadow: `0 0 6px ${workflow.color}` }}
+          />
+        ))}
+      </div>
+
+      {/* ── Workflow Badge ── */}
+      <div className="relative z-10 flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#090a14]/90 backdrop-blur-xl border border-white/10 text-[10px] font-mono font-bold text-slate-200 shadow-xl mb-4 mt-1">
+        <span className="w-2 h-2 rounded-full animate-ping" style={{ backgroundColor: workflow.color }} />
+        <span style={{ color: workflow.color }}>{workflow.name}</span>
+        <span className="text-slate-600">|</span>
+        <span className="text-slate-400 font-normal">{workflowIndex + 1}/{WORKFLOWS.length}</span>
+      </div>
+
+      {/* ── AI Brain Emblem (centered, prominent) ── */}
+      <motion.div
+        animate={{ y: [0, -8, 0] }}
+        transition={{ duration: 3.5, repeat: Infinity, ease: 'easeInOut' }}
+        className="relative z-10 mb-5"
+      >
+        {/* Outer pulsing ring */}
+        <motion.div
+          animate={{ scale: [1, 1.2, 1], opacity: [0.3, 0.6, 0.3] }}
+          transition={{ duration: 2.8, repeat: Infinity, ease: 'easeInOut' }}
+          className="absolute -inset-3 rounded-[28px] border pointer-events-none"
+          style={{ borderColor: `${workflow.color}60` }}
+        />
+        {/* Gradient glow blob */}
+        <div
+          className="absolute -inset-1 rounded-[26px] blur-xl opacity-80"
+          style={{ background: `linear-gradient(135deg, ${workflow.color}60, #7c6af750, #34d39940)` }}
+        />
+        {/* Emblem card */}
+        <div className="relative w-24 h-24 rounded-[22px] bg-[#0c0d19]/95 backdrop-blur-2xl border border-white/20 flex flex-col items-center justify-center shadow-2xl overflow-hidden">
+          <img
+            src="/slack-app-icon.png"
+            alt="Slack AI Brain"
+            className="w-14 h-14 object-contain"
+            style={{ filter: `drop-shadow(0 0 12px ${workflow.color}80)` }}
+          />
+          <div
+            className="mt-1 flex items-center gap-1 px-2 py-0.5 rounded-full border text-[8px] font-mono font-bold tracking-widest uppercase"
+            style={{ backgroundColor: `${workflow.color}20`, borderColor: `${workflow.color}40`, color: workflow.color }}
+          >
+            <Sparkles className="w-2 h-2 animate-pulse" />
+            <span>AI BRAIN</span>
+          </div>
+        </div>
+      </motion.div>
+
+      {/* ── Query Prompt Chip ── */}
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={`query-${workflow.id}`}
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -8 }}
+          transition={{ duration: 0.35 }}
+          className="relative z-10 w-full max-w-xs mb-3 px-3.5 py-2.5 rounded-xl bg-[#090a14]/90 border border-white/10 backdrop-blur-xl"
+        >
+          <div className="flex items-center gap-1.5 mb-1">
+            <BadgeIcon className="w-3 h-3 shrink-0" style={{ color: workflow.color }} />
+            <span className="text-[9px] font-mono font-bold text-white uppercase tracking-wider">{workflow.category}</span>
+            <span
+              className="ml-auto text-[8px] font-mono font-bold px-1.5 py-0.5 rounded border"
+              style={{ backgroundColor: `${workflow.color}15`, color: workflow.color, borderColor: `${workflow.color}30` }}
+            >
+              {workflow.inputChannel}
+            </span>
+          </div>
+          <p className="text-[11px] text-slate-200 font-medium leading-snug italic">"{workflow.queryText}"</p>
+          <div className="flex items-center justify-end gap-1 mt-1.5 text-[9px] font-mono text-[#38bdf8] font-bold">
+            <span>Streaming to AI</span>
+            <ArrowRight className="w-2.5 h-2.5 animate-pulse" />
+          </div>
+        </motion.div>
+      </AnimatePresence>
+
+      {/* ── Output Result Card ── */}
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={`output-${workflow.id}`}
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -12 }}
+          transition={{ duration: 0.4, delay: 0.1 }}
+          className="relative z-10 w-full max-w-xs rounded-2xl p-3 border backdrop-blur-2xl shadow-2xl"
+          style={{ backgroundColor: '#0c0d19f5', borderColor: `${workflow.color}50` }}
+        >
+          {/* Card header */}
+          <div className="flex items-center justify-between border-b border-white/10 pb-2 mb-2.5">
+            <div className="flex items-center gap-1.5">
+              <Zap className="w-3.5 h-3.5 text-[#0ea5e9] animate-pulse" />
+              <span className="text-[10.5px] font-bold text-white tracking-wide">{workflow.outputTitle}</span>
+            </div>
+            <span
+              className="text-[8px] font-mono font-bold px-1.5 py-0.5 rounded border"
+              style={{ backgroundColor: `${workflow.color}15`, color: workflow.color, borderColor: `${workflow.color}30` }}
+            >
+              {workflow.outputBadge}
+            </span>
+          </div>
+
+          {/* Output items — only show first 2 on mobile for compactness */}
+          <div className="space-y-1.5 mb-2.5">
+            {workflow.outputItems.slice(0, 2).map((item, idx) => {
+              const ItemIcon = item.icon;
+              return (
+                <motion.div
+                  key={idx}
+                  initial={{ opacity: 0, x: 8 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: idx * 0.1 + 0.2 }}
+                  className="flex items-start gap-2 p-2 rounded-lg bg-white/[0.03] border border-white/5 text-[10px] text-slate-200"
+                >
+                  <ItemIcon className="w-3 h-3 shrink-0 mt-0.5" style={{ color: item.color }} />
+                  <div className="flex flex-col gap-0.5 min-w-0">
+                    <span className="font-semibold text-slate-100 leading-snug truncate">{item.label}</span>
+                    <span className="text-[8.5px] font-mono text-slate-400 truncate">{item.detail}</span>
+                  </div>
+                </motion.div>
+              );
+            })}
+          </div>
+
+          {/* Footer metric */}
+          <div className="flex items-center justify-between text-[8.5px] font-mono border-t border-white/5 pt-2">
+            <span className="flex items-center gap-1 text-[#34d399] font-bold">
+              <Check className="w-2.5 h-2.5" /> Live Intelligence
+            </span>
+            <span className="font-bold" style={{ color: workflow.color }}>
+              {workflow.metricLabel}: {workflow.metricValue}
+            </span>
+          </div>
+        </motion.div>
+      </AnimatePresence>
+
+      {/* ── Navigation Controls ── */}
+      <div className="relative z-10 flex items-center gap-3 mt-4">
+        <button
+          onClick={onPrev}
+          className="w-8 h-8 rounded-full flex items-center justify-center bg-white/5 border border-white/10 text-slate-300 hover:bg-white/10 active:scale-90 transition-all"
+          aria-label="Previous workflow"
+        >
+          <ChevronLeft className="w-4 h-4" />
+        </button>
+
+        {/* Dot indicators */}
+        <div className="flex items-center gap-1.5">
+          {WORKFLOWS.map((wf, idx) => (
+            <button
+              key={wf.id}
+              onClick={() => setWorkflowIndex(idx)}
+              className="rounded-full transition-all duration-300"
+              style={{
+                width: idx === workflowIndex % WORKFLOWS.length ? '20px' : '6px',
+                height: '6px',
+                backgroundColor: idx === workflowIndex % WORKFLOWS.length ? workflow.color : 'rgba(255,255,255,0.2)',
+                boxShadow: idx === workflowIndex % WORKFLOWS.length ? `0 0 8px ${workflow.color}` : 'none'
+              }}
+              title={wf.name}
+            />
+          ))}
+        </div>
+
+        <button
+          onClick={onNext}
+          className="w-8 h-8 rounded-full flex items-center justify-center bg-white/5 border border-white/10 text-slate-300 hover:bg-white/10 active:scale-90 transition-all"
+          aria-label="Next workflow"
+        >
+          <ChevronRight className="w-4 h-4" />
+        </button>
+      </div>
+    </div>
+  );
+};
+
+// ─── DESKTOP HERO SCENE ───────────────────────────────────────────────────────
+const DesktopHeroScene = ({
   workflowIndex,
   onEmblemClick,
   setWorkflowIndex
@@ -176,15 +377,8 @@ const FastHeroScene = ({
     <div className="w-full h-full relative flex items-center justify-center p-4 overflow-hidden select-none">
       {/* Dynamic Background Ambient Glow Layer */}
       <motion.div
-        animate={{
-          scale: [1, 1.15, 1],
-          opacity: [0.2, 0.35, 0.2]
-        }}
-        transition={{
-          duration: 5,
-          repeat: Infinity,
-          ease: 'easeInOut'
-        }}
+        animate={{ scale: [1, 1.15, 1], opacity: [0.2, 0.35, 0.2] }}
+        transition={{ duration: 5, repeat: Infinity, ease: 'easeInOut' }}
         className="absolute inset-0 m-auto w-96 h-96 rounded-full bg-[#7c6af7]/30 blur-[130px] pointer-events-none"
       />
 
@@ -193,22 +387,9 @@ const FastHeroScene = ({
         {[...Array(12)].map((_, i) => (
           <motion.div
             key={i}
-            initial={{
-              x: `${(i * 8.5) % 100}%`,
-              y: '100%',
-              opacity: 0.1
-            }}
-            animate={{
-              y: ['100%', '-10%'],
-              opacity: [0.1, 0.6, 0.1],
-              scale: [0.8, 1.4, 0.8]
-            }}
-            transition={{
-              duration: 6 + (i % 5) * 2,
-              repeat: Infinity,
-              delay: i * 0.5,
-              ease: 'linear'
-            }}
+            initial={{ x: `${(i * 8.5) % 100}%`, y: '100%', opacity: 0.1 }}
+            animate={{ y: ['100%', '-10%'], opacity: [0.1, 0.6, 0.1], scale: [0.8, 1.4, 0.8] }}
+            transition={{ duration: 6 + (i % 5) * 2, repeat: Infinity, delay: i * 0.5, ease: 'linear' }}
             className="absolute w-1.5 h-1.5 rounded-full bg-[#38bdf8] shadow-[0_0_8px_#38bdf8]"
           />
         ))}
@@ -219,13 +400,11 @@ const FastHeroScene = ({
         <span className="w-2.5 h-2.5 rounded-full bg-[#38bdf8] animate-ping" />
         <span style={{ color: workflow.color }}>{workflow.name}</span>
         <span className="text-slate-600">|</span>
-        <span className="text-slate-400 font-normal">
-          Workflow {workflowIndex + 1}/{WORKFLOWS.length}
-        </span>
+        <span className="text-slate-400 font-normal">Workflow {workflowIndex + 1}/{WORKFLOWS.length}</span>
       </div>
 
       {/* Neural Stream Energy SVG Lines */}
-      <svg className="absolute inset-0 w-full h-full pointer-events-none z-0 hidden lg:block opacity-60">
+      <svg className="absolute inset-0 w-full h-full pointer-events-none z-0 opacity-60">
         <defs>
           <linearGradient id="neuralGrad" x1="0%" y1="0%" x2="100%" y2="0%">
             <stop offset="0%" stopColor="#38bdf8" stopOpacity="0.8" />
@@ -233,83 +412,43 @@ const FastHeroScene = ({
             <stop offset="100%" stopColor="#34d399" stopOpacity="0.8" />
           </linearGradient>
         </defs>
-
         <path d="M 220 240 Q 380 200 500 240" fill="none" stroke="url(#neuralGrad)" strokeWidth="2" strokeDasharray="6 6" />
         <path d="M 500 240 Q 620 280 780 240" fill="none" stroke="url(#neuralGrad)" strokeWidth="2" strokeDasharray="6 6" />
-
-        <motion.circle
-          cx="220"
-          cy="240"
-          r="4"
-          fill="#38bdf8"
-          animate={{
-            cx: [220, 500],
-            cy: [240, 240],
-            opacity: [0, 1, 0]
-          }}
-          transition={{
-            duration: 2.2,
-            repeat: Infinity,
-            ease: 'easeInOut'
-          }}
+        <motion.circle cx="220" cy="240" r="4" fill="#38bdf8"
+          animate={{ cx: [220, 500], cy: [240, 240], opacity: [0, 1, 0] }}
+          transition={{ duration: 2.2, repeat: Infinity, ease: 'easeInOut' }}
         />
-        <motion.circle
-          cx="500"
-          cy="240"
-          r="4"
-          fill="#34d399"
-          animate={{
-            cx: [500, 780],
-            cy: [240, 240],
-            opacity: [0, 1, 0]
-          }}
-          transition={{
-            duration: 2.2,
-            repeat: Infinity,
-            delay: 1.1,
-            ease: 'easeInOut'
-          }}
+        <motion.circle cx="500" cy="240" r="4" fill="#34d399"
+          animate={{ cx: [500, 780], cy: [240, 240], opacity: [0, 1, 0] }}
+          transition={{ duration: 2.2, repeat: Infinity, delay: 1.1, ease: 'easeInOut' }}
         />
       </svg>
 
       {/* Main 3D Composition Grid */}
-      <div className="w-full max-w-5xl grid grid-cols-1 lg:grid-cols-12 gap-6 items-center z-10">
+      <div className="w-full max-w-5xl grid grid-cols-12 gap-6 items-center z-10">
         {/* Left Input Card */}
         <motion.div
           key={`input-${workflow.id}`}
           initial={{ opacity: 0, x: -25, scale: 0.95 }}
-          animate={{
-            opacity: 1,
-            x: 0,
-            scale: 1,
-            y: [0, -6, 0]
-          }}
+          animate={{ opacity: 1, x: 0, scale: 1, y: [0, -6, 0] }}
           transition={{
-            opacity: { duration: 0.4 },
-            scale: { duration: 0.4 },
-            x: { duration: 0.4 },
+            opacity: { duration: 0.4 }, scale: { duration: 0.4 }, x: { duration: 0.4 },
             y: { duration: 4, repeat: Infinity, ease: 'easeInOut' }
           }}
-          className="lg:col-span-4 bg-[#090a14]/95 backdrop-blur-2xl border border-white/10 rounded-2xl p-4 shadow-2xl relative group hover:border-[#38bdf8]/40 transition-colors"
+          className="col-span-4 bg-[#090a14]/95 backdrop-blur-2xl border border-white/10 rounded-2xl p-4 shadow-2xl relative group hover:border-[#38bdf8]/40 transition-colors"
         >
           <div className="flex items-center justify-between border-b border-white/10 pb-2 mb-3">
             <div className="flex items-center gap-1.5">
               <BadgeIcon className="w-3.5 h-3.5" style={{ color: workflow.color }} />
-              <span className="text-[10px] font-mono font-bold text-white uppercase tracking-wider">
-                {workflow.category}
-              </span>
+              <span className="text-[10px] font-mono font-bold text-white uppercase tracking-wider">{workflow.category}</span>
             </div>
             <span className="text-[9px] font-mono text-[#38bdf8] bg-[#0ea5e9]/10 px-2 py-0.5 rounded border border-[#0ea5e9]/20 font-bold">
               {workflow.inputChannel}
             </span>
           </div>
-
           <div className="bg-white/[0.02] border border-white/5 rounded-xl p-3 mb-3">
-            <p className="text-[11.5px] text-slate-100 font-medium leading-relaxed italic">
-              {workflow.queryText}
-            </p>
+            <p className="text-[11.5px] text-slate-100 font-medium leading-relaxed italic">{workflow.queryText}</p>
           </div>
-
           <div className="flex items-center justify-between text-[9.5px] font-mono text-slate-400 border-t border-white/5 pt-2">
             <span className="text-slate-400 font-bold">{workflow.inputAuthor}</span>
             <span className="flex items-center gap-1 text-[#38bdf8] font-bold">
@@ -318,37 +457,23 @@ const FastHeroScene = ({
             </span>
           </div>
         </motion.div>
-        <div className="lg:col-span-4 flex flex-col items-center justify-center my-4 lg:my-0 relative">
+
+        {/* Center AI Brain Emblem */}
+        <div className="col-span-4 flex flex-col items-center justify-center my-4 lg:my-0 relative">
           <motion.div
-            animate={{
-              y: [0, -10, 0],
-              rotateZ: [0, 1, -1, 0]
-            }}
-            transition={{
-              duration: 4,
-              repeat: Infinity,
-              ease: 'easeInOut'
-            }}
+            animate={{ y: [0, -10, 0], rotateZ: [0, 1, -1, 0] }}
+            transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
             whileHover={{ scale: 1.08 }}
             whileTap={{ scale: 0.95 }}
             onClick={onEmblemClick}
             className="relative cursor-pointer group"
           >
-            {/* Pulsing Aura Rings */}
             <motion.div
-              animate={{
-                scale: [1, 1.25, 1],
-                opacity: [0.3, 0.7, 0.3]
-              }}
-              transition={{
-                duration: 3,
-                repeat: Infinity,
-                ease: 'easeInOut'
-              }}
+              animate={{ scale: [1, 1.25, 1], opacity: [0.3, 0.7, 0.3] }}
+              transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
               className="absolute -inset-4 rounded-full border border-[#0ea5e9]/40 pointer-events-none"
             />
             <div className="absolute -inset-2 rounded-3xl bg-gradient-to-r from-[#7c6af7] via-[#0ea5e9] to-[#34d399] blur-xl opacity-75 group-hover:opacity-100 transition duration-500 animate-pulse" />
-
             <div className="relative w-32 h-32 rounded-[24px] bg-[#0c0d19]/90 backdrop-blur-2xl border border-white/20 flex flex-col items-center justify-center p-4 shadow-2xl overflow-hidden">
               <img
                 src="/slack-app-icon.png"
@@ -367,39 +492,23 @@ const FastHeroScene = ({
         <motion.div
           key={`output-${workflow.id}`}
           initial={{ opacity: 0, x: 25, scale: 0.95 }}
-          animate={{
-            opacity: 1,
-            x: 0,
-            scale: 1,
-            y: [0, 6, 0]
-          }}
+          animate={{ opacity: 1, x: 0, scale: 1, y: [0, 6, 0] }}
           transition={{
-            opacity: { duration: 0.4 },
-            scale: { duration: 0.4 },
-            x: { duration: 0.4 },
+            opacity: { duration: 0.4 }, scale: { duration: 0.4 }, x: { duration: 0.4 },
             y: { duration: 4.5, repeat: Infinity, ease: 'easeInOut' }
           }}
-          className="lg:col-span-4 bg-[#0c0d19]/95 backdrop-blur-2xl border border-[#7c6af7]/40 rounded-2xl p-4 shadow-2xl relative group hover:border-[#7c6af7]/70 transition-colors"
+          className="col-span-4 bg-[#0c0d19]/95 backdrop-blur-2xl border border-[#7c6af7]/40 rounded-2xl p-4 shadow-2xl relative group hover:border-[#7c6af7]/70 transition-colors"
         >
           <div className="flex items-center justify-between border-b border-white/10 pb-2.5 mb-3">
             <div className="flex items-center gap-1.5">
               <Zap className="w-4 h-4 text-[#0ea5e9] animate-pulse" />
-              <span className="text-[11px] font-bold text-white tracking-wide">
-                {workflow.outputTitle}
-              </span>
+              <span className="text-[11px] font-bold text-white tracking-wide">{workflow.outputTitle}</span>
             </div>
-            <span
-              className="text-[9px] font-mono font-bold px-2 py-0.5 rounded border"
-              style={{
-                backgroundColor: `${workflow.color}15`,
-                color: workflow.color,
-                borderColor: `${workflow.color}30`
-              }}
-            >
+            <span className="text-[9px] font-mono font-bold px-2 py-0.5 rounded border"
+              style={{ backgroundColor: `${workflow.color}15`, color: workflow.color, borderColor: `${workflow.color}30` }}>
               {workflow.outputBadge}
             </span>
           </div>
-
           <div className="space-y-2 mb-3">
             {workflow.outputItems.map((item, idx) => {
               const ItemIcon = item.icon;
@@ -420,14 +529,11 @@ const FastHeroScene = ({
               );
             })}
           </div>
-
           <div className="flex items-center justify-between text-[9.5px] font-mono border-t border-white/5 pt-2">
             <span className="flex items-center gap-1 text-[#34d399] font-bold">
               <Check className="w-3 h-3" /> Live Intelligence
             </span>
-            <span className="text-[#a78bfa] font-bold">
-              {workflow.metricLabel}: {workflow.metricValue}
-            </span>
+            <span className="text-[#a78bfa] font-bold">{workflow.metricLabel}: {workflow.metricValue}</span>
           </div>
         </motion.div>
       </div>
@@ -438,11 +544,7 @@ const FastHeroScene = ({
           <button
             key={wf.id}
             onClick={() => setWorkflowIndex(idx)}
-            className={`w-2 h-2 rounded-full transition-all duration-300 ${
-              idx === workflowIndex % WORKFLOWS.length
-                ? 'w-6 bg-[#38bdf8] shadow-[0_0_10px_#38bdf8]'
-                : 'bg-white/20 hover:bg-white/40'
-            }`}
+            className={`h-2 rounded-full transition-all duration-300 ${idx === workflowIndex % WORKFLOWS.length ? 'w-6 bg-[#38bdf8] shadow-[0_0_10px_#38bdf8]' : 'w-2 bg-white/20 hover:bg-white/40'}`}
             title={wf.name}
           />
         ))}
@@ -454,21 +556,17 @@ const FastHeroScene = ({
 // Optional WebGL Layer for High-End Devices
 const SimpleParticles = () => {
   const pointsRef = useRef<THREE.Points>(null);
-
   useFrame((_, delta) => {
     if (pointsRef.current) {
       const posArr = pointsRef.current.geometry.attributes.position.array as Float32Array;
       for (let i = 0; i < PARTICLE_COUNT; i++) {
         const xIdx = i * 3;
         posArr[xIdx] += delta * 1.2;
-        if (posArr[xIdx] > 2.8) {
-          posArr[xIdx] = -2.8;
-        }
+        if (posArr[xIdx] > 2.8) posArr[xIdx] = -2.8;
       }
       pointsRef.current.geometry.attributes.position.needsUpdate = true;
     }
   });
-
   return (
     <points ref={pointsRef}>
       <bufferGeometry>
@@ -479,11 +577,21 @@ const SimpleParticles = () => {
   );
 };
 
+// ─── MAIN EXPORT ──────────────────────────────────────────────────────────────
 export default function ThreeHeroScene() {
   const [workflowIndex, setWorkflowIndex] = useState(0);
   const [useWebGL, setUseWebGL] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
 
-  // Lazy enable light WebGL after initial fast render
+  // Detect mobile
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 1024);
+    check();
+    window.addEventListener('resize', check);
+    return () => window.removeEventListener('resize', check);
+  }, []);
+
+  // Lazy enable WebGL after initial fast render
   useEffect(() => {
     const timer = setTimeout(() => {
       try {
@@ -494,7 +602,6 @@ export default function ThreeHeroScene() {
         setUseWebGL(false);
       }
     }, 400);
-
     return () => clearTimeout(timer);
   }, []);
 
@@ -503,35 +610,45 @@ export default function ThreeHeroScene() {
     const interval = setInterval(() => {
       setWorkflowIndex((prev) => (prev + 1) % WORKFLOWS.length);
     }, 6000);
-
     return () => clearInterval(interval);
   }, []);
 
-  const handleEmblemClick = () => {
-    setWorkflowIndex((prev) => (prev + 1) % WORKFLOWS.length);
-  };
+  const handleEmblemClick = () => setWorkflowIndex((prev) => (prev + 1) % WORKFLOWS.length);
+  const handleNext = () => setWorkflowIndex((prev) => (prev + 1) % WORKFLOWS.length);
+  const handlePrev = () => setWorkflowIndex((prev) => (prev - 1 + WORKFLOWS.length) % WORKFLOWS.length);
 
-  const fastScene = (
-    <FastHeroScene
+  const mobileScene = (
+    <MobileHeroScene
+      workflowIndex={workflowIndex}
+      onNext={handleNext}
+      onPrev={handlePrev}
+      setWorkflowIndex={setWorkflowIndex}
+    />
+  );
+
+  const desktopScene = (
+    <DesktopHeroScene
       workflowIndex={workflowIndex}
       onEmblemClick={handleEmblemClick}
       setWorkflowIndex={setWorkflowIndex}
     />
   );
 
-  if (!useWebGL) {
-    return fastScene;
-  }
+  const activeScene = isMobile ? mobileScene : desktopScene;
+
+  if (!useWebGL) return activeScene;
 
   return (
-    <WebGLErrorBoundary fallback={fastScene}>
+    <WebGLErrorBoundary fallback={activeScene}>
       <div className="w-full h-full relative">
-        {fastScene}
-        <div className="absolute inset-0 pointer-events-none z-0 opacity-40">
-          <Canvas camera={{ position: [0, 0, 5], fov: 50 }} gl={{ powerPreference: 'high-performance', antialias: false }}>
-            <SimpleParticles />
-          </Canvas>
-        </div>
+        {activeScene}
+        {!isMobile && (
+          <div className="absolute inset-0 pointer-events-none z-0 opacity-40">
+            <Canvas camera={{ position: [0, 0, 5], fov: 50 }} gl={{ powerPreference: 'high-performance', antialias: false }}>
+              <SimpleParticles />
+            </Canvas>
+          </div>
+        )}
       </div>
     </WebGLErrorBoundary>
   );

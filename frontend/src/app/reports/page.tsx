@@ -55,7 +55,7 @@ interface Channel {
 }
 
 // Simple custom Markdown to HTML renderer for rendering generated report markdown
-function renderMarkdown(md: string, isLightMode: boolean) {
+function renderMarkdown(md: string) {
   if (!md) return '';
   
   let html = md
@@ -64,25 +64,25 @@ function renderMarkdown(md: string, isLightMode: boolean) {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     // Headers
-    .replace(/^### (.*$)/gim, `<h4 class="text-xs font-bold mt-4 mb-2 uppercase tracking-wide ${isLightMode ? 'text-slate-800' : 'text-white'}">$1</h4>`)
+    .replace(/^### (.*$)/gim, '<h4 class="text-xs font-bold mt-4 mb-2 uppercase tracking-wide text-white">$1</h4>')
     .replace(/^## (.*$)/gim, '<h3 class="text-sm font-bold text-primary mt-6 mb-2 border-b border-border/40 pb-1">$1</h3>')
-    .replace(/^# (.*$)/gim, `<h2 class="text-base font-bold mt-8 mb-3 ${isLightMode ? 'text-slate-800' : 'text-white'}">$1</h2>`)
+    .replace(/^# (.*$)/gim, '<h2 class="text-base font-bold mt-8 mb-3 text-white">$1</h2>')
     // Bold
-    .replace(/\*\*(.*?)\*\*/gim, `<strong class="font-semibold ${isLightMode ? 'text-slate-900' : 'text-white'}">$1</strong>`)
+    .replace(/\*\*(.*?)\*\*/gim, '<strong class="font-semibold text-white">$1</strong>')
     // Lists
-    .replace(/^\* (.*$)/gim, `<li class="ml-4 list-disc pl-1 py-0.5 text-xs ${isLightMode ? 'text-slate-600' : 'text-slate-300'}">$1</li>`)
-    .replace(/^- (.*$)/gim, `<li class="ml-4 list-disc pl-1 py-0.5 text-xs ${isLightMode ? 'text-slate-600' : 'text-slate-300'}">$1</li>`)
+    .replace(/^\* (.*$)/gim, '<li class="ml-4 list-disc pl-1 py-0.5 text-xs text-slate-300">$1</li>')
+    .replace(/^- (.*$)/gim, '<li class="ml-4 list-disc pl-1 py-0.5 text-xs text-slate-300">$1</li>')
     // Tables (Very basic Markdown table to HTML converter)
     .replace(/\|(.+)\|/gim, (match, cells: string) => {
       const isHeaderRow = cells.includes('---');
       if (isHeaderRow) return '';
       
       const cols = cells.split('|').map(c => c.trim()).filter(c => c !== '');
-      return `<tr class="border-b ${isLightMode ? 'border-slate-200 hover:bg-slate-50' : 'border-border/40 hover:bg-secondary/15'}"><td class="px-4 py-2 text-xs ${isLightMode ? 'text-slate-600 font-medium' : 'text-slate-300'}">${cols.join(`</td><td class="px-4 py-2 text-xs ${isLightMode ? 'text-slate-600 font-medium' : 'text-slate-300'}">`)}</td></tr>`;
+      return `<tr class="border-b border-border/40 hover:bg-secondary/15"><td class="px-4 py-2 text-xs text-slate-300">${cols.join('</td><td class="px-4 py-2 text-xs text-slate-300">')}</td></tr>`;
     });
 
   // Wrap table rows in a table tag
-  html = html.replace(/(<tr[\s\S]+?<\/tr>)/g, `<table class="w-full text-left border-collapse border my-4 rounded-2xl overflow-hidden ${isLightMode ? 'border-slate-200 bg-slate-50/50' : 'border-border/40 bg-black/10'}">$1</table>`);
+  html = html.replace(/(<tr[\s\S]+?<\/tr>)/g, '<table class="w-full text-left border-collapse border my-4 rounded-2xl overflow-hidden border-border/40 bg-black/10">$1</table>');
   // Combine consecutive table tags
   html = html.replace(/<\/table>\s*<table[^>]*>/g, '');
 
@@ -91,14 +91,13 @@ function renderMarkdown(md: string, isLightMode: boolean) {
     if (p.trim().startsWith('<li') || p.trim().startsWith('<table') || p.trim().startsWith('<h') || p.trim().startsWith('<tr')) {
       return p;
     }
-    return `<p class="text-xs leading-relaxed mb-3 ${isLightMode ? 'text-slate-600' : 'text-slate-300'}">${p.replace(/\n/g, '<br/>')}</p>`;
+    return `<p class="text-xs leading-relaxed mb-3 text-slate-300">${p.replace(/\n/g, '<br/>')}</p>`;
   }).join('\n');
 
   return html;
 }
 
 function ReportsPageContent() {
-  const isLightMode = false;
   const queryClient = useQueryClient();
   const searchParams = useSearchParams();
   const reportUrlId = searchParams.get('id');
@@ -253,7 +252,7 @@ function ReportsPageContent() {
           <div className="p-4 border-b border-border flex items-center justify-between shrink-0">
             <div className="flex items-center gap-2">
               <FileText className="w-4 h-4 text-primary" />
-              <h3 className={`text-sm font-bold ${isLightMode ? 'text-slate-800' : 'text-white'}`}>Reports & Charts</h3>
+              <h3 className="text-sm font-bold text-white">Reports & Charts</h3>
             </div>
             <div className="flex items-center gap-1.5">
               <button
@@ -305,15 +304,15 @@ function ReportsPageContent() {
                     }}
                     className={`p-3 rounded-2xl border cursor-pointer transition-all flex items-start gap-3 ${
                       isActive 
-                        ? (isLightMode ? 'bg-slate-100 border-primary shadow-sm' : 'bg-secondary/40 border-primary shadow-sm') 
-                        : (isLightMode ? 'bg-white border-slate-200/60 hover:bg-slate-50/50' : 'bg-secondary/10 border-border/40 hover:bg-secondary/20')
+                        ? 'bg-secondary/40 border-primary shadow-sm'
+                        : 'bg-secondary/10 border-border/40 hover:bg-secondary/20'
                     }`}
                   >
                     <div className={`p-2 rounded-xl shrink-0 mt-0.5 ${isActive ? 'bg-primary/20 text-primary' : 'bg-secondary/30 text-muted-foreground'}`}>
                       <Icon className="w-4 h-4" />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className={`text-xs font-semibold truncate ${isActive ? (isLightMode ? 'text-primary font-bold' : 'text-white') : (isLightMode ? 'text-slate-700' : 'text-slate-350')}`}>{report.title}</p>
+                      <p className={`text-xs font-semibold truncate ${isActive ? 'text-white' : 'text-slate-350'}`}>{report.title}</p>
                       <p className="text-[9px] text-muted-foreground mt-0.5 truncate">{meta.channelName || 'Slack Channel'}</p>
                       <div className="flex items-center justify-between mt-2.5">
                         <span className="text-[8px] text-muted-foreground flex items-center gap-0.5">
@@ -340,7 +339,7 @@ function ReportsPageContent() {
               {/* Toolbar */}
               <header className="h-14 md:h-16 border-b border-border flex items-center justify-between px-4 sm:px-6 md:px-8 shrink-0 bg-card/20">
                 <div className="min-w-0 pr-4">
-                  <h2 className={`text-sm font-bold truncate ${isLightMode ? 'text-slate-800' : 'text-white'}`}>{selectedReport.title}</h2>
+                  <h2 className="text-sm font-bold truncate text-white">{selectedReport.title}</h2>
                   <p className="text-[10px] text-muted-foreground mt-0.5 flex items-center gap-1.5">
                     <span>Generated on {new Date(selectedReport.created_at).toLocaleString()}</span>
                     <span>•</span>
@@ -350,9 +349,7 @@ function ReportsPageContent() {
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => copyToClipboard(selectedReport.content)}
-                    className={`p-2 border rounded-xl hover:bg-secondary/15 transition-all text-xs flex items-center gap-1 ${
-                      isLightMode ? 'border-slate-200 text-slate-700 bg-white' : 'border-border/50 text-slate-350'
-                    }`}
+                    className="p-2 border rounded-xl hover:bg-secondary/15 transition-all text-xs flex items-center gap-1 border-border/50 text-slate-350"
                     title="Copy Markdown"
                   >
                     <Copy className="w-4 h-4" />
@@ -360,9 +357,7 @@ function ReportsPageContent() {
                   </button>
                   <button
                     onClick={() => downloadMarkdownFile(selectedReport.title, selectedReport.content)}
-                    className={`p-2 border rounded-xl hover:bg-secondary/15 transition-all text-xs flex items-center gap-1 ${
-                      isLightMode ? 'border-slate-200 text-slate-700 bg-white' : 'border-border/50 text-slate-350'
-                    }`}
+                    className="p-2 border rounded-xl hover:bg-secondary/15 transition-all text-xs flex items-center gap-1 border-border/50 text-slate-350"
                     title="Download Markdown"
                   >
                     <Download className="w-4 h-4" />
@@ -371,11 +366,7 @@ function ReportsPageContent() {
                   <button
                     onClick={() => deleteMutation.mutate(selectedReport.id)}
                     disabled={deleteMutation.isPending}
-                    className={`p-2 rounded-xl border transition-all ${
-                      isLightMode
-                        ? 'text-red-600 hover:bg-red-50 hover:border-red-200 border-slate-200'
-                        : 'text-red-400 hover:bg-red-500/10 border-border/50 hover:border-red-500/25'
-                    }`}
+                    className="p-2 rounded-xl border transition-all text-red-400 hover:bg-red-500/10 border-border/50 hover:border-red-500/25"
                     title="Delete Report"
                   >
                     <Trash2 className="w-4 h-4" />
@@ -386,26 +377,24 @@ function ReportsPageContent() {
               {/* Viewer body */}
               <div className="flex-1 overflow-y-auto p-8 max-w-4xl w-full mx-auto">
                 {/* Meta Summary Card */}
-                <div className={`mb-6 p-4 rounded-2xl flex items-center gap-4 ${
-                  isLightMode ? 'bg-slate-50 border border-slate-200/60' : 'bg-secondary/10 border border-border/40'
-                }`}>
+                <div className="mb-6 p-4 rounded-2xl flex items-center gap-4 bg-secondary/10 border border-border/40">
                   <Info className="w-5 h-5 text-primary shrink-0" />
-                  <div className={`text-[11px] leading-normal ${isLightMode ? 'text-slate-600' : 'text-slate-300'}`}>
-                    This report summarizes <span className={`font-semibold ${isLightMode ? 'text-slate-800 font-bold' : 'text-white'}`}>{getMetadata(selectedReport).messageCount || 'multiple'} Slack messages</span> from channel <span className={`font-semibold ${isLightMode ? 'text-slate-800 font-bold' : 'text-white'}`}>{getMetadata(selectedReport).channelName || 'Workspace'}</span>. The content is locally indexed in your assistant's RAG layer for semantic search.
+                  <div className="text-[11px] leading-normal text-slate-300">
+                    This report summarizes <span className="font-semibold text-white">{getMetadata(selectedReport).messageCount || 'multiple'} Slack messages</span> from channel <span className="font-semibold text-white">{getMetadata(selectedReport).channelName || 'Workspace'}</span>. The content is locally indexed in your assistant's RAG layer for semantic search.
                   </div>
                 </div>
 
                 {/* Main Markdown Content */}
                 <article 
-                  className={`prose max-w-none ${isLightMode ? 'prose-slate text-slate-800' : 'prose-invert text-slate-200'}`}
-                  dangerouslySetInnerHTML={{ __html: renderMarkdown(selectedReport.content, isLightMode) }}
+                  className="prose max-w-none prose-invert text-slate-200"
+                  dangerouslySetInnerHTML={{ __html: renderMarkdown(selectedReport.content) }}
                 />
               </div>
             </div>
           ) : (
             <div className="flex-1 flex flex-col h-full overflow-y-auto p-4 sm:p-6 md:p-8 max-w-5xl w-full mx-auto animate-fadeIn">
               <div className="mb-6">
-                <h2 className={`text-base font-bold flex items-center gap-2 ${isLightMode ? 'text-slate-800' : 'text-white'}`}>
+                <h2 className="text-base font-bold flex items-center gap-2 text-white">
                   <BarChart3 className="w-5 h-5 text-[#7c6af7]" />
                   Advanced Workspace Analytics
                 </h2>
@@ -416,8 +405,8 @@ function ReportsPageContent() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                 
                 {/* Chart 1: Message Volume Trend */}
-                <div className={`p-5 rounded-3xl border flex flex-col min-h-[280px] ${isLightMode ? 'bg-white border-slate-200/80 shadow-sm' : 'bg-white/[0.02] border-white/[0.07]'}`}>
-                  <h3 className={`text-xs font-bold mb-4 flex items-center gap-1.5 ${isLightMode ? 'text-slate-700' : 'text-slate-300'}`}>
+                <div className="p-5 rounded-3xl border flex flex-col min-h-[280px] bg-white/[0.02] border-white/[0.07]">
+                  <h3 className="text-xs font-bold mb-4 flex items-center gap-1.5 text-slate-300">
                     <TrendingUp className="w-3.5 h-3.5" style={{ color: '#7c6af7' }} />
                     Message Volume (Last 30 Days)
                   </h3>
@@ -428,7 +417,7 @@ function ReportsPageContent() {
                           try { return new Date(str).toLocaleDateString([], { month: 'short', day: 'numeric' }); } catch { return ''; }
                         }} />
                         <YAxis stroke="#64748b" fontSize={9} />
-                        <Tooltip contentStyle={{ background: isLightMode ? '#fff' : '#111322', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '12px' }} labelStyle={{ fontSize: '10px', color: '#9ca3af' }} itemStyle={{ fontSize: '11px', fontWeight: 'bold' }} />
+                        <Tooltip contentStyle={{ background: '#111322', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '12px' }} labelStyle={{ fontSize: '10px', color: '#9ca3af' }} itemStyle={{ fontSize: '11px', fontWeight: 'bold' }} />
                         <Line type="monotone" dataKey="count" name="Messages" stroke="#7c6af7" strokeWidth={2} dot={false} activeDot={{ r: 6 }} />
                       </LineChart>
                     </ResponsiveContainer>
@@ -436,8 +425,8 @@ function ReportsPageContent() {
                 </div>
 
                 {/* Chart 2: Channel Activity */}
-                <div className={`p-5 rounded-3xl border flex flex-col min-h-[280px] ${isLightMode ? 'bg-white border-slate-200/80 shadow-sm' : 'bg-white/[0.02] border-white/[0.07]'}`}>
-                  <h3 className={`text-xs font-bold mb-4 flex items-center gap-1.5 ${isLightMode ? 'text-slate-700' : 'text-slate-300'}`}>
+                <div className="p-5 rounded-3xl border flex flex-col min-h-[280px] bg-white/[0.02] border-white/[0.07]">
+                  <h3 className="text-xs font-bold mb-4 flex items-center gap-1.5 text-slate-300">
                     <Layers className="w-3.5 h-3.5" style={{ color: '#0ea5e9' }} />
                     Top Active Channels
                   </h3>
@@ -446,7 +435,7 @@ function ReportsPageContent() {
                       <BarChart data={activeChannelsData || []} layout="vertical">
                         <XAxis type="number" stroke="#64748b" fontSize={9} />
                         <YAxis type="category" dataKey="name" stroke="#64748b" fontSize={9} width={60} />
-                        <Tooltip contentStyle={{ background: isLightMode ? '#fff' : '#111322', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '12px' }} itemStyle={{ fontSize: '11px', fontWeight: 'bold' }} />
+                        <Tooltip contentStyle={{ background: '#111322', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '12px' }} itemStyle={{ fontSize: '11px', fontWeight: 'bold' }} />
                         <Bar dataKey="message_count" name="Messages" radius={[0, 4, 4, 0]}>
                           {(activeChannelsData || []).map((_, index) => {
                             const colors = ['#7c6af7', '#6366f1', '#8b5cf6', '#0ea5e9', '#14b8a6', '#f59e0b'];
@@ -459,8 +448,8 @@ function ReportsPageContent() {
                 </div>
 
                 {/* Chart 3: Task Completion Rate */}
-                <div className={`p-5 rounded-3xl border flex flex-col min-h-[280px] md:col-span-2 ${isLightMode ? 'bg-white border-slate-200/80 shadow-sm' : 'bg-white/[0.02] border-white/[0.07]'}`}>
-                  <h3 className={`text-xs font-bold mb-4 flex items-center gap-1.5 ${isLightMode ? 'text-slate-700' : 'text-slate-300'}`}>
+                <div className="p-5 rounded-3xl border flex flex-col min-h-[280px] md:col-span-2 bg-white/[0.02] border-white/[0.07]">
+                  <h3 className="text-xs font-bold mb-4 flex items-center gap-1.5 text-slate-300">
                     <CheckCircle className="w-3.5 h-3.5" style={{ color: '#10b981' }} />
                     Action Items Completion Rate
                   </h3>
@@ -489,7 +478,7 @@ function ReportsPageContent() {
                               <Cell key={`cell-${index}`} fill={entry.color} />
                             ))}
                           </Pie>
-                          <Tooltip contentStyle={{ background: isLightMode ? '#fff' : '#111322', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '12px' }} itemStyle={{ fontSize: '11px', fontWeight: 'bold' }} />
+                          <Tooltip contentStyle={{ background: '#111322', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '12px' }} itemStyle={{ fontSize: '11px', fontWeight: 'bold' }} />
                         </PieChart>
                       </ResponsiveContainer>
                     </div>
@@ -501,11 +490,11 @@ function ReportsPageContent() {
                         { label: 'Completed tasks', val: taskStatusData?.completed || 0, color: '#10b981' }
                       ].map((item, i) => (
                         <div key={i} className="flex items-center justify-between text-xs font-semibold">
-                          <span className="flex items-center gap-2" style={{ color: isLightMode ? '#64748b' : '#9ca3af' }}>
+                          <span className="flex items-center gap-2 text-[#9ca3af]">
                             <span className="w-2.5 h-2.5 rounded-full" style={{ background: item.color }} />
                             {item.label}
                           </span>
-                          <span className={isLightMode ? 'text-slate-800' : 'text-white'}>{item.val}</span>
+                          <span className="text-white">{item.val}</span>
                         </div>
                       ))}
                     </div>
@@ -523,7 +512,7 @@ function ReportsPageContent() {
       {showCreateModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
           <div className="w-full max-w-lg glass p-6 rounded-3xl shadow-2xl relative animate-scale-up">
-            <h3 className={`text-sm font-bold mb-4 flex items-center gap-2 ${isLightMode ? 'text-slate-800' : 'text-white'}`}>
+            <h3 className="text-sm font-bold mb-4 flex items-center gap-2 text-white">
               <Plus className="w-4 h-4 text-primary" />
               Generate Workspace Report
             </h3>
@@ -550,9 +539,7 @@ function ReportsPageContent() {
                   required
                   value={formData.channelId}
                   onChange={(e) => setFormData(prev => ({ ...prev, channelId: e.target.value }))}
-                  className={`w-full px-4 py-3 rounded-xl bg-input border border-border/80 focus:border-primary/80 focus:ring-1 focus:ring-primary/40 text-sm placeholder-muted-foreground/60 transition-all outline-none ${
-                    isLightMode ? 'text-slate-800 bg-white border-slate-200' : 'text-white'
-                  }`}
+                  className="w-full px-4 py-3 rounded-xl bg-input border border-border/80 focus:border-primary/80 focus:ring-1 focus:ring-primary/40 text-sm placeholder-muted-foreground/60 transition-all outline-none text-white"
                 >
                   <option value="">-- Choose Channel --</option>
                   {channels?.map(ch => (
@@ -569,9 +556,7 @@ function ReportsPageContent() {
                 <select
                   value={formData.type}
                   onChange={(e) => setFormData(prev => ({ ...prev, type: e.target.value }))}
-                  className={`w-full px-4 py-3 rounded-xl bg-input border border-border/80 focus:border-primary/80 focus:ring-1 focus:ring-primary/40 text-sm placeholder-muted-foreground/60 transition-all outline-none ${
-                    isLightMode ? 'text-slate-800 bg-white border-slate-200' : 'text-white'
-                  }`}
+                  className="w-full px-4 py-3 rounded-xl bg-input border border-border/80 focus:border-primary/80 focus:ring-1 focus:ring-primary/40 text-sm placeholder-muted-foreground/60 transition-all outline-none text-white"
                 >
                   <option value="daily">Daily Summary Report</option>
                   <option value="weekly">Weekly Summary Report</option>
@@ -595,9 +580,7 @@ function ReportsPageContent() {
                   placeholder="Leave empty for default title"
                   value={formData.title}
                   onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
-                  className={`w-full px-4 py-3 rounded-xl bg-input border border-border/80 focus:border-primary/80 focus:ring-1 focus:ring-primary/40 text-sm placeholder-muted-foreground/60 transition-all outline-none ${
-                    isLightMode ? 'text-slate-800 bg-slate-100/50 border-slate-200' : 'text-white'
-                  }`}
+                  className="w-full px-4 py-3 rounded-xl bg-input border border-border/80 focus:border-primary/80 focus:ring-1 focus:ring-primary/40 text-sm placeholder-muted-foreground/60 transition-all outline-none text-white"
                 />
               </div>
 
@@ -606,11 +589,7 @@ function ReportsPageContent() {
                 <button
                   type="button"
                   onClick={() => setShowCreateModal(false)}
-                  className={`px-4 py-2.5 rounded-xl border text-xs font-medium transition-all ${
-                    isLightMode 
-                      ? 'border-slate-200 text-slate-600 hover:bg-slate-50' 
-                      : 'border-border/60 text-slate-300 hover:bg-secondary/40'
-                  }`}
+                  className="px-4 py-2.5 rounded-xl border text-xs font-medium transition-all border-border/60 text-slate-300 hover:bg-secondary/40"
                 >
                   Cancel
                 </button>
@@ -622,18 +601,21 @@ function ReportsPageContent() {
                   {generateMutation.isPending ? (
                     <>
                       <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                      Analyzing Slack...
+                      <span>Generating Report...</span>
                     </>
                   ) : (
-                    'Generate Report'
+                    <>
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Generate Report</span>
+                    </>
                   )}
                 </button>
               </div>
+
             </form>
           </div>
         </div>
       )}
-
     </AppLayout>
   );
 }
@@ -641,9 +623,9 @@ function ReportsPageContent() {
 export default function ReportsPage() {
   return (
     <Suspense fallback={
-      <div className="flex h-full items-center justify-center bg-background text-foreground">
-        <div className="w-8 h-8 rounded-full border-2 border-primary/30 border-t-primary animate-spin" />
-      </div>
+      <AppLayout>
+        <div className="p-8 text-center text-xs text-muted-foreground">Loading workspace reports...</div>
+      </AppLayout>
     }>
       <ReportsPageContent />
     </Suspense>

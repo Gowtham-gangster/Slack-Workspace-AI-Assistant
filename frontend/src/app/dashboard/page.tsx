@@ -40,7 +40,6 @@ import {
   Plus, Check, Copy, ThumbsUp, Heart, Smile, Flame, Bookmark, Pin, Trash2, Edit3, MoreVertical, Paperclip, SmilePlus, Bell, Info, Mic, Image, CornerDownLeft, Eye, EyeOff, CheckSquare, Award, User, Link as LinkIcon, Compass, Terminal, X, ExternalLink
 } from 'lucide-react';
 import Link from 'next/link';
-import { useTheme } from '../../components/ThemeContext';
 import { useAuth } from '../../components/AuthContext';
 
 interface DashboardData {
@@ -159,15 +158,13 @@ const parseSummary = (md: string): { title: string; sections: SummarySection[] }
 };
 
 const BoldText = ({ text }: { text: string }) => {
-  const { theme } = useTheme();
-  const isLightMode = theme === 'light';
   if (!text) return null;
   const parts = text.split(/\*\*(.*?)\*\*/g);
   return (
     <>
       {parts.map((part, i) => {
         if (i % 2 === 1) {
-          return <strong key={i} className={`font-bold ${isLightMode ? 'text-slate-900' : 'text-white'}`}>{part}</strong>;
+          return <strong key={i} className="font-bold text-white">{part}</strong>;
         }
         return part;
       })}
@@ -175,7 +172,7 @@ const BoldText = ({ text }: { text: string }) => {
   );
 };
 
-const renderCardContent = (content: string, isLightMode: boolean) => {
+const renderCardContent = (content: string) => {
   if (!content) return null;
 
   const lines = content.split('\n').map(l => l.trim()).filter(Boolean);
@@ -189,22 +186,20 @@ const renderCardContent = (content: string, isLightMode: boolean) => {
       const dataRows = rows.slice(1).map(row => row.split('|').map(c => c.trim()).filter(Boolean));
 
       elements.push(
-        <div key="table-wrapper" className={`overflow-x-auto rounded-xl border my-1 leading-normal ${
-          isLightMode ? 'border-slate-200/60 bg-slate-50/50' : 'border-white/5 bg-black/15'
-        }`}>
+        <div key="table-wrapper" className="overflow-x-auto rounded-xl border my-1 leading-normal border-white/5 bg-black/15">
           <table className="w-full text-left border-collapse text-[13px]">
             <thead>
-              <tr className={`border-b ${isLightMode ? 'bg-slate-100/50 border-slate-200/50' : 'bg-white/5 border-white/5'}`}>
+              <tr className="border-b bg-white/5 border-white/5">
                 {headerCols.map((h, i) => (
-                  <th key={i} className={`px-3 py-1.5 font-semibold text-[10px] uppercase tracking-wider ${isLightMode ? 'text-slate-500' : 'text-white/50'}`}>{h}</th>
+                  <th key={i} className="px-3 py-1.5 font-semibold text-[10px] uppercase tracking-wider text-white/50">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {dataRows.map((cols, i) => (
-                <tr key={i} className={`border-b last:border-0 hover:bg-white/5 transition-colors ${isLightMode ? 'border-slate-100 hover:bg-slate-100/30' : 'border-white/5'}`}>
+                <tr key={i} className="border-b last:border-0 hover:bg-white/5 transition-colors border-white/5">
                   {cols.map((c, j) => (
-                    <td key={j} className={`px-3 py-1.5 font-medium ${isLightMode ? 'text-slate-600' : 'text-slate-300'}`}>{c}</td>
+                    <td key={j} className="px-3 py-1.5 font-medium text-slate-300">{c}</td>
                   ))}
                 </tr>
               ))}
@@ -220,7 +215,7 @@ const renderCardContent = (content: string, isLightMode: boolean) => {
   const bullets = lines.filter(l => l.startsWith('* ') || l.startsWith('- '));
   if (bullets.length > 0) {
     elements.push(
-      <ul key="bullet-list" className={`flex flex-col gap-1.5 list-disc pl-4 mt-1 ${isLightMode ? 'text-slate-600' : 'text-slate-300'}`}>
+      <ul key="bullet-list" className="flex flex-col gap-1.5 list-disc pl-4 mt-1 text-slate-300">
         {bullets.map((b, i) => {
           const text = b.replace(/^[\*\-]\s+/, '');
           return (
@@ -237,7 +232,7 @@ const renderCardContent = (content: string, isLightMode: boolean) => {
   // Paragraph list
   lines.forEach((line, i) => {
     elements.push(
-      <p key={i} className={`text-[14px] leading-[1.7] mb-2.5 last:mb-0 ${isLightMode ? 'text-slate-600' : 'text-slate-300'}`}>
+      <p key={i} className="text-[14px] leading-[1.7] mb-2.5 last:mb-0 text-slate-300">
         <BoldText text={line} />
       </p>
     );
@@ -246,7 +241,7 @@ const renderCardContent = (content: string, isLightMode: boolean) => {
   return elements;
 };
 
-const MarkdownRenderer = ({ text, isLightMode }: { text: string; isLightMode: boolean }) => {
+const MarkdownRenderer = ({ text }: { text: string }) => {
   if (!text) return null;
 
   const lines = text.split('\n');
@@ -261,13 +256,13 @@ const MarkdownRenderer = ({ text, isLightMode }: { text: string; isLightMode: bo
     const parts = txt.split(/(\*\*.*?\*\*|\*.*?\*|`.*?`)/g);
     return parts.map((part, index) => {
       if (part.startsWith('**') && part.endsWith('**')) {
-        return <strong key={index} className={`font-bold ${isLightMode ? 'text-slate-900' : 'text-white'}`}>{part.slice(2, -2)}</strong>;
+        return <strong key={index} className="font-bold text-white">{part.slice(2, -2)}</strong>;
       }
       if (part.startsWith('*') && part.endsWith('*')) {
         return <em key={index} className="italic text-muted-foreground">{part.slice(1, -1)}</em>;
       }
       if (part.startsWith('`') && part.endsWith('`')) {
-        return <code key={index} className={`px-1.5 py-0.5 rounded font-mono text-[10px] ${isLightMode ? 'bg-slate-100 text-slate-800' : 'bg-black/30 text-slate-200 border border-white/5'}`}>{part.slice(1, -1)}</code>;
+        return <code key={index} className="px-1.5 py-0.5 rounded font-mono text-[10px] bg-black/30 text-slate-200 border border-white/5">{part.slice(1, -1)}</code>;
       }
       return part;
     });
@@ -276,7 +271,7 @@ const MarkdownRenderer = ({ text, isLightMode }: { text: string; isLightMode: bo
   const flushList = () => {
     if (inList && listItems.length > 0) {
       renderedElements.push(
-        <ul key={`ul-${renderedElements.length}`} className={`flex flex-col gap-1 my-2 ${isLightMode ? 'text-slate-700' : 'text-slate-300'}`}>
+        <ul key={`ul-${renderedElements.length}`} className="flex flex-col gap-1 my-2 text-slate-300">
           {listItems}
         </ul>
       );
@@ -292,9 +287,7 @@ const MarkdownRenderer = ({ text, isLightMode }: { text: string; isLightMode: bo
       flushList();
       if (inCodeBlock) {
         renderedElements.push(
-          <pre key={`code-${lineIndex}`} className={`p-3 my-2 overflow-x-auto rounded-xl border font-mono text-[10px] leading-normal ${
-            isLightMode ? 'border-slate-200 bg-slate-50 text-slate-800' : 'border-white/5 bg-black/20 text-slate-300'
-          }`}>
+          <pre key={`code-${lineIndex}`} className="p-3 my-2 overflow-x-auto rounded-xl border font-mono text-[10px] leading-normal border-white/5 bg-black/20 text-slate-300">
             <code>{codeLines.join('\n')}</code>
           </pre>
         );
@@ -314,7 +307,7 @@ const MarkdownRenderer = ({ text, isLightMode }: { text: string; isLightMode: bo
     if (trimmed.startsWith('#### ')) {
       flushList();
       renderedElements.push(
-        <h5 key={`h4-${lineIndex}`} className={`text-xs font-bold mt-3 mb-1.5 ${isLightMode ? 'text-slate-900' : 'text-white'}`}>
+        <h5 key={`h4-${lineIndex}`} className="text-xs font-bold mt-3 mb-1.5 text-white">
           {parseInlineStyles(trimmed.slice(5))}
         </h5>
       );
@@ -323,7 +316,7 @@ const MarkdownRenderer = ({ text, isLightMode }: { text: string; isLightMode: bo
     if (trimmed.startsWith('### ')) {
       flushList();
       renderedElements.push(
-        <h4 key={`h3-${lineIndex}`} className={`text-[13px] font-bold mt-4 mb-2 flex items-center gap-1.5 ${isLightMode ? 'text-slate-800' : 'text-slate-200'}`}>
+        <h4 key={`h3-${lineIndex}`} className="text-[13px] font-bold mt-4 mb-2 flex items-center gap-1.5 text-slate-200">
           {parseInlineStyles(trimmed.slice(4))}
         </h4>
       );
@@ -332,7 +325,7 @@ const MarkdownRenderer = ({ text, isLightMode }: { text: string; isLightMode: bo
     if (trimmed.startsWith('## ')) {
       flushList();
       renderedElements.push(
-        <h3 key={`h2-${lineIndex}`} className={`text-sm font-bold mt-4 mb-2 ${isLightMode ? 'text-slate-800' : 'text-slate-200'}`}>
+        <h3 key={`h2-${lineIndex}`} className="text-sm font-bold mt-4 mb-2 text-slate-200">
           {parseInlineStyles(trimmed.slice(3))}
         </h3>
       );
@@ -341,7 +334,7 @@ const MarkdownRenderer = ({ text, isLightMode }: { text: string; isLightMode: bo
     if (trimmed.startsWith('# ')) {
       flushList();
       renderedElements.push(
-        <h2 key={`h1-${lineIndex}`} className={`text-base font-bold mt-5 mb-2.5 ${isLightMode ? 'text-slate-900' : 'text-white'}`}>
+        <h2 key={`h1-${lineIndex}`} className="text-base font-bold mt-5 mb-2.5 text-white">
           {parseInlineStyles(trimmed.slice(2))}
         </h2>
       );
@@ -351,9 +344,7 @@ const MarkdownRenderer = ({ text, isLightMode }: { text: string; isLightMode: bo
     if (trimmed.startsWith('> ')) {
       flushList();
       renderedElements.push(
-        <blockquote key={`quote-${lineIndex}`} className={`border-l-4 pl-3 py-1 my-2 italic ${
-          isLightMode ? 'border-slate-300 bg-slate-50/50 text-slate-700' : 'border-border bg-white/5 text-slate-300'
-        }`}>
+        <blockquote key={`quote-${lineIndex}`} className="border-l-4 pl-3 py-1 my-2 italic border-border bg-white/5 text-slate-300">
           {parseInlineStyles(trimmed.slice(2))}
         </blockquote>
       );
@@ -377,7 +368,7 @@ const MarkdownRenderer = ({ text, isLightMode }: { text: string; isLightMode: bo
 
     flushList();
     renderedElements.push(
-      <p key={`p-${lineIndex}`} className={`my-1.5 leading-relaxed text-[11px] ${isLightMode ? 'text-slate-700' : 'text-slate-300'}`}>
+      <p key={`p-${lineIndex}`} className="my-1.5 leading-relaxed text-[11px] text-slate-300">
         {parseInlineStyles(line)}
       </p>
     );
@@ -392,8 +383,6 @@ const MarkdownRenderer = ({ text, isLightMode }: { text: string; isLightMode: bo
 const SectionHeader = ({ icon: Icon, title, subtitle, action }: {
   icon: any; title: string; subtitle?: string; action?: React.ReactNode
 }) => {
-  const { theme } = useTheme();
-  const isLightMode = theme === 'light';
   return (
     <div className="flex items-center justify-between mb-5">
       <div className="flex items-center gap-3">
@@ -402,8 +391,8 @@ const SectionHeader = ({ icon: Icon, title, subtitle, action }: {
           <Icon className="w-4 h-4" style={{ color: '#7c6af7' }} />
         </div>
         <div>
-          <h3 className={`text-[14px] font-bold leading-none ${isLightMode ? 'text-slate-800' : 'text-white'}`}>{title}</h3>
-          {subtitle && <p className="text-[11px] mt-0.5 leading-none" style={{ color: isLightMode ? '#6b7280' : '#9ca3af' }}>{subtitle}</p>}
+          <h3 className="text-[14px] font-bold leading-none text-white">{title}</h3>
+          {subtitle && <p className="text-[11px] mt-0.5 leading-none" style={{ color: '#9ca3af' }}>{subtitle}</p>}
         </div>
       </div>
       {action}
@@ -433,16 +422,14 @@ const PrimaryBtn = ({ onClick, disabled, loading, loadingText, children, classNa
 );
 
 const ErrorBanner = ({ message }: { message: string }) => {
-  const { theme } = useTheme();
-  const isLightMode = theme === 'light';
   return (
     <div className="flex items-start gap-3 p-3.5 rounded-2xl animate-fadeIn"
          style={{ 
-           background: isLightMode ? 'rgba(239,68,68,0.05)' : 'rgba(239,68,68,0.08)', 
-           border: isLightMode ? '1px solid rgba(239,68,68,0.15)' : '1px solid rgba(239,68,68,0.2)' 
+           background: 'rgba(239,68,68,0.08)', 
+           border: '1px solid rgba(239,68,68,0.2)' 
          }}>
-      <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" style={{ color: isLightMode ? '#dc2626' : '#f87171' }} />
-      <p className="text-[12px] leading-relaxed font-medium" style={{ color: isLightMode ? '#991b1b' : '#fca5a5' }}>{message}</p>
+      <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" style={{ color: '#f87171' }} />
+      <p className="text-[12px] leading-relaxed font-medium" style={{ color: '#fca5a5' }}>{message}</p>
     </div>
   );
 };
@@ -473,9 +460,7 @@ interface FileUpload {
 
 /* ─────────────────── main page ─────────────────── */
 export default function DashboardPage() {
-  const { theme } = useTheme();
-  const isLightMode = theme === 'light';
-  const { slackUsers } = useAuth();
+    const { slackUsers } = useAuth();
 
   const getUserDisplayName = (userId: string) => {
     if (!userId) return 'Unknown';
@@ -1720,13 +1705,13 @@ export default function DashboardPage() {
         {/* ── Top bar ── */}
         <header className="h-14 shrink-0 flex items-center justify-between px-4 sm:px-6 md:px-8 sticky top-0 z-20 gap-3"
                 style={{
-                  background: isLightMode ? 'rgba(255, 255, 255, 0.85)' : 'rgba(6,7,13,0.85)',
+                  background: 'rgba(6,7,13,0.85)',
                   backdropFilter: 'blur(16px)',
-                  borderBottom: isLightMode ? '1px solid rgba(0,0,0,0.08)' : '1px solid rgba(255,255,255,0.06)'
+                  borderBottom: '1px solid rgba(255,255,255,0.06)'
                 }}>
           <div className="flex items-center gap-2 sm:gap-2.5 min-w-0">
             <TrendingUp className="w-4 h-4 shrink-0" style={{ color: '#7c6af7' }} />
-            <span className={`text-[13px] font-semibold truncate ${isLightMode ? 'text-slate-800' : 'text-white'}`}>Assistant Overview</span>
+            <span className={`text-[13px] font-semibold truncate ${'text-white'}`}>Assistant Overview</span>
             <div className="hidden sm:flex ml-2 items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-medium shrink-0"
                  style={{ background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.2)', color: '#34d399' }}>
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 pulse-dot" />
@@ -1757,8 +1742,8 @@ export default function DashboardPage() {
           {isSocketReconnecting && (
             <div className="flex items-center gap-2.5 p-3 rounded-2xl animate-pulse"
                  style={{ 
-                   background: isLightMode ? 'rgba(245,158,11,0.06)' : 'rgba(245,158,11,0.09)', 
-                   border: isLightMode ? '1px solid rgba(245,158,11,0.18)' : '1px solid rgba(245,158,11,0.22)' 
+                   background: 'rgba(245,158,11,0.09)', 
+                   border: '1px solid rgba(245,158,11,0.22)' 
                  }}>
               <div className="w-2 h-2 rounded-full bg-amber-400 animate-ping shrink-0" />
               <p className="text-[12px] font-semibold text-amber-500">Reconnecting to real-time service...</p>
@@ -1783,15 +1768,15 @@ export default function DashboardPage() {
 
           {/* ── Workspace Intelligence Score Widget ── */}
           <section className={`rounded-3xl border p-6 grid grid-cols-1 md:grid-cols-3 gap-6 transition-all ${
-            isLightMode ? 'bg-white border-slate-200/80 shadow-sm' : 'bg-white/[0.03] border-white/[0.07]'
+            'bg-white/[0.03] border-white/[0.07]'
           }`}>
             {/* Circular Ring widget */}
             <div className="flex flex-col items-center justify-center md:border-r md:pr-6"
-                 style={{ borderColor: isLightMode ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.06)' }}>
+                 style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
               <div className="relative w-28 h-28">
                 <svg viewBox="0 0 36 36" className="w-28 h-28 -rotate-90">
                   <circle cx="18" cy="18" r="15.9" fill="none" strokeWidth="3"
-                          stroke={isLightMode ? '#e2e8f0' : 'rgba(255,255,255,0.06)'} />
+                          stroke={'rgba(255,255,255,0.06)'} />
                   <circle cx="18" cy="18" r="15.9" fill="none" strokeWidth="3"
                           stroke="url(#scoreGrad)"
                           strokeDasharray={`${loadingScore ? 0 : intelligenceScore?.overall || 0} 100`}
@@ -1804,14 +1789,14 @@ export default function DashboardPage() {
                   </defs>
                 </svg>
                 <div className="absolute inset-0 flex flex-col items-center justify-center">
-                  <span className={`text-2xl font-bold ${isLightMode ? 'text-slate-800' : 'text-white'}`}>
+                  <span className={`text-2xl font-bold ${'text-white'}`}>
                     {loadingScore ? '—' : intelligenceScore?.overall || 0}
                   </span>
                   <span className="text-[9px] uppercase tracking-wider font-semibold" style={{ color: '#9ca3af' }}>Score</span>
                 </div>
               </div>
               <div className="text-center mt-3">
-                <h4 className={`text-xs font-bold ${isLightMode ? 'text-slate-800' : 'text-slate-200'}`}>Workspace Intelligence</h4>
+                <h4 className={`text-xs font-bold ${'text-slate-200'}`}>Workspace Intelligence</h4>
                 <p className="text-[10px]" style={{ color: '#6b7280' }}>Overall team collaboration health</p>
               </div>
             </div>
@@ -1826,19 +1811,19 @@ export default function DashboardPage() {
               ].map((sub, i) => (
                 <div key={i} className="space-y-1.5">
                   <div className="flex justify-between items-center text-xs font-medium">
-                    <span style={{ color: isLightMode ? '#64748b' : '#9ca3af' }}>{sub.label}</span>
-                    <span className={`font-bold ${isLightMode ? 'text-slate-800' : 'text-slate-200'}`}>
+                    <span style={{ color: '#9ca3af' }}>{sub.label}</span>
+                    <span className={`font-bold ${'text-slate-200'}`}>
                       {loadingScore ? '—' : `${sub.score}%`}
                     </span>
                   </div>
-                  <div className="h-2 rounded-full" style={{ background: isLightMode ? '#f1f5f9' : 'rgba(255,255,255,0.05)' }}>
+                  <div className="h-2 rounded-full" style={{ background: 'rgba(255,255,255,0.05)' }}>
                     <div className="h-full rounded-full transition-all duration-700"
                          style={{ width: loadingScore ? '0%' : `${sub.score}%`, background: sub.color }} />
                   </div>
                 </div>
               ))}
               <div className="sm:col-span-2 flex items-center justify-between text-[10px] pt-2 border-t"
-                   style={{ borderColor: isLightMode ? 'rgba(0,0,0,0.04)' : 'rgba(255,255,255,0.04)' }}>
+                   style={{ borderColor: 'rgba(255,255,255,0.04)' }}>
                 <span style={{ color: '#6b7280' }}>MCP Server Connection:</span>
                 <span className={`font-bold uppercase ${data?.stats.mcpConnected ? 'text-emerald-500' : 'text-rose-500'}`}>
                   {data?.stats.mcpConnected ? 'CONNECTED' : 'OFFLINE'}
@@ -1848,13 +1833,13 @@ export default function DashboardPage() {
           </section>
 
           {/* ── Channel Viewer ── */}
-          <section className="glass-elevated rounded-3xl overflow-hidden" style={{ border: isLightMode ? '1px solid rgba(0,0,0,0.06)' : '1px solid rgba(255,255,255,0.08)' }}>
+          <section className="glass-elevated rounded-3xl overflow-hidden" style={{ border: '1px solid rgba(255,255,255,0.08)' }}>
 
             {/* Panel header */}
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-4 sm:px-6 py-4"
                  style={{
-                   borderBottom: isLightMode ? '1px solid rgba(0,0,0,0.06)' : '1px solid rgba(255,255,255,0.06)',
-                   background: isLightMode ? 'rgba(0,0,0,0.01)' : 'rgba(255,255,255,0.02)'
+                   borderBottom: '1px solid rgba(255,255,255,0.06)',
+                   background: 'rgba(255,255,255,0.02)'
                  }}>
               <SectionHeader
                 icon={MessageSquare}
@@ -1867,7 +1852,7 @@ export default function DashboardPage() {
                 <select
                   value={fetchLimit}
                   onChange={e => setFetchLimit(Number(e.target.value))}
-                  className={`glass-input px-3 py-2 rounded-xl text-[12px] cursor-pointer flex-1 min-w-[110px] sm:flex-none ${isLightMode ? 'text-slate-800 bg-white border-slate-200' : 'text-white'}`}
+                  className={`glass-input px-3 py-2 rounded-xl text-[12px] cursor-pointer flex-1 min-w-[110px] sm:flex-none ${'text-white'}`}
                   style={{ fontFamily: 'Inter, sans-serif', minWidth: 120 }}
                 >
                   <option value={5}>Latest 5</option>
@@ -1881,7 +1866,7 @@ export default function DashboardPage() {
                 <select
                   value={selectedChannelId}
                   onChange={e => setSelectedChannelId(e.target.value)}
-                  className={`glass-input px-3 py-2 rounded-xl text-[12px] cursor-pointer flex-1 min-w-[110px] sm:flex-none ${isLightMode ? 'text-slate-800 bg-white border-slate-200' : 'text-white'}`}
+                  className={`glass-input px-3 py-2 rounded-xl text-[12px] cursor-pointer flex-1 min-w-[110px] sm:flex-none ${'text-white'}`}
                   style={{ fontFamily: 'Inter, sans-serif', minWidth: 130 }}
                 >
                   {channels?.map(ch => (
@@ -1894,8 +1879,8 @@ export default function DashboardPage() {
                   disabled={isFetchingMessages}
                   className="w-9 h-9 rounded-xl flex items-center justify-center transition-all duration-200"
                   style={{
-                    background: isLightMode ? 'rgba(0,0,0,0.02)' : 'rgba(255,255,255,0.04)',
-                    border: isLightMode ? '1px solid rgba(0,0,0,0.06)' : '1px solid rgba(255,255,255,0.08)',
+                    background: 'rgba(255,255,255,0.04)',
+                    border: '1px solid rgba(255,255,255,0.08)',
                     color: isFetchingMessages ? '#7c6af7' : '#6b7280',
                   }}
                   title="Refresh"
@@ -1911,7 +1896,7 @@ export default function DashboardPage() {
                     className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all duration-200 border ${
                       showPinnedDropdown 
                         ? 'border-primary text-primary bg-primary/10' 
-                        : (isLightMode ? 'bg-[#000000]/02 border-[#000000]/06 text-[#6b7280]' : 'bg-[#ffffff]/04 border-[#ffffff]/08 text-[#6b7280]')
+                        : ('bg-[#ffffff]/04 border-[#ffffff]/08 text-[#6b7280]')
                     }`}
                     title="Pinned Messages"
                   >
@@ -1925,7 +1910,7 @@ export default function DashboardPage() {
                     <div 
                       ref={pinnedDropdownRef}
                       className={`absolute right-0 mt-2 w-80 max-h-80 overflow-y-auto rounded-2xl border shadow-2xl p-4 flex flex-col gap-3 z-[100] ${
-                        isLightMode ? 'bg-white border-slate-200' : 'bg-[#141624] border-border'
+                        'bg-[#141624] border-border'
                       }`}
                     >
                       <div className="flex items-center justify-between border-b border-border/40 pb-2 mb-1">
@@ -1973,7 +1958,7 @@ export default function DashboardPage() {
                     className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all duration-200 border ${
                       showBookmarksDropdown 
                         ? 'border-amber-500 text-amber-500 bg-amber-500/10' 
-                        : (isLightMode ? 'bg-[#000000]/02 border-[#000000]/06 text-[#6b7280]' : 'bg-[#ffffff]/04 border-[#ffffff]/08 text-[#6b7280]')
+                        : ('bg-[#ffffff]/04 border-[#ffffff]/08 text-[#6b7280]')
                     }`}
                     title="Saved Messages"
                   >
@@ -1987,7 +1972,7 @@ export default function DashboardPage() {
                     <div 
                       ref={bookmarksDropdownRef}
                       className={`absolute right-0 mt-2 w-80 max-h-80 overflow-y-auto rounded-2xl border shadow-2xl p-4 flex flex-col gap-3 z-[100] ${
-                        isLightMode ? 'bg-white border-slate-200' : 'bg-[#141624] border-border'
+                        'bg-[#141624] border-border'
                       }`}
                     >
                       <div className="flex items-center justify-between border-b border-border/40 pb-2 mb-1">
@@ -2037,8 +2022,8 @@ export default function DashboardPage() {
             <div className="px-4 sm:px-6 pt-4 pb-2">
               <div className="flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl"
                    style={{
-                     background: isLightMode ? 'rgba(0, 0, 0, 0.02)' : 'rgba(255,255,255,0.03)',
-                     border: isLightMode ? '1px solid rgba(0, 0, 0, 0.08)' : '1px solid rgba(255,255,255,0.07)'
+                     background: 'rgba(255,255,255,0.03)',
+                     border: '1px solid rgba(255,255,255,0.07)'
                    }}>
                 <Filter className="w-3.5 h-3.5 shrink-0" style={{ color: '#4b5563' }} />
                 <input
@@ -2046,7 +2031,7 @@ export default function DashboardPage() {
                   placeholder="Filter messages in this view by keyword…"
                   value={filterQuery}
                   onChange={e => setFilterQuery(e.target.value)}
-                  className={`flex-1 bg-transparent text-[12px] outline-none ${isLightMode ? 'text-slate-800 placeholder:text-slate-400' : 'text-white placeholder:text-[#374151]'}`}
+                  className={`flex-1 bg-transparent text-[12px] outline-none ${'text-white placeholder:text-[#374151]'}`}
                 />
                 {filterQuery && (
                   <button onClick={() => setFilterQuery('')} className="text-[10px] px-2 py-0.5 rounded-lg"
@@ -2236,7 +2221,7 @@ export default function DashboardPage() {
               {/* Mentions Autocomplete suggestions */}
               {mentionQuery && (
                 <div className={`max-w-xs absolute bottom-28 left-6 w-64 max-h-48 overflow-y-auto rounded-2xl border shadow-2xl p-2 z-50 ${
-                  isLightMode ? 'bg-white border-slate-200' : 'bg-[#141624] border-border'
+                  'bg-[#141624] border-border'
                 }`}>
                   <div className="px-2 py-1 text-[9px] font-bold text-muted-foreground uppercase border-b border-border/30 tracking-wider">
                     {mentionQuery.type === '@' ? 'Users List' : 'Channels List'}
@@ -2327,14 +2312,14 @@ export default function DashboardPage() {
 
           {/* ── AI Command Center & Insights Panel ── */}
           <section className={`rounded-3xl border p-6 space-y-6 ${
-            isLightMode ? 'bg-white border-slate-200/80 shadow-sm' : 'bg-white/[0.03] border-white/[0.07]'
+            'bg-white/[0.03] border-white/[0.07]'
           }`}>
             <div>
               <div className="flex items-center gap-2.5 mb-2">
                 <Brain className="w-4.5 h-4.5 text-[#7c6af7]" />
-                <h3 className={`text-[14px] font-bold ${isLightMode ? 'text-slate-800' : 'text-white'}`}>AI Command Center</h3>
+                <h3 className={`text-[14px] font-bold ${'text-white'}`}>AI Command Center</h3>
               </div>
-              <p className="text-[11px]" style={{ color: isLightMode ? '#6b7280' : '#9ca3af' }}>
+              <p className="text-[11px]" style={{ color: '#9ca3af' }}>
                 Ask anything or explore the indexed knowledge base using conversational commands
               </p>
             </div>
@@ -2359,9 +2344,7 @@ export default function DashboardPage() {
                     }).then(d => setRetrieverResult(d)).catch(err => setRetrieverError(err?.message));
                   }}
                   className={`px-3 py-1.5 rounded-xl text-[10px] font-semibold border transition-all ${
-                    isLightMode
-                      ? 'bg-slate-50 hover:bg-slate-100 border-slate-200 text-slate-600'
-                      : 'bg-white/[0.04] hover:bg-white/[0.08] border-white/[0.08] text-slate-400'
+                    'bg-white/[0.04] hover:bg-white/[0.08] border-white/[0.08] text-slate-400'
                   }`}
                 >
                   {chip.label}
@@ -2373,11 +2356,11 @@ export default function DashboardPage() {
             <form onSubmit={handleRetrieveMessages} className="flex gap-2.5">
               <div className="flex-1 flex items-center gap-2.5 px-4 py-3 rounded-xl transition-all"
                    style={{
-                     background: isLightMode ? 'rgba(0, 0, 0, 0.02)' : 'rgba(255, 255, 255, 0.04)',
-                     border: isLightMode ? '1px solid rgba(0, 0, 0, 0.08)' : '1px solid rgba(255, 255, 255, 0.08)'
+                     background: 'rgba(255, 255, 255, 0.04)',
+                     border: '1px solid rgba(255, 255, 255, 0.08)'
                    }}
                    onFocusCapture={e => (e.currentTarget as HTMLElement).style.border = '1px solid rgba(124,106,247,0.5)'}
-                   onBlurCapture={e => (e.currentTarget as HTMLElement).style.border = isLightMode ? '1px solid rgba(0, 0, 0, 0.08)' : '1px solid rgba(255, 255, 255, 0.08)'}
+                   onBlurCapture={e => (e.currentTarget as HTMLElement).style.border = '1px solid rgba(255, 255, 255, 0.08)'}
               >
                 <Search className="w-3.5 h-3.5 shrink-0" style={{ color: '#4b5563' }} />
                 <input
@@ -2387,7 +2370,7 @@ export default function DashboardPage() {
                   value={retrieverQuery}
                   onChange={e => setRetrieverQuery(e.target.value)}
                   disabled={loadingRetriever}
-                  className={`flex-1 bg-transparent text-[12px] outline-none ${isLightMode ? 'text-slate-800 placeholder:text-slate-400' : 'text-white placeholder:text-[#374151]'}`}
+                  className={`flex-1 bg-transparent text-[12px] outline-none ${'text-white placeholder:text-[#374151]'}`}
                 />
               </div>
               <PrimaryBtn
@@ -2414,11 +2397,11 @@ export default function DashboardPage() {
               <div className="space-y-4 animate-fadeInUp">
                 <div className="flex flex-wrap items-center gap-2 p-3.5 rounded-2xl"
                      style={{
-                       background: isLightMode ? 'rgba(124,106,247,0.08)' : 'rgba(124,106,247,0.06)',
+                       background: 'rgba(124,106,247,0.06)',
                        border: '1px solid rgba(124,106,247,0.15)'
                      }}>
                   <Zap className="w-3.5 h-3.5 shrink-0" style={{ color: '#7c6af7' }} />
-                  <span className={`text-[11px] font-semibold ${isLightMode ? 'text-slate-800' : 'text-white'}`}>{retrieverResult.explanation}</span>
+                  <span className={`text-[11px] font-semibold ${'text-white'}`}>{retrieverResult.explanation}</span>
                   <div className="flex flex-wrap gap-2 ml-auto items-center">
                     <span className="px-2.5 py-1 rounded-full text-[10px] font-bold"
                           style={{
@@ -2434,7 +2417,7 @@ export default function DashboardPage() {
                 {/* AI Summary Card */}
                 {retrieverResult.summary && (
                   <div className={`p-4 rounded-2xl border text-xs leading-relaxed ${
-                    isLightMode ? 'bg-slate-50 border-slate-200/80 text-slate-705' : 'bg-white/[0.02] border-white/[0.06] text-slate-300'
+                    'bg-white/[0.02] border-white/[0.06] text-slate-300'
                   }`}>
                     <div className="flex items-center gap-1.5 mb-2 font-bold text-[10px] uppercase tracking-wider text-violet-400">
                       <Sparkles className="w-3.5 h-3.5 animate-pulse" />
@@ -2450,7 +2433,7 @@ export default function DashboardPage() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     {/* Participants */}
                     {retrieverResult.participants && retrieverResult.participants.length > 0 && (
-                      <div className={`p-3 rounded-2xl border ${isLightMode ? 'bg-white border-slate-200' : 'bg-white/[0.01] border-white/[0.06]'}`}>
+                      <div className={`p-3 rounded-2xl border ${'bg-white/[0.01] border-white/[0.06]'}`}>
                         <span className="text-[9px] font-bold uppercase tracking-wider text-slate-500 block mb-1.5">Key Contributors</span>
                         <div className="flex flex-wrap gap-1.5">
                           {retrieverResult.participants.slice(0, 6).map((p: string, idx: number) => (
@@ -2463,7 +2446,7 @@ export default function DashboardPage() {
                     )}
                     {/* Related Topics */}
                     {retrieverResult.relatedTopics && retrieverResult.relatedTopics.length > 0 && (
-                      <div className={`p-3 rounded-2xl border ${isLightMode ? 'bg-white border-slate-200' : 'bg-white/[0.01] border-white/[0.06]'}`}>
+                      <div className={`p-3 rounded-2xl border ${'bg-white/[0.01] border-white/[0.06]'}`}>
                         <span className="text-[9px] font-bold uppercase tracking-wider text-slate-500 block mb-1.5">Related Topics</span>
                         <div className="flex flex-wrap gap-1.5">
                           {retrieverResult.relatedTopics.slice(0, 6).map((t: string, idx: number) => (
@@ -2479,8 +2462,8 @@ export default function DashboardPage() {
 
                 <div className="max-h-[320px] overflow-y-auto space-y-2.5 rounded-2xl p-3"
                      style={{
-                       background: isLightMode ? 'rgba(0,0,0,0.01)' : 'rgba(0,0,0,0.2)',
-                       border: isLightMode ? '1px solid rgba(0,0,0,0.06)' : '1px solid rgba(255,255,255,0.05)'
+                       background: 'rgba(0,0,0,0.2)',
+                       border: '1px solid rgba(255,255,255,0.05)'
                      }}>
                   {retrieverResult.messages.length === 0 ? (
                     <EmptyState text="No relevant messages found." />
@@ -2500,8 +2483,8 @@ export default function DashboardPage() {
                           <div className="min-w-0 flex-1">
                             <div className="flex items-baseline justify-between gap-2 mb-1.5">
                               <div className="flex items-baseline gap-2">
-                                <span className={`text-[11px] font-semibold font-sans ${isLightMode ? 'text-slate-700' : 'text-white'}`}>{getUserDisplayName(msg.user)}</span>
-                                <span className="text-[9px]" style={{ color: isLightMode ? '#6b7280' : '#4b5563' }}>{fmtDate(msg.ts)} {fmtTime(msg.ts)}</span>
+                                <span className={`text-[11px] font-semibold font-sans ${'text-white'}`}>{getUserDisplayName(msg.user)}</span>
+                                <span className="text-[9px]" style={{ color: '#4b5563' }}>{fmtDate(msg.ts)} {fmtTime(msg.ts)}</span>
                               </div>
                               {msg.relevanceScore !== undefined && (
                                 <span className="text-[10px] font-bold px-2 py-0.5 rounded-lg border"
@@ -2514,7 +2497,7 @@ export default function DashboardPage() {
                                 </span>
                               )}
                             </div>
-                            <p className="text-[12px] leading-relaxed whitespace-pre-wrap" style={{ color: isLightMode ? '#334155' : '#d1d5db' }}>{msg.text}</p>
+                            <p className="text-[12px] leading-relaxed whitespace-pre-wrap" style={{ color: '#d1d5db' }}>{msg.text}</p>
                           </div>
                         </div>
                       );
@@ -2525,12 +2508,12 @@ export default function DashboardPage() {
             )}
 
             {/* AI Insights Collapsible Panel */}
-            <div className="border-t pt-4" style={{ borderColor: isLightMode ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.06)' }}>
+            <div className="border-t pt-4" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
               <button
                 type="button"
                 onClick={() => setShowInsights(!showInsights)}
                 className="flex items-center justify-between w-full text-left font-bold text-xs"
-                style={{ color: isLightMode ? '#4b5563' : '#9ca3af' }}
+                style={{ color: '#9ca3af' }}
               >
                 <span className="flex items-center gap-1.5">
                   <Sparkles className="w-3.5 h-3.5 text-violet-400" />
@@ -2555,17 +2538,17 @@ export default function DashboardPage() {
                       return (
                         <div key={idx} className="flex gap-2.5 p-3 rounded-2xl border text-xs font-semibold leading-relaxed"
                              style={isWarn ? {
-                               background: isLightMode ? '#fffbeb' : 'rgba(245,158,11,0.04)',
-                               borderColor: isLightMode ? '#fef3c7' : 'rgba(245,158,11,0.1)',
-                               color: isLightMode ? '#b45309' : '#fcd34d'
+                               background: 'rgba(245,158,11,0.04)',
+                               borderColor: 'rgba(245,158,11,0.1)',
+                               color: '#fcd34d'
                              } : isPos ? {
-                               background: isLightMode ? '#f0fdf4' : 'rgba(16,185,129,0.04)',
-                               borderColor: isLightMode ? '#dcfce7' : 'rgba(16,185,129,0.1)',
-                               color: isLightMode ? '#15803d' : '#6ee7b7'
+                               background: 'rgba(16,185,129,0.04)',
+                               borderColor: 'rgba(16,185,129,0.1)',
+                               color: '#6ee7b7'
                              } : {
-                               background: isLightMode ? '#f8fafc' : 'rgba(255,255,255,0.02)',
-                               borderColor: isLightMode ? '#e2e8f0' : 'rgba(255,255,255,0.05)',
-                               color: isLightMode ? '#475569' : '#94a3b8'
+                               background: 'rgba(255,255,255,0.02)',
+                               borderColor: 'rgba(255,255,255,0.05)',
+                               color: '#94a3b8'
                              }}>
                           <Sparkles className="w-3.5 h-3.5 shrink-0 mt-0.5" />
                           <span>{ins.text}</span>
@@ -2579,15 +2562,15 @@ export default function DashboardPage() {
           </section>
 
           {/* ── Analytics Panel ── */}
-          <section className="glass rounded-3xl p-6" style={{ border: isLightMode ? '1px solid rgba(0,0,0,0.06)' : '1px solid rgba(255,255,255,0.08)' }}>
+          <section className="glass rounded-3xl p-6" style={{ border: '1px solid rgba(255,255,255,0.08)' }}>
             <div className="flex items-center justify-between mb-5">
               <SectionHeader icon={Activity} title="Channel Analytics" subtitle="AI-powered insights from conversation history" />
 
               {/* Tabs */}
               <div className="flex items-center gap-1 p-1 rounded-xl"
                    style={{
-                     background: isLightMode ? 'rgba(0,0,0,0.02)' : 'rgba(255,255,255,0.04)',
-                     border: isLightMode ? '1px solid rgba(0,0,0,0.06)' : '1px solid rgba(255,255,255,0.07)'
+                     background: 'rgba(255,255,255,0.04)',
+                     border: '1px solid rgba(255,255,255,0.07)'
                    }}>
                 {([
                   { key: 'summary', icon: Layers,         label: 'Summary'  },
@@ -2600,7 +2583,7 @@ export default function DashboardPage() {
                     className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-[11px] font-semibold transition-all duration-200"
                     style={analyticsTab === tab.key
                       ? { background: 'linear-gradient(135deg,#7c6af7,#6366f1)', color: '#fff', boxShadow: '0 4px 12px rgba(124,106,247,0.35)' }
-                      : { color: isLightMode ? '#4b5563' : '#8b949e' }}
+                      : { color: '#8b949e' }}
                   >
                     <tab.icon className="w-3 h-3" />
                     {tab.label}
@@ -2640,11 +2623,9 @@ export default function DashboardPage() {
                         return (
                           <div className="mx-auto max-w-[900px] w-full mt-2">
                             <div className={`p-5 rounded-2xl text-[14px] leading-7 select-text ${
-                              isLightMode 
-                                ? 'bg-white border border-slate-100 shadow-sm text-slate-700' 
-                                : 'glass text-slate-300'
+                              'glass text-slate-300'
                             }`}
-                                 style={{ border: isLightMode ? '' : '1px solid rgba(255, 255, 255, 0.05)' }}>
+                                 style={{ border: '1px solid rgba(255, 255, 255, 0.05)' }}>
                               {summaryText}
                             </div>
                           </div>
@@ -2653,7 +2634,7 @@ export default function DashboardPage() {
 
                       return (
                         <div className="mx-auto max-w-[900px] w-full mt-2 space-y-4">
-                          <h2 className={`text-[24px] font-bold mb-6 select-text ${isLightMode ? 'text-slate-800' : 'text-white'}`}>
+                          <h2 className={`text-[24px] font-bold mb-6 select-text ${'text-white'}`}>
                             Conversation Summary
                           </h2>
                           
@@ -2661,16 +2642,14 @@ export default function DashboardPage() {
                             
                             {/* Main Context / Conversation Overview */}
                             <div className={`p-4 rounded-2xl flex flex-col justify-start transition-all duration-300 hover:scale-[1.01] md:col-span-2 ${
-                              isLightMode 
-                                ? 'bg-white border border-slate-100 shadow-[0_4px_20px_rgba(0,0,0,0.02)] hover:border-slate-200/80 text-slate-800' 
-                                : 'glass hover:border-white/10 text-slate-300'
+                              'glass hover:border-white/10 text-slate-300'
                             }`}
-                                 style={{ border: isLightMode ? '' : '1px solid rgba(255, 255, 255, 0.05)', paddingTop: '12px', paddingBottom: '12px' }}>
-                              <h3 className={`text-[16px] font-semibold mb-1 ${isLightMode ? 'text-[#7c6af7]' : 'text-[#a78bfa]'}`}>
+                                 style={{ border: '1px solid rgba(255, 255, 255, 0.05)', paddingTop: '12px', paddingBottom: '12px' }}>
+                              <h3 className={`text-[16px] font-semibold mb-1 ${'text-[#a78bfa]'}`}>
                                 Conversation Overview
                               </h3>
-                              <div className={`w-full border-t mb-3 ${isLightMode ? 'border-slate-100' : 'border-white/5'}`} />
-                              <p className={`text-[14px] leading-[1.7] ${isLightMode ? 'text-slate-600' : 'text-slate-300'}`}>
+                              <div className={`w-full border-t mb-3 ${'border-white/5'}`} />
+                              <p className={`text-[14px] leading-[1.7] ${'text-slate-300'}`}>
                                 <BoldText text={data.conversationOverview} />
                               </p>
                             </div>
@@ -2678,23 +2657,21 @@ export default function DashboardPage() {
                             {/* Discussion Themes */}
                             {data.discussionThemes && data.discussionThemes.length > 0 && (
                               <div className={`p-4 rounded-2xl flex flex-col justify-start transition-all duration-300 hover:scale-[1.01] md:col-span-2 ${
-                                isLightMode 
-                                  ? 'bg-white border border-slate-100 shadow-[0_4px_20px_rgba(0,0,0,0.02)] hover:border-slate-200/80 text-slate-800' 
-                                  : 'glass hover:border-white/10 text-slate-300'
+                                'glass hover:border-white/10 text-slate-300'
                               }`}
-                                   style={{ border: isLightMode ? '' : '1px solid rgba(255, 255, 255, 0.05)', paddingTop: '12px', paddingBottom: '12px' }}>
-                                <h3 className={`text-[16px] font-semibold mb-1 ${isLightMode ? 'text-[#7c6af7]' : 'text-[#a78bfa]'}`}>
+                                   style={{ border: '1px solid rgba(255, 255, 255, 0.05)', paddingTop: '12px', paddingBottom: '12px' }}>
+                                <h3 className={`text-[16px] font-semibold mb-1 ${'text-[#a78bfa]'}`}>
                                   Discussion Themes
                                 </h3>
-                                <div className={`w-full border-t mb-3 ${isLightMode ? 'border-slate-100' : 'border-white/5'}`} />
+                                <div className={`w-full border-t mb-3 ${'border-white/5'}`} />
                                 <div className="space-y-3">
                                   {data.discussionThemes.map((theme: any, i: number) => (
                                     <div key={i} className={`p-3.5 rounded-xl border flex flex-col md:flex-row justify-between gap-3 ${
-                                      isLightMode ? 'border-slate-100 bg-slate-50/50' : 'border-white/5 bg-white/[0.01]'
+                                      'border-white/5 bg-white/[0.01]'
                                     }`}>
                                       <div className="flex-1">
-                                        <h4 className={`text-[14px] font-bold mb-1 ${isLightMode ? 'text-slate-800' : 'text-white'}`}>{theme.theme}</h4>
-                                        <p className={`text-[13px] leading-[1.6] ${isLightMode ? 'text-slate-500' : 'text-slate-400'}`}>{theme.summary}</p>
+                                        <h4 className={`text-[14px] font-bold mb-1 ${'text-white'}`}>{theme.theme}</h4>
+                                        <p className={`text-[13px] leading-[1.6] ${'text-slate-400'}`}>{theme.summary}</p>
                                       </div>
                                       <span className={`self-start px-2 py-0.5 rounded-md text-[10px] font-bold uppercase ${
                                         theme.importance?.toLowerCase() === 'high' ? 'bg-red-500/10 text-red-400 border border-red-500/20' : 
@@ -2711,16 +2688,14 @@ export default function DashboardPage() {
 
                             {/* Key Discussion Points */}
                             <div className={`p-4 rounded-2xl flex flex-col justify-start transition-all duration-300 hover:scale-[1.01] ${
-                              isLightMode 
-                                ? 'bg-white border border-slate-100 shadow-[0_4px_20px_rgba(0,0,0,0.02)] hover:border-slate-200/80 text-slate-800' 
-                                : 'glass hover:border-white/10 text-slate-300'
+                              'glass hover:border-white/10 text-slate-300'
                             }`}
-                                 style={{ border: isLightMode ? '' : '1px solid rgba(255, 255, 255, 0.05)', paddingTop: '12px', paddingBottom: '12px' }}>
-                              <h3 className={`text-[16px] font-semibold mb-1 ${isLightMode ? 'text-[#7c6af7]' : 'text-[#a78bfa]'}`}>
+                                 style={{ border: '1px solid rgba(255, 255, 255, 0.05)', paddingTop: '12px', paddingBottom: '12px' }}>
+                              <h3 className={`text-[16px] font-semibold mb-1 ${'text-[#a78bfa]'}`}>
                                 Key Discussion Points
                               </h3>
-                              <div className={`w-full border-t mb-3 ${isLightMode ? 'border-slate-100' : 'border-white/5'}`} />
-                              <ul className={`flex flex-col gap-1.5 list-disc pl-4 ${isLightMode ? 'text-slate-600' : 'text-slate-300'}`}>
+                              <div className={`w-full border-t mb-3 ${'border-white/5'}`} />
+                              <ul className={`flex flex-col gap-1.5 list-disc pl-4 ${'text-slate-300'}`}>
                                 {data.keyDiscussionPoints?.map((p: string, i: number) => (
                                   <li key={i} className="p-0 m-0 leading-[1.6] text-[14px]"><BoldText text={p} /></li>
                                 ))}
@@ -2729,16 +2704,14 @@ export default function DashboardPage() {
 
                             {/* Important Insights */}
                             <div className={`p-4 rounded-2xl flex flex-col justify-start transition-all duration-300 hover:scale-[1.01] ${
-                              isLightMode 
-                                ? 'bg-white border border-slate-100 shadow-[0_4px_20px_rgba(0,0,0,0.02)] hover:border-slate-200/80 text-slate-800' 
-                                : 'glass hover:border-white/10 text-slate-300'
+                              'glass hover:border-white/10 text-slate-300'
                             }`}
-                                 style={{ border: isLightMode ? '' : '1px solid rgba(255, 255, 255, 0.05)', paddingTop: '12px', paddingBottom: '12px' }}>
-                              <h3 className={`text-[16px] font-semibold mb-1 ${isLightMode ? 'text-[#7c6af7]' : 'text-[#a78bfa]'}`}>
+                                 style={{ border: '1px solid rgba(255, 255, 255, 0.05)', paddingTop: '12px', paddingBottom: '12px' }}>
+                              <h3 className={`text-[16px] font-semibold mb-1 ${'text-[#a78bfa]'}`}>
                                 Important Insights
                               </h3>
-                              <div className={`w-full border-t mb-3 ${isLightMode ? 'border-slate-100' : 'border-white/5'}`} />
-                              <ul className={`flex flex-col gap-1.5 list-disc pl-4 ${isLightMode ? 'text-slate-600' : 'text-slate-300'}`}>
+                              <div className={`w-full border-t mb-3 ${'border-white/5'}`} />
+                              <ul className={`flex flex-col gap-1.5 list-disc pl-4 ${'text-slate-300'}`}>
                                 {data.importantInsights?.map((p: string, i: number) => (
                                   <li key={i} className="p-0 m-0 leading-[1.6] text-[14px]"><BoldText text={p} /></li>
                                 ))}
@@ -2747,16 +2720,14 @@ export default function DashboardPage() {
 
                             {/* Decisions Made */}
                             <div className={`p-4 rounded-2xl flex flex-col justify-start transition-all duration-300 hover:scale-[1.01] ${
-                              isLightMode 
-                                ? 'bg-white border border-slate-100 shadow-[0_4px_20px_rgba(0,0,0,0.02)] hover:border-slate-200/80 text-slate-800' 
-                                : 'glass hover:border-white/10 text-slate-300'
+                              'glass hover:border-white/10 text-slate-300'
                             }`}
-                                 style={{ border: isLightMode ? '' : '1px solid rgba(255, 255, 255, 0.05)', paddingTop: '12px', paddingBottom: '12px' }}>
-                              <h3 className={`text-[16px] font-semibold mb-1 ${isLightMode ? 'text-[#7c6af7]' : 'text-[#a78bfa]'}`}>
+                                 style={{ border: '1px solid rgba(255, 255, 255, 0.05)', paddingTop: '12px', paddingBottom: '12px' }}>
+                              <h3 className={`text-[16px] font-semibold mb-1 ${'text-[#a78bfa]'}`}>
                                 Decisions Made
                               </h3>
-                              <div className={`w-full border-t mb-3 ${isLightMode ? 'border-slate-100' : 'border-white/5'}`} />
-                              <ul className={`flex flex-col gap-1.5 list-disc pl-4 ${isLightMode ? 'text-slate-600' : 'text-slate-300'}`}>
+                              <div className={`w-full border-t mb-3 ${'border-white/5'}`} />
+                              <ul className={`flex flex-col gap-1.5 list-disc pl-4 ${'text-slate-300'}`}>
                                 {data.decisions?.map((p: string, i: number) => (
                                   <li key={i} className="p-0 m-0 leading-[1.6] text-[14px]"><BoldText text={p} /></li>
                                 ))}
@@ -2765,16 +2736,14 @@ export default function DashboardPage() {
 
                             {/* Risks / Blockers */}
                             <div className={`p-4 rounded-2xl flex flex-col justify-start transition-all duration-300 hover:scale-[1.01] ${
-                              isLightMode 
-                                ? 'bg-white border border-slate-100 shadow-[0_4px_20px_rgba(0,0,0,0.02)] hover:border-slate-200/80 text-slate-800' 
-                                : 'glass hover:border-white/10 text-slate-300'
+                              'glass hover:border-white/10 text-slate-300'
                             }`}
-                                 style={{ border: isLightMode ? '' : '1px solid rgba(255, 255, 255, 0.05)', paddingTop: '12px', paddingBottom: '12px' }}>
-                              <h3 className={`text-[16px] font-semibold mb-1 ${isLightMode ? 'text-[#7c6af7]' : 'text-[#a78bfa]'}`}>
+                                 style={{ border: '1px solid rgba(255, 255, 255, 0.05)', paddingTop: '12px', paddingBottom: '12px' }}>
+                              <h3 className={`text-[16px] font-semibold mb-1 ${'text-[#a78bfa]'}`}>
                                 Risks / Blockers
                               </h3>
-                              <div className={`w-full border-t mb-3 ${isLightMode ? 'border-slate-100' : 'border-white/5'}`} />
-                              <ul className={`flex flex-col gap-1.5 list-disc pl-4 ${isLightMode ? 'text-slate-600' : 'text-slate-300'}`}>
+                              <div className={`w-full border-t mb-3 ${'border-white/5'}`} />
+                              <ul className={`flex flex-col gap-1.5 list-disc pl-4 ${'text-slate-300'}`}>
                                 {data.risks?.map((p: string, i: number) => (
                                   <li key={i} className="p-0 m-0 leading-[1.6] text-[14px]"><BoldText text={p} /></li>
                                 ))}
@@ -2784,38 +2753,36 @@ export default function DashboardPage() {
                             {/* Action Items */}
                             {data.actionItems && data.actionItems.length > 0 && (
                               <div className={`p-4 rounded-2xl flex flex-col justify-start transition-all duration-300 hover:scale-[1.01] md:col-span-2 ${
-                                isLightMode 
-                                  ? 'bg-white border border-slate-100 shadow-[0_4px_20px_rgba(0,0,0,0.02)] hover:border-slate-200/80 text-slate-800' 
-                                  : 'glass hover:border-white/10 text-slate-300'
+                                'glass hover:border-white/10 text-slate-300'
                               }`}
-                                   style={{ border: isLightMode ? '' : '1px solid rgba(255, 255, 255, 0.05)', paddingTop: '12px', paddingBottom: '12px' }}>
-                                <h3 className={`text-[16px] font-semibold mb-1 ${isLightMode ? 'text-[#7c6af7]' : 'text-[#a78bfa]'}`}>
+                                   style={{ border: '1px solid rgba(255, 255, 255, 0.05)', paddingTop: '12px', paddingBottom: '12px' }}>
+                                <h3 className={`text-[16px] font-semibold mb-1 ${'text-[#a78bfa]'}`}>
                                   Action Items
                                 </h3>
-                                <div className={`w-full border-t mb-3 ${isLightMode ? 'border-slate-100' : 'border-white/5'}`} />
+                                <div className={`w-full border-t mb-3 ${'border-white/5'}`} />
                                 <div className={`overflow-x-auto rounded-xl border my-1 leading-normal ${
-                                  isLightMode ? 'border-slate-200/60 bg-slate-50/50' : 'border-white/5 bg-black/15'
+                                  'border-white/5 bg-black/15'
                                 }`}>
                                   <table className="w-full text-left border-collapse text-[13px]">
                                     <thead>
-                                      <tr className={`border-b ${isLightMode ? 'bg-slate-100/50 border-slate-200/50' : 'bg-white/5 border-white/5'}`}>
-                                        <th className={`px-3 py-1.5 font-semibold text-[10px] uppercase tracking-wider ${isLightMode ? 'text-slate-500' : 'text-white/50'}`}>Task</th>
-                                        <th className={`px-3 py-1.5 font-semibold text-[10px] uppercase tracking-wider ${isLightMode ? 'text-slate-500' : 'text-white/50'}`}>Owner</th>
-                                        <th className={`px-3 py-1.5 font-semibold text-[10px] uppercase tracking-wider ${isLightMode ? 'text-slate-500' : 'text-white/50'}`}>Status</th>
+                                      <tr className={`border-b ${'bg-white/5 border-white/5'}`}>
+                                        <th className={`px-3 py-1.5 font-semibold text-[10px] uppercase tracking-wider ${'text-white/50'}`}>Task</th>
+                                        <th className={`px-3 py-1.5 font-semibold text-[10px] uppercase tracking-wider ${'text-white/50'}`}>Owner</th>
+                                        <th className={`px-3 py-1.5 font-semibold text-[10px] uppercase tracking-wider ${'text-white/50'}`}>Status</th>
                                       </tr>
                                     </thead>
                                     <tbody>
                                       {data.actionItems.map((item: any, i: number) => (
                                         <tr key={i} className={`border-b last:border-0 hover:bg-white/5 transition-colors ${
-                                          isLightMode ? 'border-slate-100 hover:bg-slate-100/30' : 'border-white/5'
+                                          'border-white/5'
                                         }`}>
-                                          <td className={`px-3 py-1.5 font-medium ${isLightMode ? 'text-slate-700' : 'text-slate-300'}`}>{item.task}</td>
-                                          <td className={`px-3 py-1.5 font-medium ${isLightMode ? 'text-slate-700' : 'text-slate-300'}`}>{getUserDisplayName(item.owner)}</td>
-                                          <td className={`px-3 py-1.5 font-medium ${isLightMode ? 'text-slate-700' : 'text-slate-300'}`}>
+                                          <td className={`px-3 py-1.5 font-medium ${'text-slate-300'}`}>{item.task}</td>
+                                          <td className={`px-3 py-1.5 font-medium ${'text-slate-300'}`}>{getUserDisplayName(item.owner)}</td>
+                                          <td className={`px-3 py-1.5 font-medium ${'text-slate-300'}`}>
                                             <span className={`px-2 py-0.5 rounded text-[10px] font-semibold uppercase ${
-                                              item.status?.toLowerCase() === 'completed' ? (isLightMode ? 'bg-emerald-100 text-emerald-700' : 'bg-emerald-500/10 text-emerald-400') :
-                                              item.status?.toLowerCase() === 'in progress' ? (isLightMode ? 'bg-amber-100 text-amber-700' : 'bg-amber-500/10 text-amber-400') :
-                                              (isLightMode ? 'bg-blue-100 text-blue-700' : 'bg-blue-500/10 text-blue-400')
+                                              item.status?.toLowerCase() === 'completed' ? ('bg-emerald-500/10 text-emerald-400') :
+                                              item.status?.toLowerCase() === 'in progress' ? ('bg-amber-500/10 text-amber-400') :
+                                              ('bg-blue-500/10 text-blue-400')
                                             }`}>
                                               {item.status}
                                             </span>
@@ -2830,32 +2797,28 @@ export default function DashboardPage() {
 
                             {/* Participants */}
                             <div className={`p-4 rounded-2xl flex flex-col justify-start transition-all duration-300 hover:scale-[1.01] md:col-span-2 ${
-                              isLightMode 
-                                ? 'bg-white border border-slate-100 shadow-[0_4px_20px_rgba(0,0,0,0.02)] hover:border-slate-200/80 text-slate-800' 
-                                : 'glass hover:border-white/10 text-slate-300'
+                              'glass hover:border-white/10 text-slate-300'
                             }`}
-                                 style={{ border: isLightMode ? '' : '1px solid rgba(255, 255, 255, 0.05)', paddingTop: '12px', paddingBottom: '12px' }}>
-                              <h3 className={`text-[16px] font-semibold mb-1 ${isLightMode ? 'text-[#7c6af7]' : 'text-[#a78bfa]'}`}>
+                                 style={{ border: '1px solid rgba(255, 255, 255, 0.05)', paddingTop: '12px', paddingBottom: '12px' }}>
+                              <h3 className={`text-[16px] font-semibold mb-1 ${'text-[#a78bfa]'}`}>
                                 Participants
                               </h3>
-                              <div className={`w-full border-t mb-3 ${isLightMode ? 'border-slate-100' : 'border-white/5'}`} />
-                              <p className={`text-[14px] leading-[1.7] ${isLightMode ? 'text-slate-600' : 'text-slate-300'}`}>
+                              <div className={`w-full border-t mb-3 ${'border-white/5'}`} />
+                              <p className={`text-[14px] leading-[1.7] ${'text-slate-300'}`}>
                                 {data.participants?.join(', ') || 'No contributors detected.'}
                               </p>
                             </div>
 
                             {/* Final Outcome */}
                             <div className={`p-4 rounded-2xl flex flex-col justify-start transition-all duration-300 hover:scale-[1.01] md:col-span-2 ${
-                              isLightMode 
-                                ? 'bg-white border border-slate-100 shadow-[0_4px_20px_rgba(0,0,0,0.02)] hover:border-slate-200/80 text-slate-800' 
-                                : 'glass hover:border-white/10 text-slate-300'
+                              'glass hover:border-white/10 text-slate-300'
                             }`}
-                                 style={{ border: isLightMode ? '' : '1px solid rgba(255, 255, 255, 0.05)', paddingTop: '12px', paddingBottom: '12px' }}>
-                              <h3 className={`text-[16px] font-semibold mb-1 ${isLightMode ? 'text-[#7c6af7]' : 'text-[#a78bfa]'}`}>
+                                 style={{ border: '1px solid rgba(255, 255, 255, 0.05)', paddingTop: '12px', paddingBottom: '12px' }}>
+                              <h3 className={`text-[16px] font-semibold mb-1 ${'text-[#a78bfa]'}`}>
                                 Final Outcome
                               </h3>
-                              <div className={`w-full border-t mb-3 ${isLightMode ? 'border-slate-100' : 'border-white/5'}`} />
-                              <p className={`text-[14px] leading-[1.7] font-medium ${isLightMode ? 'text-slate-700' : 'text-slate-300'}`}>
+                              <div className={`w-full border-t mb-3 ${'border-white/5'}`} />
+                              <p className={`text-[14px] leading-[1.7] font-medium ${'text-slate-300'}`}>
                                 <BoldText text={data.finalOutcome} />
                               </p>
                             </div>
@@ -2882,15 +2845,15 @@ export default function DashboardPage() {
                   </div>
                   {plansError && <ErrorBanner message={plansError} />}
                   {actionPlans.length > 0 ? (
-                    <div className="rounded-2xl overflow-hidden" style={{ border: isLightMode ? '1px solid rgba(0,0,0,0.06)' : '1px solid rgba(255,255,255,0.07)' }}>
+                    <div className="rounded-2xl overflow-hidden" style={{ border: '1px solid rgba(255,255,255,0.07)' }}>
                       <table className="w-full text-left border-collapse text-[12px]">
                         <thead>
                           <tr style={{
-                            background: isLightMode ? 'rgba(0,0,0,0.01)' : 'rgba(255,255,255,0.03)',
-                            borderBottom: isLightMode ? '1px solid rgba(0,0,0,0.06)' : '1px solid rgba(255,255,255,0.07)'
+                            background: 'rgba(255,255,255,0.03)',
+                            borderBottom: '1px solid rgba(255,255,255,0.07)'
                           }}>
                             {['Task', 'Owner', 'Status', 'Deadline'].map(h => (
-                              <th key={h} className={`px-4 py-3 text-[10px] font-semibold uppercase tracking-widest ${isLightMode ? 'text-slate-500' : 'text-slate-400'}`}>{h}</th>
+                              <th key={h} className={`px-4 py-3 text-[10px] font-semibold uppercase tracking-widest ${'text-slate-400'}`}>{h}</th>
                             ))}
                           </tr>
                         </thead>
@@ -2899,15 +2862,15 @@ export default function DashboardPage() {
                             const st = (p.status || '').toLowerCase();
                             const badgeClass = st.includes('done') || st.includes('complete') ? 'badge-done' : st.includes('progress') || st.includes('started') ? 'badge-progress' : 'badge-pending';
                             return (
-                              <tr key={i} className="transition-colors" style={{ borderBottom: isLightMode ? '1px solid rgba(0,0,0,0.05)' : '1px solid rgba(255,255,255,0.05)' }}
-                                  onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = isLightMode ? 'rgba(0,0,0,0.02)' : 'rgba(255,255,255,0.02)'}
+                              <tr key={i} className="transition-colors" style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}
+                                  onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.02)'}
                                   onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = ''}>
-                                <td className={`px-4 py-3 font-medium ${isLightMode ? 'text-slate-800' : 'text-white'}`}>{p.task}</td>
-                                <td className="px-4 py-3" style={{ color: isLightMode ? '#6b7280' : '#9ca3af' }}>{p.owner ? getUserDisplayName(p.owner) : 'Unassigned'}</td>
+                                <td className={`px-4 py-3 font-medium ${'text-white'}`}>{p.task}</td>
+                                <td className="px-4 py-3" style={{ color: '#9ca3af' }}>{p.owner ? getUserDisplayName(p.owner) : 'Unassigned'}</td>
                                 <td className="px-4 py-3">
                                   <span className={`${badgeClass} px-2.5 py-1 rounded-full text-[10px] font-semibold uppercase`}>{p.status || 'Pending'}</span>
                                 </td>
-                                <td className="px-4 py-3 font-mono text-[11px]" style={{ color: isLightMode ? '#6b7280' : '#6b7280' }}>{p.deadline || '—'}</td>
+                                <td className="px-4 py-3 font-mono text-[11px]" style={{ color: '#6b7280' }}>{p.deadline || '—'}</td>
                               </tr>
                             );
                           })}
@@ -2939,11 +2902,11 @@ export default function DashboardPage() {
                         return (
                           <div key={i} className="p-4 rounded-2xl transition-all duration-200 group shadow-sm bg-card"
                                style={{
-                                 background: isLightMode ? '#ffffff' : 'rgba(255,255,255,0.03)',
-                                 border: isLightMode ? '1px solid rgba(0,0,0,0.06)' : '1px solid rgba(255,255,255,0.07)'
+                                 background: 'rgba(255,255,255,0.03)',
+                                 border: '1px solid rgba(255,255,255,0.07)'
                                }}
                                onMouseEnter={e => (e.currentTarget as HTMLElement).style.border = '1px solid rgba(124,106,247,0.25)'}
-                               onMouseLeave={e => (e.currentTarget as HTMLElement).style.border = isLightMode ? '1px solid rgba(0,0,0,0.06)' : '1px solid rgba(255,255,255,0.07)'}>
+                               onMouseLeave={e => (e.currentTarget as HTMLElement).style.border = '1px solid rgba(255,255,255,0.07)'}>
                             <div className="flex items-center gap-3 mb-3">
                               {m.avatar ? (
                                 <img src={m.avatar} alt={m.realName} className="w-9 h-9 rounded-xl shrink-0 object-cover" />
@@ -2954,16 +2917,16 @@ export default function DashboardPage() {
                                 </div>
                               )}
                               <div className="min-w-0 flex-1">
-                                <h5 className={`text-[13px] font-semibold truncate leading-none ${isLightMode ? 'text-slate-800' : 'text-white'}`}>{m.realName || m.name}</h5>
-                                <p className="text-[10px] mt-0.5 font-mono" style={{ color: isLightMode ? '#6b7280' : '#4b5563' }}>@{m.name}</p>
+                                <h5 className={`text-[13px] font-semibold truncate leading-none ${'text-white'}`}>{m.realName || m.name}</h5>
+                                <p className="text-[10px] mt-0.5 font-mono" style={{ color: '#4b5563' }}>@{m.name}</p>
                               </div>
                               <div className="text-right shrink-0">
                                 <span className="text-[18px] font-bold leading-none" style={{ color }}>{m.count}</span>
-                                <span className="text-[9px] block uppercase tracking-wide mt-0.5" style={{ color: isLightMode ? '#6b7280' : '#374151' }}>posts</span>
+                                <span className="text-[9px] block uppercase tracking-wide mt-0.5" style={{ color: '#374151' }}>posts</span>
                               </div>
                             </div>
                             {/* Activity bar */}
-                            <div className="h-1 rounded-full overflow-hidden" style={{ background: isLightMode ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.06)' }}>
+                            <div className="h-1 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.06)' }}>
                               <div className="h-full rounded-full transition-all duration-700"
                                    style={{ width: `${pct}%`, background: `linear-gradient(to right, ${color}80, ${color})` }} />
                             </div>
@@ -2978,7 +2941,7 @@ export default function DashboardPage() {
           </section>
 
           {/* ── Recent Reports ── */}
-          <section className="glass rounded-3xl p-6" style={{ border: isLightMode ? '1px solid rgba(0,0,0,0.06)' : '1px solid rgba(255,255,255,0.08)' }}>
+          <section className="glass rounded-3xl p-6" style={{ border: '1px solid rgba(255,255,255,0.08)' }}>
             <div className="flex items-center justify-between mb-5">
               <SectionHeader icon={FileText} title="Recent Reports" subtitle="Saved analytics exports" />
               <Link
@@ -3002,16 +2965,16 @@ export default function DashboardPage() {
                       href={`/reports?id=${report.id}`}
                       className="group p-4 rounded-2xl flex flex-col justify-between transition-all duration-200 min-h-[110px] bg-card shadow-sm"
                       style={{
-                        background: isLightMode ? '#ffffff' : 'rgba(255,255,255,0.03)',
-                        border: isLightMode ? '1px solid rgba(0,0,0,0.06)' : '1px solid rgba(255,255,255,0.07)'
+                        background: 'rgba(255,255,255,0.03)',
+                        border: '1px solid rgba(255,255,255,0.07)'
                       }}
                       onMouseEnter={e => {
-                        (e.currentTarget as HTMLElement).style.background = isLightMode ? '#ffffff' : 'rgba(124,106,247,0.06)';
+                        (e.currentTarget as HTMLElement).style.background = 'rgba(124,106,247,0.06)';
                         (e.currentTarget as HTMLElement).style.border = '1px solid rgba(124,106,247,0.25)';
                       }}
                       onMouseLeave={e => {
-                        (e.currentTarget as HTMLElement).style.background = isLightMode ? '#ffffff' : 'rgba(255,255,255,0.03)';
-                        (e.currentTarget as HTMLElement).style.border = isLightMode ? '1px solid rgba(0,0,0,0.06)' : '1px solid rgba(255,255,255,0.07)';
+                        (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.03)';
+                        (e.currentTarget as HTMLElement).style.border = '1px solid rgba(255,255,255,0.07)';
                       }}
                     >
                       <div>
@@ -3019,7 +2982,7 @@ export default function DashboardPage() {
                               style={{ background: bg, color: fg }}>
                           {report.type}
                         </span>
-                        <p className={`text-[13px] font-semibold leading-snug group-hover:text-[#7c6af7] transition-colors ${isLightMode ? 'text-slate-800' : 'text-white'}`}>
+                        <p className={`text-[13px] font-semibold leading-snug group-hover:text-[#7c6af7] transition-colors ${'text-white'}`}>
                           {report.title}
                         </p>
                       </div>
@@ -3040,13 +3003,13 @@ export default function DashboardPage() {
       {activeThreadParentId && (
         <div className="fixed md:relative inset-0 md:inset-auto md:w-[380px] border-l flex flex-col h-full bg-card shrink-0 z-40 transition-all shadow-2xl"
              style={{
-               borderLeft: isLightMode ? '1px solid rgba(0,0,0,0.08)' : '1px solid rgba(255,255,255,0.08)',
-               background: isLightMode ? 'rgba(255,255,255,0.98)' : 'rgba(15,16,27,0.98)'
+               borderLeft: '1px solid rgba(255,255,255,0.08)',
+               background: 'rgba(15,16,27,0.98)'
              }}>
           
           {/* Thread Header */}
           <div className="p-4 border-b flex items-center justify-between shrink-0"
-               style={{ borderColor: isLightMode ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.08)' }}>
+               style={{ borderColor: 'rgba(255,255,255,0.08)' }}>
             <div className="flex items-center gap-2">
               <MessageSquare className="w-4 h-4 text-primary" />
               <h4 className="text-xs font-bold uppercase tracking-wider">Thread replies</h4>
@@ -3067,7 +3030,7 @@ export default function DashboardPage() {
               if (!parent) return null;
               return (
                 <div className="p-3.5 border-b pb-4 mb-2 flex flex-col gap-2"
-                     style={{ borderColor: isLightMode ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.06)' }}>
+                     style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
                   <div className="flex items-center justify-between text-[10px] text-muted-foreground">
                     <span className="font-bold">{getUserDisplayName(parent.user)}</span>
                     <span>{fmtDate(parent.ts)} {fmtTime(parent.ts)}</span>
@@ -3095,7 +3058,7 @@ export default function DashboardPage() {
                   <div key={r.id} className={`p-3 rounded-2xl flex flex-col gap-1.5 max-w-[85%] ${
                     isRepUser 
                       ? 'ml-auto bg-[#7c6af7]/10 border border-[#7c6af7]/20 text-[#7c6af7]' 
-                      : (isLightMode ? 'mr-auto bg-slate-100 border border-slate-200 text-slate-800' : 'mr-auto bg-secondary/10 border border-border/20 text-foreground')
+                      : ('mr-auto bg-secondary/10 border border-border/20 text-foreground')
                   }`}>
                     <div className="flex justify-between items-center text-[8px] text-muted-foreground/80">
                       <span className="font-bold">{getUserDisplayName(r.user || (isRepUser ? 'user' : 'assistant'))}</span>
@@ -3120,7 +3083,7 @@ export default function DashboardPage() {
 
           {/* Thread reply composer */}
           <form onSubmit={handleSendThreadReply} className="p-4 border-t bg-card/25 shrink-0 flex gap-2"
-                style={{ borderColor: isLightMode ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.08)' }}>
+                style={{ borderColor: 'rgba(255,255,255,0.08)' }}>
             <input
               type="text"
               required
@@ -3129,7 +3092,7 @@ export default function DashboardPage() {
               onChange={(e) => setThreadInput(e.target.value)}
               disabled={isThreadSending}
               className={`flex-1 px-3 py-2 text-xs rounded-xl border outline-none focus:border-primary/80 focus:ring-1 focus:ring-primary/40 ${
-                isLightMode ? 'bg-white text-slate-800 border-slate-200' : 'bg-slate-900 border-border text-white'
+                'bg-slate-900 border-border text-white'
               }`}
             />
             <button
@@ -3148,7 +3111,7 @@ export default function DashboardPage() {
       {infoModalMessage && (
         <div className="fixed inset-0 bg-black/75 z-[999] flex items-center justify-center p-4" onClick={() => setInfoModalMessage(null)}>
           <div className={`w-full max-w-md p-6 rounded-3xl shadow-2xl border flex flex-col gap-4 ${
-            isLightMode ? 'bg-white border-slate-200' : 'bg-[#141624] border-border'
+            'bg-[#141624] border-border'
           }`} onClick={e => e.stopPropagation()}>
             <div className="flex justify-between items-center border-b border-border/40 pb-3">
               <h4 className="text-xs font-bold uppercase tracking-wider flex items-center gap-1.5"><Info className="w-4 h-4 text-primary" /> Message metadata</h4>
@@ -3191,7 +3154,7 @@ export default function DashboardPage() {
       {taskMessage && (
         <div className="fixed inset-0 bg-black/75 z-[999] flex items-center justify-center p-4" onClick={() => setTaskMessage(null)}>
           <form onSubmit={handleCreateTask} className={`w-full max-w-md p-6 rounded-3xl shadow-2xl border flex flex-col gap-4 ${
-            isLightMode ? 'bg-white border-slate-200' : 'bg-[#141624] border-border'
+            'bg-[#141624] border-border'
           }`} onClick={e => e.stopPropagation()}>
             <div className="flex justify-between items-center border-b border-border/40 pb-3">
               <h4 className="text-xs font-bold uppercase tracking-wider flex items-center gap-1.5"><Check className="w-4 h-4 text-[#7c6af7]" /> Convert message to task</h4>
@@ -3206,7 +3169,7 @@ export default function DashboardPage() {
                   value={taskForm.task}
                   onChange={e => setTaskForm({ ...taskForm, task: e.target.value })}
                   className={`w-full p-2.5 rounded-xl border border-border outline-none focus:border-primary ${
-                    isLightMode ? 'bg-white text-slate-800 border-slate-200' : 'bg-[#0f101a] text-white border-border/40'
+                    'bg-[#0f101a] text-white border-border/40'
                   }`}
                   rows={3}
                 />
@@ -3220,7 +3183,7 @@ export default function DashboardPage() {
                     value={taskForm.owner}
                     onChange={e => setTaskForm({ ...taskForm, owner: e.target.value })}
                     className={`w-full p-2.5 rounded-xl border border-border outline-none focus:border-primary ${
-                      isLightMode ? 'bg-white text-slate-800 border-slate-200' : 'bg-[#0f101a] text-white border-border/40'
+                      'bg-[#0f101a] text-white border-border/40'
                     }`}
                   />
                 </div>
@@ -3232,7 +3195,7 @@ export default function DashboardPage() {
                     value={taskForm.dueDate}
                     onChange={e => setTaskForm({ ...taskForm, dueDate: e.target.value })}
                     className={`w-full p-2.5 rounded-xl border border-border outline-none focus:border-primary ${
-                      isLightMode ? 'bg-white text-slate-800 border-slate-200' : 'bg-[#0f101a] text-white border-border/40'
+                      'bg-[#0f101a] text-white border-border/40'
                     }`}
                   />
                 </div>
@@ -3244,7 +3207,7 @@ export default function DashboardPage() {
                   value={taskForm.priority}
                   onChange={e => setTaskForm({ ...taskForm, priority: e.target.value })}
                   className={`w-full p-2.5 rounded-xl border border-border outline-none focus:border-primary ${
-                    isLightMode ? 'bg-white text-slate-800 border-slate-200' : 'bg-[#0f101a] text-white border-border/40'
+                    'bg-[#0f101a] text-white border-border/40'
                   }`}
                 >
                   <option value="low">Low Priority</option>
@@ -3265,7 +3228,7 @@ export default function DashboardPage() {
       {reminderMessage && (
         <div className="fixed inset-0 bg-black/75 z-[999] flex items-center justify-center p-4" onClick={() => setReminderMessage(null)}>
           <div className={`w-full max-w-sm p-6 rounded-3xl shadow-2xl border flex flex-col gap-4 ${
-            isLightMode ? 'bg-white border-slate-200' : 'bg-[#141624] border-border'
+            'bg-[#141624] border-border'
           }`} onClick={e => e.stopPropagation()}>
             <div className="flex justify-between items-center border-b border-border/40 pb-3">
               <h4 className="text-xs font-bold uppercase tracking-wider flex items-center gap-1.5"><Bell className="w-4 h-4 text-[#7c6af7]" /> Set message reminder</h4>
@@ -3278,7 +3241,7 @@ export default function DashboardPage() {
             </div>
 
             {/* Message Preview */}
-            <div className={`text-xs rounded-xl p-3 border border-border/40 ${isLightMode ? 'bg-slate-50 text-slate-700' : 'bg-[#0f101a] text-slate-300'} line-clamp-3 leading-relaxed`}>
+            <div className={`text-xs rounded-xl p-3 border border-border/40 ${'bg-[#0f101a] text-slate-300'} line-clamp-3 leading-relaxed`}>
               "{reminderMessage.text?.slice(0, 160)}{reminderMessage.text?.length > 160 ? '…' : ''}"
             </div>
             
@@ -3289,7 +3252,7 @@ export default function DashboardPage() {
                   value={reminderDuration}
                   onChange={e => setReminderDuration(e.target.value)}
                   className={`w-full p-2.5 rounded-xl border border-border outline-none focus:border-primary ${
-                    isLightMode ? 'bg-white text-slate-800 border-slate-200' : 'bg-[#0f101a] text-white border-border/40'
+                    'bg-[#0f101a] text-white border-border/40'
                   }`}
                 >
                   <option value="10">10 minutes</option>
@@ -3313,7 +3276,7 @@ export default function DashboardPage() {
                     onChange={e => setCustomRemindAt(e.target.value)}
                     min={new Date(Date.now() + 60000).toISOString().slice(0, 16)}
                     className={`w-full p-2.5 rounded-xl border border-border outline-none focus:border-primary ${
-                      isLightMode ? 'bg-white text-slate-800 border-slate-200' : 'bg-[#0f101a] text-white border-border/40'
+                      'bg-[#0f101a] text-white border-border/40'
                     }`}
                   />
                 </div>
@@ -3336,7 +3299,7 @@ export default function DashboardPage() {
       {showMyReminders && (
         <div className="fixed inset-0 bg-black/60 z-[999] flex justify-end" onClick={() => setShowMyReminders(false)}>
           <div className={`w-full max-w-sm h-full flex flex-col shadow-2xl overflow-hidden ${
-            isLightMode ? 'bg-white' : 'bg-[#141624]'
+            'bg-[#141624]'
           }`} onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between p-5 border-b border-border/40">
               <h3 className="font-bold text-sm flex items-center gap-2"><Bell className="w-4 h-4 text-[#7c6af7]" /> My Reminders</h3>
@@ -3357,7 +3320,7 @@ export default function DashboardPage() {
                   return (
                     <div key={r.id} className={`p-3 rounded-xl border text-xs ${
                       isPast ? 'border-yellow-500/30 bg-yellow-500/5' : 'border-border/40'
-                    } ${isLightMode ? 'bg-slate-50' : 'bg-[#0f101a]'}`}>
+                    } ${'bg-[#0f101a]'}`}>
                       <div className="flex items-start justify-between gap-2 mb-2">
                         <span className={`flex items-center gap-1 font-semibold ${isPast ? 'text-yellow-400' : 'text-primary'}`}>
                           <Bell className="w-3 h-3" />
@@ -3417,7 +3380,7 @@ export default function DashboardPage() {
       {aiActionResult && (
         <div className="fixed inset-0 bg-black/75 z-[999] flex items-center justify-center p-4" onClick={() => setAiActionResult(null)}>
           <div className={`w-full max-w-2xl p-6 rounded-3xl shadow-2xl border flex flex-col gap-4 ${
-            isLightMode ? 'bg-white border-slate-200' : 'bg-[#141624] border-border'
+            'bg-[#141624] border-border'
           }`} onClick={e => e.stopPropagation()}>
             <div className="flex justify-between items-center border-b border-border/40 pb-3">
               <h4 className="text-xs font-bold uppercase tracking-wider flex items-center gap-1.5"><Sparkles className="w-4 h-4 text-primary animate-pulse" /> {aiActionResult.title}</h4>
@@ -3435,7 +3398,7 @@ export default function DashboardPage() {
             </div>
             
             <div className="overflow-y-auto max-h-96 text-xs leading-relaxed max-w-none text-foreground/90 p-4 border border-border/40 rounded-2xl bg-secondary/5 font-medium">
-              <MarkdownRenderer text={aiActionResult.text} isLightMode={isLightMode} />
+              <MarkdownRenderer text={aiActionResult.text} />
             </div>
           </div>
         </div>
@@ -3453,7 +3416,7 @@ export default function DashboardPage() {
       {selectedMobileMsg && (
         <div className="fixed inset-0 bg-black/75 z-[999] flex items-end sm:hidden" onClick={() => setSelectedMobileMsg(null)}>
           <div className={`w-full rounded-t-3xl p-6 flex flex-col gap-3.5 shadow-2xl border-t ${
-            isLightMode ? 'bg-white border-slate-200' : 'bg-[#141624] border-border'
+            'bg-[#141624] border-border'
           }`} onClick={e => e.stopPropagation()}>
             
             <div className="w-12 h-1.5 bg-muted-foreground/30 rounded-full mx-auto mb-2 shrink-0" />
@@ -3571,7 +3534,7 @@ export default function DashboardPage() {
       {activePdfViewer && (
         <div className="fixed inset-0 bg-black/70 z-[9999] flex items-center justify-center p-4" onClick={() => setActivePdfViewer(null)}>
           <div className={`relative max-w-4xl w-full h-[85vh] rounded-3xl shadow-2xl border flex flex-col overflow-hidden ${
-            isLightMode ? 'bg-white border-slate-200' : 'bg-[#141624] border-border'
+            'bg-[#141624] border-border'
           }`} onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between p-4 border-b border-border/40 shrink-0">
               <div>
@@ -3616,7 +3579,7 @@ export default function DashboardPage() {
       {activeCodeViewer && (
         <div className="fixed inset-0 bg-black/70 z-[9999] flex items-center justify-center p-4" onClick={() => setActiveCodeViewer(null)}>
           <div className={`relative max-w-4xl w-full h-[80vh] rounded-3xl shadow-2xl border flex flex-col overflow-hidden ${
-            isLightMode ? 'bg-white border-slate-200' : 'bg-[#141624] border-border'
+            'bg-[#141624] border-border'
           }`} onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between p-4 border-b border-border/40 shrink-0">
               <div>
@@ -3729,9 +3692,7 @@ const MessageItem = React.memo(({
   onOpenCodeViewer
 }: MessageItemProps) => {
   const { user, slackUsers } = useAuth();
-  const { theme } = useTheme();
-  const isLightMode = theme === 'light';
-
+  
   const EMOJIS = ['👍', '❤️', '😂', '🔥', '👏', '🎉', '😮', '😢', '👀', '🚀'];
 
   const getUserAvatar = (userId: string) => {
@@ -3818,12 +3779,8 @@ const MessageItem = React.memo(({
       onMouseLeave={() => setHoveredMessageId(null)}
       className={`msg-bubble flex gap-3 items-start px-3 py-2.5 rounded-xl relative transition-all duration-500 border border-transparent ${
         isHighlighted
-          ? isLightMode 
-            ? 'bg-amber-100/60 border-amber-300 shadow-[0_0_12px_rgba(245,158,11,0.15)] scale-[1.01]' 
-            : 'bg-amber-500/10 border-amber-500/30 shadow-[0_0_12px_rgba(245,158,11,0.1)] scale-[1.01]'
-          : isLightMode 
-            ? 'hover:bg-slate-100/50' 
-            : 'hover:bg-white/[0.02]'
+          ? 'bg-amber-500/10 border-amber-500/30 shadow-[0_0_12px_rgba(245,158,11,0.1)] scale-[1.01]'
+          : 'hover:bg-white/[0.02]'
       }`}
       onTouchStart={() => handleMessageTouchStart(msg)}
       onTouchEnd={handleMessageTouchEnd}
@@ -3961,7 +3918,7 @@ const MessageItem = React.memo(({
           {openedMoreMenuMsgId === msg.ts && (
             <div 
               className={`more-options-dropdown absolute ${idx < 3 ? 'top-full mt-1.5' : 'bottom-full mb-1.5'} w-52 rounded-xl shadow-2xl p-2 z-50 right-0 border ${
-                isLightMode ? 'bg-white border-slate-200 text-slate-800' : 'bg-[#141624] border-border text-slate-100'
+                'bg-[#141624] border-border text-slate-100'
               }`}
               onClick={e => e.stopPropagation()}
             >
@@ -4066,16 +4023,16 @@ const MessageItem = React.memo(({
       
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline gap-2 mb-1">
-          <span className={`text-[11px] font-semibold font-sans flex items-center gap-1.5 ${isLightMode ? 'text-slate-700' : 'text-white'}`}>
+          <span className={`text-[11px] font-semibold font-sans flex items-center gap-1.5 ${'text-white'}`}>
             {getUserDisplayName(msg.user)}
             {msg.isPinned && <Pin className="w-2.5 h-2.5 text-primary rotate-45 shrink-0" />}
             {msg.isBookmarked && <Bookmark className="w-2.5 h-2.5 text-amber-500 shrink-0" fill="currentColor" />}
           </span>
-          <span className="text-[9px]" style={{ color: isLightMode ? '#6b7280' : '#4b5563' }}>{fmtDate(msg.ts)} {fmtTime(msg.ts)}</span>
+          <span className="text-[9px]" style={{ color: '#4b5563' }}>{fmtDate(msg.ts)} {fmtTime(msg.ts)}</span>
         </div>
         <div 
           className="text-[12px] leading-relaxed slack-message-body"
-          style={{ color: isLightMode ? '#334155' : '#d1d5db' }}
+          style={{ color: '#d1d5db' }}
         >
           <SlackMrkdwnRenderer text={msg.text || ''} users={slackUsers} />
         </div>

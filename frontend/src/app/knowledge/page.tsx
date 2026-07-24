@@ -2,27 +2,21 @@
 
 import React, { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import ReactFlow, { Background, Controls, MiniMap, useNodesState, useEdgesState, MarkerType } from 'reactflow';
+import 'reactflow/dist/style.css';
 import AppLayout from '../../components/AppLayout';
 import { apiFetch } from '../../lib/api';
 import { useAuth } from '../../components/AuthContext';
-import { Network, Hash, AlertCircle, Info, Zap } from 'lucide-react';
 import AIErrorAlert from '../../components/AIErrorAlert';
-import ReactFlow, {
-  Background,
-  Controls,
-  MiniMap,
-  useNodesState,
-  useEdgesState,
-  MarkerType
-} from 'reactflow';
-import 'reactflow/dist/style.css';
+import { Network, Hash, Zap, Info } from 'lucide-react';
 
 const NODE_COLORS: Record<string, string> = {
   Person: '#7c6af7',
   Topic: '#0ea5e9',
-  Task: '#f59e0b',
   Decision: '#10b981',
-  Project: '#ec4899',
+  Task: '#f59e0b',
+  Risk: '#ef4444',
+  File: '#8b5cf6',
 };
 
 interface GraphNode {
@@ -38,7 +32,6 @@ interface GraphEdge {
 }
 
 export default function KnowledgeGraphPage() {
-  const isLightMode = false;
   const { slackUsers } = useAuth();
 
   const [selectedChannel, setSelectedChannel] = useState('');
@@ -89,8 +82,8 @@ export default function KnowledgeGraphPage() {
         data: { label: displayName, type: n.type },
         position: { x, y },
         style: {
-          background: isLightMode ? '#ffffff' : '#111322',
-          color: isLightMode ? '#1e293b' : '#f8fafc',
+          background: '#111322',
+          color: '#f8fafc',
           border: `2px solid ${color}`,
           borderRadius: '12px',
           padding: '10px 14px',
@@ -115,12 +108,12 @@ export default function KnowledgeGraphPage() {
         type: 'smoothstep',
         animated: true,
         labelStyle: {
-          fill: isLightMode ? '#64748b' : '#94a3b8',
+          fill: '#94a3b8',
           fontSize: '8px',
           fontWeight: 'bold'
         },
         labelBgStyle: {
-          fill: isLightMode ? '#f8fafc' : '#0a0b12',
+          fill: '#0a0b12',
           fillOpacity: 0.85
         },
         style: {
@@ -140,7 +133,7 @@ export default function KnowledgeGraphPage() {
     setNodes(formattedNodes);
     setEdges(formattedEdges);
     setSelectedNode(null);
-  }, [graphData, isLightMode]);
+  }, [graphData]);
 
   const handleNodeClick = (_: any, node: any) => {
     const originalNode = graphData?.nodes.find(n => n.id === node.id);
@@ -168,9 +161,7 @@ export default function KnowledgeGraphPage() {
     });
   };
 
-  const cardStyle = `rounded-2xl border transition-all ${
-    isLightMode ? 'bg-white border-slate-200/80 shadow-sm' : 'bg-white/[0.03] border-white/[0.07]'
-  }`;
+  const cardStyle = "rounded-2xl border transition-all bg-white/[0.03] border-white/[0.07]";
 
   return (
     <AppLayout mainClassName="overflow-hidden">
@@ -184,24 +175,20 @@ export default function KnowledgeGraphPage() {
                 <Network className="w-4.5 h-4.5 text-white" />
               </div>
               <div>
-                <h1 className={`text-xl font-bold ${isLightMode ? 'text-slate-900' : 'text-white'}`}>AI Knowledge Graph</h1>
-                <p className={`text-sm ${isLightMode ? 'text-slate-500' : 'text-slate-400'}`}>Visual mapping of topics, decisions, tasks, and people</p>
+                <h1 className="text-xl font-bold text-white">AI Knowledge Graph</h1>
+                <p className="text-sm text-slate-400">Visual mapping of topics, decisions, tasks, and people</p>
               </div>
             </div>
           </div>
 
           {/* Controls & Legend */}
-          <div className={`flex flex-wrap items-center justify-between gap-4 p-4 mb-6 rounded-2xl border shrink-0 ${
-            isLightMode ? 'bg-white border-slate-200 shadow-sm' : 'bg-white/[0.03] border-white/[0.07]'
-          }`}>
+          <div className="flex flex-wrap items-center justify-between gap-4 p-4 mb-6 rounded-2xl border shrink-0 bg-white/[0.03] border-white/[0.07]">
             <div className="flex items-center gap-3 flex-1 min-w-[280px]">
               <Hash className="w-4 h-4" style={{ color: '#9ca3af' }} />
               <select
                 value={selectedChannel}
                 onChange={e => setSelectedChannel(e.target.value)}
-                className={`flex-1 px-3 py-2 rounded-xl text-sm border outline-none ${
-                  isLightMode ? 'bg-slate-100 border-slate-200 text-slate-700' : 'bg-white/[0.05] border-white/[0.1] text-slate-200'
-                }`}
+                className="flex-1 px-3 py-2 rounded-xl text-sm border outline-none bg-white/[0.05] border-white/[0.1] text-slate-200"
               >
                 <option value="">Select a channel to map knowledge...</option>
                 {channels?.map((c: any) => (
@@ -225,7 +212,7 @@ export default function KnowledgeGraphPage() {
               {Object.entries(NODE_COLORS).map(([type, color]) => (
                 <div key={type} className="flex items-center gap-1.5 text-xs font-semibold">
                   <span className="w-2.5 h-2.5 rounded-full" style={{ background: color }} />
-                  <span style={{ color: isLightMode ? '#64748b' : '#94a3b8' }}>{type}</span>
+                  <span style={{ color: '#94a3b8' }}>{type}</span>
                 </div>
               ))}
             </div>
@@ -239,7 +226,7 @@ export default function KnowledgeGraphPage() {
               {!selectedChannel ? (
                 <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center">
                   <Network className="w-12 h-12 mb-4" style={{ color: '#374151' }} />
-                  <p className={`text-base font-semibold mb-1 ${isLightMode ? 'text-slate-700' : 'text-slate-300'}`}>Select a Channel</p>
+                  <p className="text-base font-semibold mb-1 text-slate-300">Select a Channel</p>
                   <p className="text-sm" style={{ color: '#6b7280' }}>Map entities and their connections visually using AI</p>
                 </div>
               ) : isLoading ? (
@@ -272,14 +259,14 @@ export default function KnowledgeGraphPage() {
                   maxZoom={1.5}
                   proOptions={{ hideAttribution: true }}
                 >
-                  <Background color={isLightMode ? '#cbd5e1' : '#334155'} gap={16} size={1} />
+                  <Background color="#334155" gap={16} size={1} />
                   <Controls />
                   <MiniMap
                     nodeStrokeColor={n => NODE_COLORS[n.data?.type] || '#6b7280'}
                     nodeColor={n => NODE_COLORS[n.data?.type] || '#6b7280'}
-                    maskColor={isLightMode ? 'rgba(241,245,249,0.7)' : 'rgba(15,23,42,0.7)'}
+                    maskColor="rgba(15,23,42,0.7)"
                     className="border border-white/[0.08] rounded-xl overflow-hidden"
-                    style={{ background: isLightMode ? '#f8fafc' : '#111322' }}
+                    style={{ background: '#111322' }}
                   />
                 </ReactFlow>
               )}
@@ -287,7 +274,7 @@ export default function KnowledgeGraphPage() {
 
             {/* Side Details Inspector */}
             <div className={`w-full lg:w-80 shrink-0 ${cardStyle} p-6 flex flex-col h-full lg:overflow-y-auto`}>
-              <h2 className={`text-sm font-bold mb-4 flex items-center gap-2 ${isLightMode ? 'text-slate-800' : 'text-white'}`}>
+              <h2 className="text-sm font-bold mb-4 flex items-center gap-2 text-white">
                 <Info className="w-4 h-4" style={{ color: '#7c6af7' }} />
                 <span>Node Inspector</span>
               </h2>
@@ -302,7 +289,7 @@ export default function KnowledgeGraphPage() {
                           }}>
                       {selectedNode.type}
                     </span>
-                    <h3 className={`text-base font-bold leading-tight ${isLightMode ? 'text-slate-800' : 'text-white'}`}>
+                    <h3 className="text-base font-bold leading-tight text-white">
                       {selectedNode.label}
                     </h3>
                   </div>
@@ -316,11 +303,7 @@ export default function KnowledgeGraphPage() {
                     ) : (
                       <div className="space-y-2">
                         {selectedNode.connections.map((conn: any, i: number) => (
-                          <div key={i} className="p-2.5 rounded-xl border flex flex-col gap-1 text-xs"
-                               style={{
-                                 background: isLightMode ? '#f8fafc' : 'rgba(255,255,255,0.02)',
-                                 borderColor: isLightMode ? '#e2e8f0' : 'rgba(255,255,255,0.06)'
-                               }}>
+                          <div key={i} className="p-2.5 rounded-xl border flex flex-col gap-1 text-xs bg-white/[0.02] border-white/[0.06]">
                             <div className="flex items-center justify-between">
                               <span className="font-semibold text-[10px] uppercase tracking-wider" style={{ color: '#7c6af7' }}>
                                 {conn.label}
@@ -333,7 +316,7 @@ export default function KnowledgeGraphPage() {
                                 {conn.otherType}
                               </span>
                             </div>
-                            <span className={`font-bold ${isLightMode ? 'text-slate-700' : 'text-slate-200'}`}>
+                            <span className="font-bold text-slate-200">
                               {conn.otherName}
                             </span>
                           </div>

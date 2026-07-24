@@ -3,23 +3,22 @@
 import React, { useState, useEffect } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import AppLayout from '../../components/AppLayout';
-import { useAuth } from '../../components/AuthContext';
 import { apiFetch } from '../../lib/api';
+import { useAuth } from '../../components/AuthContext';
 import { 
   User, 
   Mail, 
   Lock, 
   Save, 
-  CheckCircle, 
-  XCircle, 
   Trash2, 
   LogOut, 
-  AlertTriangle
+  AlertTriangle,
+  CheckCircle,
+  XCircle
 } from 'lucide-react';
 
 export default function ProfilePage() {
   const { user, login, logout } = useAuth();
-  const isLightMode = false;
   
   // Profile form states
   const [fullName, setFullName] = useState('');
@@ -35,63 +34,70 @@ export default function ProfilePage() {
     }
   }, [user]);
 
-  // Mutation to update profile details
+  // Update Profile Mutation
   const updateProfileMutation = useMutation({
-    mutationFn: (data: { email: string; fullName?: string; password?: string }) => apiFetch('/api/auth/profile', {
+    mutationFn: (data: { name?: string; email?: string; password?: string }) => apiFetch('/api/users/profile', {
       method: 'PUT',
-      body: data
+      body: data,
     }),
-    onSuccess: (data) => {
-      setProfileStatus({ type: 'success', message: 'User profile updated successfully.' });
-      login(data.token, data.user, null, data.refreshToken);
+    onSuccess: (updatedUser: any) => {
+      if (updatedUser) {
+        const token = localStorage.getItem('auth_token') || '';
+        login(token, {
+          id: updatedUser.id,
+          fullName: updatedUser.fullName || updatedUser.name,
+          email: updatedUser.email,
+        });
+      }
       setProfilePassword('');
       setProfileConfirmPassword('');
-      setTimeout(() => setProfileStatus(null), 5000);
+      setProfileStatus({ type: 'success', message: 'Profile details updated successfully!' });
+      setTimeout(() => setProfileStatus(null), 4000);
     },
     onError: (err: any) => {
       setProfileStatus({ type: 'error', message: err?.message || 'Failed to update profile.' });
-    }
+    },
   });
 
-  // Mutation to delete user account
+  // Delete Account Mutation
   const deleteAccountMutation = useMutation({
-    mutationFn: () => apiFetch('/api/auth/account', {
-      method: 'DELETE'
+    mutationFn: () => apiFetch('/api/users/profile', {
+      method: 'DELETE',
     }),
     onSuccess: () => {
       logout();
     },
     onError: (err: any) => {
       setProfileStatus({ type: 'error', message: err?.message || 'Failed to delete account.' });
-    }
+    },
   });
 
   const handleProfileSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!profileEmail) {
-      setProfileStatus({ type: 'error', message: 'Email address cannot be blank.' });
-      return;
-    }
+    setProfileStatus(null);
 
     if (profilePassword && profilePassword !== profileConfirmPassword) {
       setProfileStatus({ type: 'error', message: 'Passwords do not match.' });
       return;
     }
 
-    const payload: { email: string; fullName?: string; password?: string } = {
-      email: profileEmail,
-      fullName: fullName
-    };
+    const payload: { name?: string; email?: string; password?: string } = {};
+    if (fullName !== user?.fullName) payload.name = fullName;
+    if (profileEmail !== user?.email) payload.email = profileEmail;
+    if (profilePassword) payload.password = profilePassword;
+    if (profileEmail !== user?.email) payload.email = profileEmail;
+    if (profilePassword) payload.password = profilePassword;
 
-    if (profilePassword) {
-      payload.password = profilePassword;
+    if (Object.keys(payload).length === 0) {
+      setProfileStatus({ type: 'error', message: 'No changes detected to save.' });
+      return;
     }
 
     updateProfileMutation.mutate(payload);
   };
 
   const confirmDeleteAccount = () => {
-    if (confirm('WARNING: Are you sure you want to delete your account? This action is permanent, and you will be signed out immediately.')) {
+    if (window.confirm('Are you sure you want to permanently delete your account? This action cannot be undone.')) {
       deleteAccountMutation.mutate();
     }
   };
@@ -103,7 +109,7 @@ export default function ProfilePage() {
         <header className="h-14 md:h-16 border-b border-border flex items-center justify-between px-4 sm:px-6 md:px-8 shrink-0 bg-card/30">
           <div className="flex items-center gap-2">
             <User className="w-5 h-5 text-primary" />
-            <h2 className={`text-sm font-semibold ${isLightMode ? 'text-slate-800' : 'text-white'}`}>My User Profile</h2>
+            <h2 className="text-sm font-semibold text-white">My User Profile</h2>
           </div>
         </header>
 
@@ -116,18 +122,14 @@ export default function ProfilePage() {
             <div className="md:col-span-7 glass rounded-3xl p-6 space-y-6">
               <div className="flex items-center gap-2.5 border-b border-border pb-3 mb-2">
                 <User className="w-5 h-5 text-primary" />
-                <h3 className={`text-sm font-bold ${isLightMode ? 'text-slate-800' : 'text-white'}`}>Profile Details</h3>
+                <h3 className="text-sm font-bold text-white">Profile Details</h3>
               </div>
 
               {profileStatus && (
                 <div className={`p-4 rounded-2xl border text-xs flex items-center gap-2.5 ${
                   profileStatus.type === 'success' 
-                    ? isLightMode
-                      ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
-                      : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' 
-                    : isLightMode
-                      ? 'bg-red-50 border-red-200 text-red-700'
-                      : 'bg-red-500/10 border-red-500/20 text-red-400'
+                    ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' 
+                    : 'bg-red-500/10 border-red-500/20 text-red-400'
                 }`}>
                   {profileStatus.type === 'success' ? <CheckCircle className="w-4.5 h-4.5" /> : <XCircle className="w-4.5 h-4.5" />}
                   <p>{profileStatus.message}</p>
@@ -147,9 +149,7 @@ export default function ProfilePage() {
                       value={fullName}
                       onChange={(e) => setFullName(e.target.value)}
                       placeholder="e.g. Gowtham Pusuloori"
-                      className={`w-full pl-11 pr-4 py-3 rounded-xl bg-input border border-border/80 focus:border-primary/80 focus:ring-1 focus:ring-primary/40 text-sm placeholder-slate-600 transition-all outline-none ${
-                        isLightMode ? 'text-slate-800 placeholder-slate-450 bg-slate-100/50' : 'text-white'
-                      }`}
+                      className="w-full pl-11 pr-4 py-3 rounded-xl bg-input border border-border/80 focus:border-primary/80 focus:ring-1 focus:ring-primary/40 text-sm placeholder-slate-600 transition-all outline-none text-white"
                     />
                   </div>
                 </div>
@@ -166,9 +166,7 @@ export default function ProfilePage() {
                       value={profileEmail}
                       onChange={(e) => setProfileEmail(e.target.value)}
                       placeholder="name@company.com"
-                      className={`w-full pl-11 pr-4 py-3 rounded-xl bg-input border border-border/80 focus:border-primary/80 focus:ring-1 focus:ring-primary/40 text-sm placeholder-slate-600 transition-all outline-none ${
-                        isLightMode ? 'text-slate-800 placeholder-slate-450 bg-slate-100/50' : 'text-white'
-                      }`}
+                      className="w-full pl-11 pr-4 py-3 rounded-xl bg-input border border-border/80 focus:border-primary/80 focus:ring-1 focus:ring-primary/40 text-sm placeholder-slate-600 transition-all outline-none text-white"
                     />
                   </div>
                 </div>
@@ -186,9 +184,7 @@ export default function ProfilePage() {
                         value={profilePassword}
                         onChange={(e) => setProfilePassword(e.target.value)}
                         placeholder="••••••••"
-                        className={`w-full pl-11 pr-4 py-3 rounded-xl bg-input border border-border/80 focus:border-primary/80 focus:ring-1 focus:ring-primary/40 text-sm placeholder-slate-600 transition-all outline-none ${
-                          isLightMode ? 'text-slate-800 placeholder-slate-450 bg-slate-100/50' : 'text-white'
-                        }`}
+                        className="w-full pl-11 pr-4 py-3 rounded-xl bg-input border border-border/80 focus:border-primary/80 focus:ring-1 focus:ring-primary/40 text-sm placeholder-slate-600 transition-all outline-none text-white"
                       />
                     </div>
                   </div>
@@ -205,9 +201,7 @@ export default function ProfilePage() {
                         value={profileConfirmPassword}
                         onChange={(e) => setProfileConfirmPassword(e.target.value)}
                         placeholder="••••••••"
-                        className={`w-full pl-11 pr-4 py-3 rounded-xl bg-input border border-border/80 focus:border-primary/80 focus:ring-1 focus:ring-primary/40 text-sm placeholder-slate-600 transition-all outline-none ${
-                          isLightMode ? 'text-slate-800 placeholder-slate-450 bg-slate-100/50' : 'text-white'
-                        }`}
+                        className="w-full pl-11 pr-4 py-3 rounded-xl bg-input border border-border/80 focus:border-primary/80 focus:ring-1 focus:ring-primary/40 text-sm placeholder-slate-600 transition-all outline-none text-white"
                       />
                     </div>
                   </div>
@@ -225,7 +219,7 @@ export default function ProfilePage() {
               </form>
             </div>
 
-            {/* Right column: Theme Settings and Danger Zone Cards (col-span-5) */}
+            {/* Right column: Safety and Danger Zone Cards (col-span-5) */}
             <div className="md:col-span-5 space-y-6 flex flex-col">
               {/* Account Safety Card */}
               <div className="glass rounded-3xl p-6 border-red-500/10 bg-red-500/[0.01] flex flex-col justify-between flex-1 min-h-[220px]">
@@ -245,11 +239,7 @@ export default function ProfilePage() {
                     type="button"
                     onClick={confirmDeleteAccount}
                     disabled={deleteAccountMutation.isPending}
-                    className={`w-full py-3.5 rounded-xl border font-bold text-xs transition-all flex items-center justify-center gap-2 disabled:opacity-50 ${
-                      isLightMode
-                        ? 'border-red-200 bg-red-50 hover:bg-red-100 text-red-600 hover:text-red-700'
-                        : 'border-red-600/30 bg-red-600/10 hover:bg-red-600/15 text-red-400 hover:text-red-300'
-                    }`}
+                    className="w-full py-3.5 rounded-xl border font-bold text-xs transition-all flex items-center justify-center gap-2 disabled:opacity-50 border-red-600/30 bg-red-600/10 hover:bg-red-600/15 text-red-400 hover:text-red-300"
                   >
                     <Trash2 className="w-4 h-4" />
                     Delete User Account Permanently
@@ -259,11 +249,7 @@ export default function ProfilePage() {
                     suppressHydrationWarning
                     type="button"
                     onClick={logout}
-                    className={`w-full py-3.5 rounded-xl border font-bold text-xs transition-all flex items-center justify-center gap-2 ${
-                      isLightMode
-                        ? 'border-slate-300 bg-slate-100/50 hover:bg-slate-200/80 text-slate-700 hover:text-slate-900'
-                        : 'border-slate-500/25 bg-slate-500/5 hover:bg-slate-500/10 text-slate-300 hover:text-white'
-                    }`}
+                    className="w-full py-3.5 rounded-xl border font-bold text-xs transition-all flex items-center justify-center gap-2 border-slate-500/25 bg-slate-500/5 hover:bg-slate-500/10 text-slate-300 hover:text-white"
                   >
                     <LogOut className="w-4 h-4" />
                     Sign Out of Session

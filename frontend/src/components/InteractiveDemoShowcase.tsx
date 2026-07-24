@@ -181,8 +181,6 @@ const showcaseCards: CardItem[] = [
 ];
 
 export default function InteractiveDemoShowcase() {
-  const isLightMode = false;
-
   const [activeCardIndex, setActiveCardIndex] = useState(0);
   const [typedQuery, setTypedQuery] = useState('');
   const [isTyping, setIsTyping] = useState(true);
@@ -271,10 +269,10 @@ export default function InteractiveDemoShowcase() {
           <Sparkles className="w-3.5 h-3.5 animate-pulse" />
           <span>Interactive Product Experience</span>
         </div>
-        <h2 className={`text-2xl sm:text-4xl lg:text-5xl font-extrabold tracking-tight ${isLightMode ? 'text-slate-900' : 'text-white'}`}>
+        <h2 className="text-2xl sm:text-4xl lg:text-5xl font-extrabold tracking-tight text-white">
           See Slack AI in Action
         </h2>
-        <p className={`text-xs sm:text-base leading-relaxed ${isLightMode ? 'text-slate-600' : 'text-slate-400'}`}>
+        <p className="text-xs sm:text-base leading-relaxed text-slate-400">
           Explore how AI indexes messages, synthesizes decisions, and structures actionable updates across your workspace.
         </p>
       </div>
@@ -283,16 +281,12 @@ export default function InteractiveDemoShowcase() {
       <div className="block lg:hidden w-full space-y-4">
         
         {/* Mobile Header Bar & Progress Counter */}
-        <div className={`flex items-center justify-between px-4 py-3 rounded-2xl border backdrop-blur-xl ${
-          isLightMode ? 'bg-white/80 border-slate-200 text-slate-800' : 'bg-[#0b0c16]/80 border-white/10 text-white'
-        }`}>
+        <div className="flex items-center justify-between px-4 py-3 rounded-2xl border backdrop-blur-xl bg-[#0b0c16]/80 border-white/10 text-white">
           <div className="flex items-center gap-2">
             <span className="text-xs font-bold text-[#7c6af7] font-mono">
               Card {activeCardIndex + 1} / {showcaseCards.length}
             </span>
-            <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-md ${
-              isLightMode ? 'bg-slate-100 text-slate-600' : 'bg-white/5 text-slate-300'
-            }`}>
+            <span className="text-[11px] font-semibold px-2 py-0.5 rounded-md bg-white/5 text-slate-300">
               {currentCard.category}
             </span>
           </div>
@@ -307,8 +301,6 @@ export default function InteractiveDemoShowcase() {
                 className={`h-2 rounded-full transition-all duration-300 ${
                   activeCardIndex === idx
                     ? 'w-6 bg-[#7c6af7]'
-                    : isLightMode
-                    ? 'w-2 bg-slate-300 hover:bg-slate-400'
                     : 'w-2 bg-white/20 hover:bg-white/40'
                 }`}
               />
@@ -323,9 +315,7 @@ export default function InteractiveDemoShowcase() {
           animate={{ opacity: 1, x: 0 }}
           exit={{ opacity: 0, x: -20 }}
           transition={{ duration: 0.3 }}
-          className={`w-full rounded-3xl p-5 sm:p-6 border backdrop-blur-xl relative overflow-hidden shadow-2xl ${
-            isLightMode ? 'bg-white/90 border-slate-200' : 'bg-[#080911]/90 border-white/10'
-          }`}
+          className="w-full rounded-3xl p-5 sm:p-6 border backdrop-blur-xl relative overflow-hidden shadow-2xl bg-[#080911]/90 border-white/10"
         >
           {/* Card Top Title */}
           <div className="flex items-start justify-between gap-3 mb-4">
@@ -337,10 +327,10 @@ export default function InteractiveDemoShowcase() {
                 <IconComponent className="w-5 h-5" />
               </div>
               <div>
-                <h3 className={`text-base font-bold tracking-tight ${isLightMode ? 'text-slate-900' : 'text-white'}`}>
+                <h3 className="text-base font-bold tracking-tight text-white">
                   {currentCard.title}
                 </h3>
-                <p className={`text-xs mt-0.5 ${isLightMode ? 'text-slate-500' : 'text-slate-400'}`}>
+                <p className="text-xs mt-0.5 text-slate-400">
                   {currentCard.tagline}
                 </p>
               </div>
@@ -348,13 +338,11 @@ export default function InteractiveDemoShowcase() {
           </div>
 
           {/* Interactive AI Console Simulation */}
-          <div className={`w-full rounded-2xl p-4 border font-mono text-xs mb-4 ${
-            isLightMode ? 'bg-slate-50 border-slate-200' : 'bg-[#04050a] border-white/10'
-          }`}>
+          <div className="w-full rounded-2xl p-4 border font-mono text-xs mb-4 bg-[#04050a] border-white/10">
             {/* User Prompt */}
             <div className="flex items-start gap-2 border-b border-white/5 pb-3 mb-3">
               <span className="text-[#7c6af7] font-bold shrink-0">User &gt;</span>
-              <p className={`font-semibold leading-relaxed ${isLightMode ? 'text-slate-800' : 'text-slate-200'}`}>
+              <p className="font-semibold leading-relaxed text-slate-200">
                 {typedQuery}
                 {isTyping && <span className="inline-block w-1.5 h-3.5 bg-[#7c6af7] ml-1 animate-pulse" />}
               </p>
@@ -382,9 +370,7 @@ export default function InteractiveDemoShowcase() {
 
                 {/* Search Match */}
                 {currentCard.responseData[0].type === 'search' && (
-                  <div className={`p-3 rounded-xl border text-xs leading-relaxed ${
-                    isLightMode ? 'bg-white border-slate-200 text-slate-700' : 'bg-white/5 border-white/10 text-slate-200'
-                  }`}>
+                  <div className="p-3 rounded-xl border text-xs leading-relaxed bg-white/5 border-white/10 text-slate-200">
                     <div className="flex items-center justify-between text-[11px] font-semibold text-[#7c6af7] mb-1.5">
                       <span>{currentCard.responseData[0].content.channel}</span>
                       <span className="text-[10px] px-2 py-0.5 rounded-md bg-[#7c6af7]/20 text-[#a78bfa]">
@@ -404,7 +390,7 @@ export default function InteractiveDemoShowcase() {
                     {currentCard.responseData[0].content.map((bullet: string, i: number) => (
                       <li key={i} className="flex items-start gap-2">
                         <span className="w-1.5 h-1.5 rounded-full bg-[#7c6af7] mt-1.5 shrink-0" />
-                        <span className={isLightMode ? 'text-slate-700' : 'text-slate-300'}>{bullet}</span>
+                        <span className="text-slate-300">{bullet}</span>
                       </li>
                     ))}
                   </ul>
@@ -412,9 +398,7 @@ export default function InteractiveDemoShowcase() {
 
                 {/* Decision Card */}
                 {currentCard.responseData[0].type === 'decision' && (
-                  <div className={`p-3 rounded-xl border ${
-                    isLightMode ? 'bg-emerald-50/50 border-emerald-200 text-slate-800' : 'bg-emerald-950/20 border-emerald-500/20 text-emerald-200'
-                  }`}>
+                  <div className="p-3 rounded-xl border bg-emerald-950/20 border-emerald-500/20 text-emerald-200">
                     <div className="flex items-center justify-between text-[11px] font-bold mb-1">
                       <span>{currentCard.responseData[0].content.title}</span>
                       <span className="px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-400 text-[10px]">
@@ -431,12 +415,10 @@ export default function InteractiveDemoShowcase() {
                 {currentCard.responseData[0].type === 'task' && (
                   <div className="space-y-2 font-sans text-xs">
                     {currentCard.responseData[0].content.map((t: any, i: number) => (
-                      <div key={i} className={`p-2.5 rounded-xl border flex items-center justify-between ${
-                        isLightMode ? 'bg-white border-slate-200' : 'bg-white/5 border-white/10'
-                      }`}>
+                      <div key={i} className="p-2.5 rounded-xl border flex items-center justify-between bg-white/5 border-white/10">
                         <div className="flex items-center gap-2">
                           <CheckSquare className="w-4 h-4 text-[#7c6af7] shrink-0" />
-                          <span className={isLightMode ? 'text-slate-800' : 'text-slate-200'}>{t.task}</span>
+                          <span className="text-slate-200">{t.task}</span>
                         </div>
                         <span className="text-[10px] px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-400 font-bold shrink-0">
                           {t.assignee}
@@ -448,16 +430,14 @@ export default function InteractiveDemoShowcase() {
 
                 {/* Default Text */}
                 {currentCard.responseData[0].type === 'text' && (
-                  <p className={`font-sans text-xs leading-relaxed ${isLightMode ? 'text-slate-700' : 'text-slate-300'}`}>
+                  <p className="font-sans text-xs leading-relaxed text-slate-300">
                     {currentCard.responseData[0].content}
                   </p>
                 )}
 
                 {/* Reminder Card */}
                 {currentCard.responseData[0].type === 'reminder' && (
-                  <div className={`p-3 rounded-xl border flex items-center justify-between ${
-                    isLightMode ? 'bg-pink-50/50 border-pink-200' : 'bg-pink-950/20 border-pink-500/20'
-                  }`}>
+                  <div className="p-3 rounded-xl border flex items-center justify-between bg-pink-950/20 border-pink-500/20">
                     <div>
                       <span className="text-xs font-bold text-pink-400 block">
                         {currentCard.responseData[0].content.topic}
@@ -473,13 +453,13 @@ export default function InteractiveDemoShowcase() {
                 {/* Analytics Card */}
                 {currentCard.responseData[0].type === 'analytics' && (
                   <div className="grid grid-cols-2 gap-2 font-sans text-xs">
-                    <div className={`p-2.5 rounded-xl border ${isLightMode ? 'bg-white border-slate-200' : 'bg-white/5 border-white/10'}`}>
+                    <div className="p-2.5 rounded-xl border bg-white/5 border-white/10">
                       <span className="text-[10px] text-slate-400 block">Sentiment</span>
                       <span className="text-sm font-extrabold text-indigo-400">
                         {currentCard.responseData[0].content.sentiment}
                       </span>
                     </div>
-                    <div className={`p-2.5 rounded-xl border ${isLightMode ? 'bg-white border-slate-200' : 'bg-white/5 border-white/10'}`}>
+                    <div className="p-2.5 rounded-xl border bg-white/5 border-white/10">
                       <span className="text-[10px] text-slate-400 block">Velocity</span>
                       <span className="text-sm font-extrabold text-indigo-400">
                         {currentCard.responseData[0].content.volume}
@@ -511,9 +491,7 @@ export default function InteractiveDemoShowcase() {
               <button
                 onClick={handlePrev}
                 aria-label="Previous Feature Card"
-                className={`min-h-[44px] min-w-[44px] px-3.5 py-2.5 rounded-xl border text-xs font-semibold flex items-center justify-center gap-1 transition-all active:scale-95 ${
-                  isLightMode ? 'bg-slate-100 border-slate-200 text-slate-700 hover:bg-slate-200' : 'bg-white/5 border-white/10 text-white hover:bg-white/10'
-                }`}
+                className="min-h-[44px] min-w-[44px] px-3.5 py-2.5 rounded-xl border text-xs font-semibold flex items-center justify-center gap-1 transition-all active:scale-95 bg-white/5 border-white/10 text-white hover:bg-white/10"
               >
                 <ChevronLeft className="w-4 h-4" />
                 <span className="hidden sm:inline">Prev</span>
@@ -522,9 +500,7 @@ export default function InteractiveDemoShowcase() {
               <button
                 onClick={handleReplay}
                 aria-label="Replay AI Animation"
-                className={`min-h-[44px] min-w-[44px] px-3.5 py-2.5 rounded-xl border text-xs font-semibold flex items-center justify-center gap-1.5 transition-all active:scale-95 ${
-                  isLightMode ? 'bg-slate-100 border-slate-200 text-slate-700 hover:bg-slate-200' : 'bg-white/5 border-white/10 text-white hover:bg-white/10'
-                }`}
+                className="min-h-[44px] min-w-[44px] px-3.5 py-2.5 rounded-xl border text-xs font-semibold flex items-center justify-center gap-1.5 transition-all active:scale-95 bg-white/5 border-white/10 text-white hover:bg-white/10"
               >
                 <RotateCcw className="w-3.5 h-3.5" />
                 <span className="hidden sm:inline">Replay</span>
@@ -560,11 +536,7 @@ export default function InteractiveDemoShowcase() {
                 onClick={() => setActiveCardIndex(idx)}
                 className={`w-full text-left p-4 rounded-2xl border transition-all duration-300 flex items-start gap-3.5 group cursor-pointer relative overflow-hidden ${
                   isActive
-                    ? isLightMode
-                      ? 'bg-white border-[#7c6af7] shadow-xl shadow-[#7c6af7]/10 ring-2 ring-[#7c6af7]/20'
-                      : 'bg-[#0d0e18] border-[#7c6af7] shadow-2xl shadow-[#7c6af7]/20 ring-1 ring-[#7c6af7]/40'
-                    : isLightMode
-                    ? 'bg-slate-50/80 border-slate-200/80 hover:bg-white hover:border-slate-300'
+                    ? 'bg-[#0d0e18] border-[#7c6af7] shadow-2xl shadow-[#7c6af7]/20 ring-1 ring-[#7c6af7]/40'
                     : 'bg-[#06070d]/60 border-white/[0.06] hover:bg-white/[0.04] hover:border-white/10'
                 }`}
               >
@@ -588,14 +560,12 @@ export default function InteractiveDemoShowcase() {
                   </div>
 
                   <h3 className={`text-sm font-bold tracking-tight mt-0.5 ${
-                    isActive ? (isLightMode ? 'text-slate-900' : 'text-white') : (isLightMode ? 'text-slate-700' : 'text-slate-300')
+                    isActive ? 'text-white' : 'text-slate-300'
                   }`}>
                     {card.title}
                   </h3>
 
-                  <p className={`text-xs mt-1 line-clamp-2 leading-relaxed ${
-                    isLightMode ? 'text-slate-500' : 'text-slate-400'
-                  }`}>
+                  <p className="text-xs mt-1 line-clamp-2 leading-relaxed text-slate-400">
                     {card.tagline}
                   </p>
                 </div>
@@ -606,9 +576,7 @@ export default function InteractiveDemoShowcase() {
 
         {/* Right Side: Live Interactive AI Console Visualizer */}
         <div className="col-span-7 flex flex-col">
-          <div className={`flex-1 rounded-3xl p-6 border backdrop-blur-xl relative flex flex-col justify-between shadow-2xl overflow-hidden ${
-            isLightMode ? 'bg-white/90 border-slate-200' : 'bg-[#080911]/90 border-white/10'
-          }`}>
+          <div className="flex-1 rounded-3xl p-6 border backdrop-blur-xl relative flex flex-col justify-between shadow-2xl overflow-hidden bg-[#080911]/90 border-white/10">
             
             {/* Top Bar */}
             <div className="flex items-center justify-between border-b border-white/10 pb-4 mb-4">
@@ -620,7 +588,7 @@ export default function InteractiveDemoShowcase() {
                   <IconComponent className="w-4 h-4" />
                 </div>
                 <div>
-                  <h4 className={`text-sm font-bold ${isLightMode ? 'text-slate-900' : 'text-white'}`}>
+                  <h4 className="text-sm font-bold text-white">
                     {currentCard.title}
                   </h4>
                   <span className="text-[11px] text-[#7c6af7] font-semibold block">
@@ -633,9 +601,7 @@ export default function InteractiveDemoShowcase() {
                 <button
                   onClick={handleReplay}
                   aria-label="Replay AI Simulation"
-                  className={`p-2 rounded-xl border text-xs font-semibold flex items-center gap-1.5 transition-all ${
-                    isLightMode ? 'bg-slate-100 border-slate-200 text-slate-700 hover:bg-slate-200' : 'bg-white/5 border-white/10 text-slate-300 hover:bg-white/10'
-                  }`}
+                  className="p-2 rounded-xl border text-xs font-semibold flex items-center gap-1.5 transition-all bg-white/5 border-white/10 text-slate-300 hover:bg-white/10"
                 >
                   <RotateCcw className="w-3.5 h-3.5" />
                   <span>Replay</span>
@@ -644,9 +610,7 @@ export default function InteractiveDemoShowcase() {
                 <button
                   onClick={handleCopy}
                   aria-label="Copy AI Output"
-                  className={`p-2 rounded-xl border text-xs font-semibold flex items-center gap-1.5 transition-all ${
-                    isLightMode ? 'bg-slate-100 border-slate-200 text-slate-700 hover:bg-slate-200' : 'bg-white/5 border-white/10 text-slate-300 hover:bg-white/10'
-                  }`}
+                  className="p-2 rounded-xl border text-xs font-semibold flex items-center gap-1.5 transition-all bg-white/5 border-white/10 text-slate-300 hover:bg-white/10"
                 >
                   {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
                   <span>{copied ? 'Copied' : 'Copy Output'}</span>
@@ -655,14 +619,12 @@ export default function InteractiveDemoShowcase() {
             </div>
 
             {/* AI Console Screen */}
-            <div className={`flex-1 rounded-2xl p-5 border font-mono text-xs overflow-y-auto space-y-4 mb-6 ${
-              isLightMode ? 'bg-slate-50 border-slate-200' : 'bg-[#04050a] border-white/10'
-            }`}>
+            <div className="flex-1 rounded-2xl p-5 border font-mono text-xs overflow-y-auto space-y-4 mb-6 bg-[#04050a] border-white/10">
               
               {/* User Prompt */}
               <div className="flex items-start gap-3 border-b border-white/5 pb-4">
                 <span className="text-[#7c6af7] font-bold shrink-0">User &gt;</span>
-                <p className={`font-semibold leading-relaxed text-sm ${isLightMode ? 'text-slate-800' : 'text-slate-100'}`}>
+                <p className="font-semibold leading-relaxed text-sm text-slate-100">
                   {typedQuery}
                   {isTyping && <span className="inline-block w-2 h-4 bg-[#7c6af7] ml-1 animate-pulse" />}
                 </p>
@@ -690,9 +652,7 @@ export default function InteractiveDemoShowcase() {
 
                   {/* Search Match */}
                   {currentCard.responseData[0].type === 'search' && (
-                    <div className={`p-4 rounded-xl border text-xs leading-relaxed space-y-2 ${
-                      isLightMode ? 'bg-white border-slate-200 text-slate-700 shadow-sm' : 'bg-white/5 border-white/10 text-slate-200'
-                    }`}>
+                    <div className="p-4 rounded-xl border text-xs leading-relaxed space-y-2 bg-white/5 border-white/10 text-slate-200">
                       <div className="flex items-center justify-between font-semibold text-[#7c6af7]">
                         <span>{currentCard.responseData[0].content.channel}</span>
                         <span className="text-[10px] px-2.5 py-0.5 rounded-md bg-[#7c6af7]/20 text-[#a78bfa]">
@@ -712,7 +672,7 @@ export default function InteractiveDemoShowcase() {
                       {currentCard.responseData[0].content.map((bullet: string, i: number) => (
                         <li key={i} className="flex items-start gap-2.5">
                           <span className="w-2 h-2 rounded-full bg-[#7c6af7] mt-1.5 shrink-0" />
-                          <span className={isLightMode ? 'text-slate-800' : 'text-slate-200'}>{bullet}</span>
+                          <span className="text-slate-200">{bullet}</span>
                         </li>
                       ))}
                     </ul>
@@ -720,9 +680,7 @@ export default function InteractiveDemoShowcase() {
 
                   {/* Decision Card */}
                   {currentCard.responseData[0].type === 'decision' && (
-                    <div className={`p-4 rounded-xl border ${
-                      isLightMode ? 'bg-emerald-50/60 border-emerald-200 text-slate-800' : 'bg-emerald-950/20 border-emerald-500/30 text-emerald-200'
-                    }`}>
+                    <div className="p-4 rounded-xl border bg-emerald-950/20 border-emerald-500/30 text-emerald-200">
                       <div className="flex items-center justify-between font-bold text-sm mb-1.5">
                         <span>{currentCard.responseData[0].content.title}</span>
                         <span className="px-2.5 py-1 rounded-md bg-emerald-500/20 text-emerald-400 text-xs font-semibold">
@@ -739,12 +697,10 @@ export default function InteractiveDemoShowcase() {
                   {currentCard.responseData[0].type === 'task' && (
                     <div className="space-y-2.5 font-sans text-xs sm:text-sm">
                       {currentCard.responseData[0].content.map((t: any, i: number) => (
-                        <div key={i} className={`p-3 rounded-xl border flex items-center justify-between ${
-                          isLightMode ? 'bg-white border-slate-200 shadow-sm' : 'bg-white/5 border-white/10'
-                        }`}>
+                        <div key={i} className="p-3 rounded-xl border flex items-center justify-between bg-white/5 border-white/10">
                           <div className="flex items-center gap-3">
                             <CheckSquare className="w-4 h-4 text-[#7c6af7] shrink-0" />
-                            <span className={isLightMode ? 'text-slate-800' : 'text-slate-200'}>{t.task}</span>
+                            <span className="text-slate-200">{t.task}</span>
                           </div>
                           <span className="text-xs px-2.5 py-1 rounded-md bg-amber-500/20 text-amber-400 font-bold shrink-0">
                             {t.assignee}
@@ -756,16 +712,14 @@ export default function InteractiveDemoShowcase() {
 
                   {/* Default Text */}
                   {currentCard.responseData[0].type === 'text' && (
-                    <p className={`font-sans text-xs sm:text-sm leading-relaxed ${isLightMode ? 'text-slate-700' : 'text-slate-300'}`}>
+                    <p className="font-sans text-xs sm:text-sm leading-relaxed text-slate-300">
                       {currentCard.responseData[0].content}
                     </p>
                   )}
 
                   {/* Reminder Card */}
                   {currentCard.responseData[0].type === 'reminder' && (
-                    <div className={`p-4 rounded-xl border flex items-center justify-between ${
-                      isLightMode ? 'bg-pink-50/60 border-pink-200' : 'bg-pink-950/20 border-pink-500/30'
-                    }`}>
+                    <div className="p-4 rounded-xl border flex items-center justify-between bg-pink-950/20 border-pink-500/30">
                       <div>
                         <span className="text-sm font-bold text-pink-400 block">
                           {currentCard.responseData[0].content.topic}
@@ -781,13 +735,13 @@ export default function InteractiveDemoShowcase() {
                   {/* Analytics Card */}
                   {currentCard.responseData[0].type === 'analytics' && (
                     <div className="grid grid-cols-2 gap-3 font-sans text-xs sm:text-sm">
-                      <div className={`p-3.5 rounded-xl border ${isLightMode ? 'bg-white border-slate-200 shadow-sm' : 'bg-white/5 border-white/10'}`}>
+                      <div className="p-3.5 rounded-xl border bg-white/5 border-white/10">
                         <span className="text-xs text-slate-400 block">Sentiment Score</span>
                         <span className="text-base font-extrabold text-indigo-400">
                           {currentCard.responseData[0].content.sentiment}
                         </span>
                       </div>
-                      <div className={`p-3.5 rounded-xl border ${isLightMode ? 'bg-white border-slate-200 shadow-sm' : 'bg-white/5 border-white/10'}`}>
+                      <div className="p-3.5 rounded-xl border bg-white/5 border-white/10">
                         <span className="text-xs text-slate-400 block">Message Velocity</span>
                         <span className="text-base font-extrabold text-indigo-400">
                           {currentCard.responseData[0].content.volume}

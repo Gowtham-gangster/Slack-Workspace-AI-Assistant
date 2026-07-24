@@ -108,9 +108,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         (route) => pathname === route || (pathname && pathname.startsWith(route))
       );
 
-      const guestOnlyPublicRoutes = ['/', '/login', '/reset-password'];
+      const guestOnlyPublicRoutes = ['/login', '/reset-password'];
       const isGuestOnlyPublicRoute = guestOnlyPublicRoutes.some(
-        (route) => pathname === route || (route !== '/' && pathname && pathname.startsWith(route))
+        (route) => pathname === route || (pathname && pathname.startsWith(route))
       );
 
       if (!user && isExplicitProtectedRoute) {

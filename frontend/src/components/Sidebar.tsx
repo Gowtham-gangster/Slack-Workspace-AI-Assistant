@@ -20,7 +20,6 @@ const Sidebar = React.memo(function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const { user, logout } = useAuth();
-  const isLightMode = false;
   const queryClient = useQueryClient();
 
   const [isCollapsed, setIsCollapsed] = useState(false);
@@ -147,13 +146,13 @@ const Sidebar = React.memo(function Sidebar() {
               transition={{ type: 'spring', stiffness: 380, damping: 36 }}
               className="md:hidden fixed top-0 right-0 bottom-0 z-[70] w-[min(88vw,320px)] flex flex-col border-l border-border/60 shadow-2xl"
               style={{
-                background: isLightMode ? 'rgba(255,255,255,0.98)' : 'rgba(8,9,16,0.98)',
+                background: 'rgba(8,9,16,0.98)',
                 paddingTop: 'env(safe-area-inset-top, 0px)',
                 paddingBottom: 'env(safe-area-inset-bottom, 0px)',
               }}
             >
               <div className="h-14 flex items-center justify-between px-4 border-b border-border/60 shrink-0">
-                <span className={`text-sm font-bold ${isLightMode ? 'text-slate-900' : 'text-white'}`}>Navigation</span>
+                <span className="text-sm font-bold text-white">Navigation</span>
                 <button
                   onClick={() => setIsMobileMenuOpen(false)}
                   className="w-10 h-10 rounded-xl flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-secondary/60 transition-colors touch-manipulation"
@@ -211,8 +210,8 @@ const Sidebar = React.memo(function Sidebar() {
           isCollapsed ? 'w-[72px]' : 'w-[230px]'
         }`}
         style={{
-          background: isLightMode ? 'rgba(255,255,255,0.98)' : 'rgba(8,9,16,0.98)',
-          borderRight: isLightMode ? '1px solid rgba(0,0,0,0.08)' : '1px solid rgba(255,255,255,0.07)',
+          background: 'rgba(8,9,16,0.98)',
+          borderRight: '1px solid rgba(255,255,255,0.07)',
         }}
       >
         <button
@@ -238,7 +237,7 @@ const Sidebar = React.memo(function Sidebar() {
           </div>
           {!isCollapsed && (
             <div className="min-w-0">
-              <h1 className={`font-bold text-sm leading-none tracking-tight ${isLightMode ? 'text-slate-900' : 'text-white'}`}>Slack AI</h1>
+              <h1 className="font-bold text-sm leading-none tracking-tight text-white">Slack AI</h1>
               <span className="text-[10px] font-semibold mt-1 block text-primary">Workspace Assistant</span>
             </div>
           )}

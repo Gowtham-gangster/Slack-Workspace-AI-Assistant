@@ -4,7 +4,6 @@ import React, { useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import AppLayout from '../../components/AppLayout';
 import { apiFetch } from '../../lib/api';
-import { useTheme } from '../../components/ThemeContext';
 import { useAuth } from '../../components/AuthContext';
 import AIErrorAlert from '../../components/AIErrorAlert';
 import {
@@ -29,7 +28,6 @@ const EXAMPLE_PROMPTS = [
 ];
 
 export default function WorkspaceMemoryPage() {
-  const isLightMode = false;
   const { slackUsers } = useAuth();
 
   const getUserDisplayName = (userId: string) => {
@@ -64,17 +62,13 @@ export default function WorkspaceMemoryPage() {
     queryMutation.mutate(prompt);
   };
 
-  const cardStyle = `rounded-2xl border transition-all ${
-    isLightMode ? 'bg-white border-slate-200/80 shadow-sm' : 'bg-white/[0.03] border-white/[0.07]'
-  }`;
+  const cardStyle = "rounded-2xl border transition-all bg-white/[0.03] border-white/[0.07]";
 
   const tabStyle = (tab: string) => {
     const active = activeTab === tab;
     return `px-4 py-2 text-xs font-semibold rounded-xl border transition-all ${
       active
         ? 'bg-gradient-to-r from-[#7c6af7] to-[#6366f1] text-white border-transparent shadow-md'
-        : isLightMode
-        ? 'bg-slate-100 border-slate-200 text-slate-600 hover:bg-slate-200'
         : 'bg-white/[0.04] border-white/[0.08] text-slate-400 hover:bg-white/[0.08]'
     }`;
   };
@@ -91,8 +85,8 @@ export default function WorkspaceMemoryPage() {
                 <BookOpen className="w-4.5 h-4.5 text-white" />
               </div>
               <div>
-                <h1 className={`text-xl font-bold ${isLightMode ? 'text-slate-900' : 'text-white'}`}>AI Workspace Memory</h1>
-                <p className={`text-sm ${isLightMode ? 'text-slate-500' : 'text-slate-400'}`}>Search and reconstruct details, context, and decisions across Slack threads</p>
+                <h1 className="text-xl font-bold text-white">AI Workspace Memory</h1>
+                <p className="text-sm text-slate-400">Search and reconstruct details, context, and decisions across Slack threads</p>
               </div>
             </div>
           </div>
@@ -107,11 +101,7 @@ export default function WorkspaceMemoryPage() {
                   placeholder="Ask anything (e.g. 'What was discussed about security or API key?') ..."
                   value={query}
                   onChange={e => setQuery(e.target.value)}
-                  className={`w-full pl-10 pr-4 py-3 rounded-xl text-sm border outline-none transition-all ${
-                    isLightMode
-                      ? 'bg-slate-50 border-slate-200 text-slate-800 focus:bg-white focus:border-slate-300 focus:shadow-inner'
-                      : 'bg-white/[0.04] border-white/[0.08] text-slate-100 focus:bg-black/20 focus:border-white/[0.15]'
-                  }`}
+                  className="w-full pl-10 pr-4 py-3 rounded-xl text-sm border outline-none transition-all bg-white/[0.04] border-white/[0.08] text-slate-100 focus:bg-black/20 focus:border-white/[0.15]"
                 />
               </div>
               <button
@@ -143,11 +133,7 @@ export default function WorkspaceMemoryPage() {
                     key={idx}
                     type="button"
                     onClick={() => handleSelectExample(prompt)}
-                    className={`px-3 py-2 rounded-xl text-xs font-medium border text-left flex items-center gap-1.5 transition-all ${
-                      isLightMode
-                        ? 'bg-slate-50 hover:bg-slate-100 border-slate-200 text-slate-600'
-                        : 'bg-white/[0.03] hover:bg-white/[0.06] border-white/[0.07] text-slate-400'
-                    }`}
+                    className="px-3 py-2 rounded-xl text-xs font-medium border text-left flex items-center gap-1.5 transition-all bg-white/[0.03] hover:bg-white/[0.06] border-white/[0.07] text-slate-400"
                   >
                     <span>{prompt}</span>
                     <ArrowRight className="w-3.5 h-3.5 text-slate-400 shrink-0" />
@@ -162,12 +148,12 @@ export default function WorkspaceMemoryPage() {
             <div className="space-y-6">
               <div className={`${cardStyle} p-6 space-y-4`}>
                 <div className="flex gap-2">
-                  <div className="h-6 w-24 rounded animate-pulse" style={{ background: isLightMode ? '#e2e8f0' : 'rgba(255,255,255,0.08)' }} />
-                  <div className="h-6 w-24 rounded animate-pulse" style={{ background: isLightMode ? '#e2e8f0' : 'rgba(255,255,255,0.08)' }} />
+                  <div className="h-6 w-24 rounded animate-pulse" style={{ background: 'rgba(255,255,255,0.08)' }} />
+                  <div className="h-6 w-24 rounded animate-pulse" style={{ background: 'rgba(255,255,255,0.08)' }} />
                 </div>
-                <div className="h-4 w-full rounded animate-pulse" style={{ background: isLightMode ? '#f1f5f9' : 'rgba(255,255,255,0.04)' }} />
-                <div className="h-4 w-5/6 rounded animate-pulse" style={{ background: isLightMode ? '#f1f5f9' : 'rgba(255,255,255,0.04)' }} />
-                <div className="h-4 w-4/5 rounded animate-pulse" style={{ background: isLightMode ? '#f1f5f9' : 'rgba(255,255,255,0.04)' }} />
+                <div className="h-4 w-full rounded animate-pulse" style={{ background: 'rgba(255,255,255,0.04)' }} />
+                <div className="h-4 w-5/6 rounded animate-pulse" style={{ background: 'rgba(255,255,255,0.04)' }} />
+                <div className="h-4 w-4/5 rounded animate-pulse" style={{ background: 'rgba(255,255,255,0.04)' }} />
               </div>
             </div>
           )}
@@ -186,7 +172,7 @@ export default function WorkspaceMemoryPage() {
             <div className={`${cardStyle} overflow-hidden`}>
               
               {/* Tabs */}
-              <div className="flex items-center gap-2 p-4 border-b" style={{ borderColor: isLightMode ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.06)' }}>
+              <div className="flex items-center gap-2 p-4 border-b border-white/[0.06]">
                 <button onClick={() => setActiveTab('summary')} className={tabStyle('summary')}>Summary</button>
                 <button onClick={() => setActiveTab('decisions')} className={tabStyle('decisions')}>Decisions & Risks</button>
                 <button onClick={() => setActiveTab('tasks')} className={tabStyle('tasks')}>Participants & Tasks</button>
@@ -199,11 +185,11 @@ export default function WorkspaceMemoryPage() {
                 {/* ── SUMMARY TAB ── */}
                 {activeTab === 'summary' && (
                   <div className="space-y-4">
-                    <h3 className={`text-base font-bold flex items-center gap-2 ${isLightMode ? 'text-slate-800' : 'text-white'}`}>
+                    <h3 className="text-base font-bold flex items-center gap-2 text-white">
                       <Sparkles className="w-4 h-4 text-violet-400" />
                       AI Analysis Summary
                     </h3>
-                    <div className={`text-sm leading-relaxed whitespace-pre-line ${isLightMode ? 'text-slate-600' : 'text-slate-300'}`}>
+                    <div className="text-sm leading-relaxed whitespace-pre-line text-slate-300">
                       {result.summary}
                     </div>
                   </div>
@@ -214,7 +200,7 @@ export default function WorkspaceMemoryPage() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     {/* Decisions */}
                     <div className="space-y-4">
-                      <h3 className={`text-sm font-bold flex items-center gap-1.5 ${isLightMode ? 'text-slate-800' : 'text-white'}`}>
+                      <h3 className="text-sm font-bold flex items-center gap-1.5 text-white">
                         <CheckCircle2 className="w-4 h-4 text-emerald-500" />
                         Decisions Made
                       </h3>
@@ -223,13 +209,9 @@ export default function WorkspaceMemoryPage() {
                       ) : (
                         <div className="space-y-2">
                           {result.decisions.map((dec, i) => (
-                            <div key={i} className="flex gap-2.5 p-3 rounded-xl border text-xs font-semibold leading-relaxed"
-                                 style={{
-                                   background: isLightMode ? '#f8fafc' : 'rgba(255,255,255,0.02)',
-                                   borderColor: isLightMode ? '#e2e8f0' : 'rgba(255,255,255,0.06)'
-                                 }}>
+                            <div key={i} className="flex gap-2.5 p-3 rounded-xl border text-xs font-semibold leading-relaxed bg-white/[0.02] border-white/[0.06]">
                               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 mt-1.5 shrink-0" />
-                              <span className={isLightMode ? 'text-slate-700' : 'text-slate-200'}>{dec}</span>
+                              <span className="text-slate-200">{dec}</span>
                             </div>
                           ))}
                         </div>
@@ -238,7 +220,7 @@ export default function WorkspaceMemoryPage() {
 
                     {/* Risks */}
                     <div className="space-y-4">
-                      <h3 className={`text-sm font-bold flex items-center gap-1.5 ${isLightMode ? 'text-slate-800' : 'text-white'}`}>
+                      <h3 className="text-sm font-bold flex items-center gap-1.5 text-white">
                         <AlertTriangle className="w-4 h-4 text-amber-500" />
                         Risks & Blockers
                       </h3>
@@ -247,13 +229,9 @@ export default function WorkspaceMemoryPage() {
                       ) : (
                         <div className="space-y-2">
                           {result.risks.map((risk, i) => (
-                            <div key={i} className="flex gap-2.5 p-3 rounded-xl border text-xs font-semibold leading-relaxed"
-                                 style={{
-                                   background: isLightMode ? '#fffbeb' : 'rgba(245,158,11,0.04)',
-                                   borderColor: isLightMode ? '#fef3c7' : 'rgba(245,158,11,0.1)'
-                                 }}>
+                            <div key={i} className="flex gap-2.5 p-3 rounded-xl border text-xs font-semibold leading-relaxed bg-amber-500/[0.04] border-amber-500/10">
                               <AlertTriangle className="w-3.5 h-3.5 text-amber-500 shrink-0 mt-0.5" />
-                              <span className={isLightMode ? 'text-amber-800' : 'text-amber-300'}>{risk}</span>
+                              <span className="text-amber-300">{risk}</span>
                             </div>
                           ))}
                         </div>
@@ -267,7 +245,7 @@ export default function WorkspaceMemoryPage() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     {/* Participants */}
                     <div className="space-y-4">
-                      <h3 className={`text-sm font-bold flex items-center gap-1.5 ${isLightMode ? 'text-slate-800' : 'text-white'}`}>
+                      <h3 className="text-sm font-bold flex items-center gap-1.5 text-white">
                         <Users className="w-4 h-4 text-violet-400" />
                         Key Participants
                       </h3>
@@ -276,9 +254,7 @@ export default function WorkspaceMemoryPage() {
                       ) : (
                         <div className="flex flex-wrap gap-2">
                           {result.participants.map((person, i) => (
-                            <span key={i} className={`text-xs font-semibold px-3 py-1.5 rounded-xl border flex items-center gap-1.5 ${
-                              isLightMode ? 'bg-slate-50 border-slate-200 text-slate-700' : 'bg-white/[0.04] border-white/[0.08] text-slate-200'
-                            }`}>
+                            <span key={i} className="text-xs font-semibold px-3 py-1.5 rounded-xl border flex items-center gap-1.5 bg-white/[0.04] border-white/[0.08] text-slate-200">
                               <span className="w-2 h-2 rounded-full bg-violet-400" />
                               {getUserDisplayName(person)}
                             </span>
@@ -289,7 +265,7 @@ export default function WorkspaceMemoryPage() {
 
                     {/* Tasks */}
                     <div className="space-y-4">
-                      <h3 className={`text-sm font-bold flex items-center gap-1.5 ${isLightMode ? 'text-slate-800' : 'text-white'}`}>
+                      <h3 className="text-sm font-bold flex items-center gap-1.5 text-white">
                         <ClipboardList className="w-4 h-4 text-sky-400" />
                         Task Assignments
                       </h3>
@@ -298,12 +274,8 @@ export default function WorkspaceMemoryPage() {
                       ) : (
                         <div className="space-y-2">
                           {result.tasks.map((t, i) => (
-                            <div key={i} className="p-3 rounded-xl border text-xs flex items-center justify-between gap-3"
-                                 style={{
-                                   background: isLightMode ? '#f8fafc' : 'rgba(255,255,255,0.02)',
-                                   borderColor: isLightMode ? '#e2e8f0' : 'rgba(255,255,255,0.06)'
-                                 }}>
-                              <span className={`font-semibold ${isLightMode ? 'text-slate-700' : 'text-slate-200'}`}>{t.task}</span>
+                            <div key={i} className="p-3 rounded-xl border text-xs flex items-center justify-between gap-3 bg-white/[0.02] border-white/[0.06]">
+                              <span className="font-semibold text-slate-200">{t.task}</span>
                               <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-[#7c6af7]/10 text-[#7c6af7] shrink-0">
                                 {getUserDisplayName(t.owner)}
                               </span>
@@ -318,7 +290,7 @@ export default function WorkspaceMemoryPage() {
                 {/* ── TIMELINE TAB ── */}
                 {activeTab === 'timeline' && (
                   <div className="space-y-4">
-                    <h3 className={`text-sm font-bold flex items-center gap-1.5 ${isLightMode ? 'text-slate-800' : 'text-white'}`}>
+                    <h3 className="text-sm font-bold flex items-center gap-1.5 text-white">
                       <Clock className="w-4 h-4 text-teal-400" />
                       Sequence of Events
                     </h3>
@@ -329,11 +301,10 @@ export default function WorkspaceMemoryPage() {
                         {result.timeline.map((ev, i) => (
                           <div key={i} className="relative group">
                             {/* Dot indicator */}
-                            <span className="absolute -left-[30px] top-1.5 w-2 h-2 rounded-full bg-teal-400 ring-4"
-                                  style={{ boxShadow: `0 0 0 4px ${isLightMode ? '#ffffff' : '#0a0b12'}` }} />
+                            <span className="absolute -left-[30px] top-1.5 w-2 h-2 rounded-full bg-teal-400 ring-4 style={{ boxShadow: '0 0 0 4px #0a0b12' }}" />
                             <div className="flex flex-col gap-0.5">
-                              <span className="text-[9px] font-mono text-slate-400" style={{ color: '#7c6af7' }}>{ev.time}</span>
-                              <p className={`text-xs font-semibold ${isLightMode ? 'text-slate-700' : 'text-slate-200'}`}>{ev.event}</p>
+                              <span className="text-[9px] font-mono" style={{ color: '#7c6af7' }}>{ev.time}</span>
+                              <p className="text-xs font-semibold text-slate-200">{ev.event}</p>
                             </div>
                           </div>
                         ))}
